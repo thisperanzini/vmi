@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Entrar · S&amp;S Partners</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231c2b4a'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Arial' font-weight='700' font-size='15' fill='%23b8923a'%3ES%26S%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root { --navy: #1c2b4a; --gold: #b8923a; --bg: #f2f4f7; --surface: #fff; --line: #d3dae4; --fg: #142035; --fg-2: #4d5b72; --fg-3: #84909f; --bad: #b42d2d; --bad-soft: #fbe6e6; --good: #1f7a3d; --good-soft: #e3f3e8; }
+@media (prefers-color-scheme: dark) { :root { --navy: #0b1220; --gold: #d8b45f; --bg: #0e1420; --surface: #151d2c; --line: #2c374b; --fg: #e9eef6; --fg-2: #aab6c9; --fg-3: #75829a; --bad: #f07272; --bad-soft: #3a1c1f; --good: #4cc77a; --good-soft: #15301f; } }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font: 15px/1.5 "IBM Plex Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; }
+.band { background: var(--navy); color: #eef2f8; padding: 14px max(16px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 12px; }
+.band b { font: 700 20px/1 "IBM Plex Sans Condensed", "IBM Plex Sans", Arial, sans-serif; } .band b i { color: var(--gold); font-style: normal; }
+.band span { font-size: 12.5px; color: #a9b6cc; }
+main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px max(16px, env(safe-area-inset-left)); }
+.card { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 24px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 6px 18px rgba(20,32,53,.06); }
+h1 { font: 600 20px/1.2 "IBM Plex Sans Condensed", "IBM Plex Sans", Arial, sans-serif; margin: 0; }
+p { margin: 0; color: var(--fg-2); font-size: 13.5px; }
+label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--fg-2); }
+input { font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; width: 100%; }
+input.codigo { font: 500 26px/1.2 "IBM Plex Mono", Consolas, monospace; letter-spacing: 8px; text-align: center; }
+input:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+button { font: 600 14px "IBM Plex Sans", sans-serif; background: var(--navy); color: #fff; border: 0; border-radius: 6px; padding: 11px 14px; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+button.ghost { background: transparent; color: var(--fg-2); border: 1px solid var(--line); }
+.msg { font-size: 13px; padding: 9px 12px; border-radius: 6px; } .msg.bad { background: var(--bad-soft); color: var(--bad); } .msg.good { background: var(--good-soft); color: var(--good); }
+footer { text-align: center; font-size: 12px; color: var(--fg-3); padding: 14px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="band"><b>S<i>&amp;</i>S PARTNERS</b><span id="siteNome">Acesso restrito</span></div>
+<main>
+  <form class="card" id="f1" autocomplete="on">
+    <h1>Entrar com o seu e-mail</h1>
+    <p>Enviamos um código de 6 dígitos para o e-mail autorizado. Nenhuma senha é guardada.</p>
+    <label for="email">E-mail<input id="email" type="email" name="email" required autocomplete="email" inputmode="email" placeholder="nome@sespartners.com.br"></label>
+    <div class="msg bad" id="m1" hidden></div>
+    <button type="submit" id="b1">Receber código</button>
+  </form>
+  <form class="card" id="f2" hidden>
+    <h1>Digite o código</h1>
+    <p id="p2">Enviado para o e-mail informado. Vale por 10 minutos.</p>
+    <label for="codigo">Código<input id="codigo" class="codigo" name="codigo" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" required></label>
+    <div class="msg bad" id="m2" hidden></div>
+    <button type="submit" id="b2">Entrar</button>
+    <button type="button" class="ghost" id="voltar">Usar outro e-mail</button>
+  </form>
+</main>
+<footer>S&amp;S Partners · acesso registrado para fins de auditoria</footer>
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  var q = new URLSearchParams(location.search), next = q.get("next") || "/";
+  if (!/^\/(?!\/)/.test(next)) next = "/";
+  var h = location.hostname; $("#siteNome").textContent = /^hda\./.test(h) ? "Imagem Própria HDA" : /^financiamento\./.test(h) ? "Financiamento VMI" : "Acesso restrito";
+  var email = "";
+  function msg(el, t, ok) { el.textContent = t; el.hidden = !t; el.className = "msg " + (ok ? "good" : "bad"); }
+  async function post(fn, body) {
+    var r = await fetch("/.netlify/functions/" + fn, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin" });
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (!r.ok) throw new Error(j.erro || ("Erro " + r.status));
+    return j;
+  }
+  $("#f1").addEventListener("submit", async function (ev) {
+    ev.preventDefault(); email = $("#email").value.trim().toLowerCase(); msg($("#m1"), ""); $("#b1").disabled = true;
+    try { var j = await post("pedir-codigo", { email: email }); $("#f1").hidden = true; $("#f2").hidden = false; $("#p2").textContent = "Se " + email + " estiver autorizado, o código chega em instantes e vale por 10 minutos."; $("#codigo").focus(); }
+    catch (e) { msg($("#m1"), e.message); }
+    $("#b1").disabled = false;
+  });
+  $("#f2").addEventListener("submit", async function (ev) {
+    ev.preventDefault(); msg($("#m2"), ""); $("#b2").disabled = true;
+    try { var j = await post("validar-codigo", { email: email, codigo: $("#codigo").value, next: next }); msg($("#m2"), "Entrando…", true); location.replace(j.next || next); }
+    catch (e) { msg($("#m2"), e.message); $("#b2").disabled = false; }
+  });
+  $("#voltar").addEventListener("click", function () { $("#f2").hidden = true; $("#f1").hidden = false; $("#codigo").value = ""; msg($("#m2"), ""); $("#email").focus(); });
+  $("#codigo").addEventListener("input", function () { this.value = this.value.replace(/\D/g, "").slice(0, 6); if (this.value.length === 6) $("#b2").click(); });
+})();
+</script>
+</body>
+</html>

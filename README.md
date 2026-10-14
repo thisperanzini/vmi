@@ -20,6 +20,19 @@ Fonte única das páginas publicadas em `financiamento.sespartners.com.br` (Netl
 
 Regras: o motor e a base são compartilhados pelas duas páginas; uma mudança de taxa vale para as duas. `dist/` é gerado, nunca editado à mão. A versão da base (`BASE_PADRAO.versao`) e do catálogo (`catalogo_versao`) devem subir a cada alteração de conteúdo: fora do claude.ai, uma base guardada no navegador só prevalece se for da mesma versão do código.
 
+## Camada de login (auth/)
+
+Código em `auth/`, copiado pelo `build.py` para `netlify/` e para `/entrar` e `/admin` de cada site. Tudo roda no Netlify (Edge Functions, Functions, Blobs); e-mail pelo Resend.
+
+- `auth/edge/gate.ts`: porteiro em todas as rotas; sem cookie de sessão válido (HMAC-SHA256, 7 dias) redireciona para `/entrar`.
+- `auth/functions/pedir-codigo.mjs`: código de 6 dígitos por e-mail, só para quem está na lista; limites de 5/hora por e-mail e 20/hora por IP; resposta neutra para e-mails fora da lista.
+- `auth/functions/validar-codigo.mjs`: confere (5 tentativas, 10 minutos), emite o cookie `ss_sess` (HttpOnly, Secure, SameSite=Lax), registra o login.
+- `auth/functions/log.mjs`: eventos de uso enviados pela página (página aberta, caso aberto, documento gerado, exportação, versão congelada).
+- `auth/functions/admin.mjs` + `/admin/`: eventos por mês com filtros e CSV; e-mails avulsos autorizados e bloqueados.
+- Quem entra: domínios em `ALLOW_DOMAINS`, administradores em `ADMIN_EMAILS` (variáveis de ambiente do site), e-mails avulsos na página admin (Blobs `config`). As listas são por site.
+
+Variáveis de ambiente (em cada site do Netlify): `SESSION_SECRET` (aleatório, 32+ caracteres; diferente por site), `SITE_ID` (`financiamento` ou `hda`), `SITE_NAME`, `ALLOW_DOMAINS`, `ADMIN_EMAILS`, `RESEND_API_KEY`, `MAIL_FROM` (ex.: `S&S Partners <acesso@sespartners.com.br>`), `SESSION_DAYS` (opcional, padrão 7).
+
 ## Fora do claude.ai
 
 Casos, base editada e catálogo ficam no `localStorage` de quem usa. Downloads são diretos. A leitura de documentos por IA (kit) só existe no claude.ai.

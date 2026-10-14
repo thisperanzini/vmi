@@ -5,7 +5,17 @@
   publish = "dist/financiamento-vmi"
   command = ""
 
-# Quem entrar pelo endereço *.netlify.app vai para o domínio próprio (necessário quando houver camada de login na frente).
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Porteiro: exige sessão (cookie assinado) em tudo, exceto a tela de entrada e as funções.
+[[edge_functions]]
+  path = "/*"
+  function = "gate"
+  excludedPath = ["/entrar", "/entrar/*", "/.netlify/*", "/favicon.ico", "/robots.txt"]
+
+# Quem entrar pelo endereço *.netlify.app vai para o domínio próprio (senão a camada de login é contornada).
 [[redirects]]
   from = "https://silver-mandazi-edca86.netlify.app/*"
   to = "https://financiamento.sespartners.com.br/:splat"

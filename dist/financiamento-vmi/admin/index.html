@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Acessos · S&amp;S Partners</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231c2b4a'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Arial' font-weight='700' font-size='15' fill='%23b8923a'%3ES%26S%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root { --navy: #1c2b4a; --gold: #b8923a; --bg: #f2f4f7; --surface: #fff; --surface-2: #e9edf3; --line: #d3dae4; --line-2: #e4e9f0; --fg: #142035; --fg-2: #4d5b72; --fg-3: #84909f; --bad: #b42d2d; --bad-soft: #fbe6e6; --good: #1f7a3d; --good-soft: #e3f3e8; --warn: #9a6400; --warn-soft: #fbf0d9; }
+@media (prefers-color-scheme: dark) { :root { --navy: #0b1220; --gold: #d8b45f; --bg: #0e1420; --surface: #151d2c; --surface-2: #1d2738; --line: #2c374b; --line-2: #233045; --fg: #e9eef6; --fg-2: #aab6c9; --fg-3: #75829a; --bad: #f07272; --bad-soft: #3a1c1f; --good: #4cc77a; --good-soft: #15301f; --warn: #e5ad45; --warn-soft: #33270f; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 "IBM Plex Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+.band { background: var(--navy); color: #eef2f8; padding: 12px max(16px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.band b { font: 700 20px/1 "IBM Plex Sans Condensed", "IBM Plex Sans", Arial, sans-serif; } .band b i { color: var(--gold); font-style: normal; }
+.band span { font-size: 12.5px; color: #a9b6cc; } .band a { color: #eef2f8; margin-left: auto; font-size: 13px; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 18px max(16px, env(safe-area-inset-left)) 40px; display: flex; flex-direction: column; gap: 16px; }
+h2 { font: 600 17px/1.2 "IBM Plex Sans Condensed", "IBM Plex Sans", Arial, sans-serif; margin: 0; }
+.card { background: var(--surface); border: 1px solid var(--line-2); border-radius: 8px; padding: 16px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+input, select { font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; }
+button { font: 500 13px "IBM Plex Sans", sans-serif; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 6px; padding: 6px 11px; cursor: pointer; }
+button.primary { background: var(--navy); color: #fff; border-color: var(--navy); } button.danger { color: var(--bad); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.kpi { border: 1px solid var(--line-2); border-radius: 8px; padding: 10px 12px; } .kpi .l { font-size: 11.5px; color: var(--fg-2); } .kpi .v { font: 500 22px/1.2 "IBM Plex Mono", monospace; }
+.tw { overflow-x: auto; } table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line-2); text-align: left; white-space: nowrap; } th { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--fg-3); }
+td.mono { font-family: "IBM Plex Mono", monospace; font-size: 12px; }
+.pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--fg-2); }
+.pill.good { background: var(--good-soft); color: var(--good); } .pill.bad { background: var(--bad-soft); color: var(--bad); } .pill.warn { background: var(--warn-soft); color: var(--warn); }
+.muted { color: var(--fg-2); font-size: 12.5px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="band"><b>S<i>&amp;</i>S PARTNERS</b><span id="siteNome">Acessos e permissões</span><a href="/">voltar à ferramenta</a><a href="/.netlify/functions/sair" style="margin-left:0">sair</a></div>
+<div class="wrap">
+  <div class="card" id="erro" hidden></div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2>Acessos</h2><div class="row"><label>Mês <input type="month" id="mes"></label><select id="tipo"><option value="">todos os eventos</option><option value="login">logins</option><option value="documento">documentos gerados</option><option value="caso">casos abertos</option><option value="pagina">páginas</option><option value="falhas">falhas e negados</option></select><input id="busca" placeholder="filtrar por e-mail, IP, caso…" style="min-width:220px"><button id="csv">Exportar .csv</button></div></div>
+    <div class="kpis" style="margin:12px 0" id="kpis"></div>
+    <div class="tw"><table><thead><tr><th>Quando</th><th>Evento</th><th>E-mail</th><th>Detalhe</th><th>IP</th><th>País</th><th>Navegador</th></tr></thead><tbody id="tb"><tr><td colspan="7" class="muted">Carregando…</td></tr></tbody></table></div>
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2>Quem pode entrar</h2><span class="muted" id="regras"></span></div>
+    <form class="row" id="fadd" style="margin:12px 0"><input type="email" id="novo" placeholder="e-mail a autorizar" required style="min-width:260px"><input id="nota" placeholder="nota (cliente, função)" style="min-width:220px"><button class="primary" type="submit">Autorizar</button></form>
+    <div class="tw"><table><thead><tr><th>E-mail</th><th>Nota</th><th>Autorizado por</th><th>Em</th><th></th></tr></thead><tbody id="tbEmails"></tbody></table></div>
+    <p class="muted" style="margin-top:10px">Domínios inteiros e administradores são definidos nas variáveis de ambiente do site (ALLOW_DOMAINS, ADMIN_EMAILS). Bloquear um e-mail impede a entrada mesmo que o domínio seja permitido.</p>
+  </div>
+</div>
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  var h = location.hostname; $("#siteNome").textContent = (/^hda\./.test(h) ? "Imagem Própria HDA" : /^financiamento\./.test(h) ? "Financiamento VMI" : "Site") + " · acessos e permissões";
+  var eventos = [], lista = null;
+  var NOMES = { login: ["Login", "good"], logout: ["Saiu", ""], codigo_enviado: ["Código enviado", ""], codigo_negado: ["Código negado (não autorizado)", "bad"], codigo_bloqueado_limite: ["Bloqueado por limite", "bad"], codigo_erro_envio: ["Falha no envio", "bad"], login_falha: ["Código errado/expirado", "warn"], login_negado: ["Login negado", "bad"], pagina: ["Página", ""], caso: ["Caso aberto", ""], documento: ["Documento gerado", "good"], export: ["Exportação", "good"], versao: ["Versão congelada", ""], admin_negado: ["Admin negado", "bad"], admin_add: ["Autorizou e-mail", ""], admin_remove: ["Removeu e-mail", ""], admin_block: ["Bloqueou e-mail", "warn"], admin_unblock: ["Desbloqueou e-mail", ""] };
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function erro(t) { var e = $("#erro"); e.hidden = !t; e.textContent = t || ""; }
+  async function api(qs, body) {
+    var r = await fetch("/.netlify/functions/admin" + (qs || ""), body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {});
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (r.status === 401) { location.href = "/entrar/?next=/admin/"; throw new Error("sessão"); }
+    if (!r.ok) throw new Error(j.erro || ("Erro " + r.status));
+    return j;
+  }
+  function detalhe(e) { var p = []; if (e.caso) p.push("caso: " + e.caso); if (e.nome) p.push(e.nome); if (e.doc) p.push("doc: " + e.doc); if (e.path) p.push(e.path); if (e.motivo) p.push(e.motivo); if (e.alvo) p.push(e.alvo); if (e.admin) p.push("admin"); if (e.status) p.push("status " + e.status); return p.join(" · "); }
+  function filtrar() {
+    var t = $("#tipo").value, b = $("#busca").value.trim().toLowerCase();
+    return eventos.filter(function (e) {
+      if (t === "falhas") { if (!/negado|falha|bloqueado|erro/.test(e.tipo)) return false; } else if (t && e.tipo !== t) return false;
+      if (b) { var s = (e.email + " " + e.ip + " " + detalhe(e) + " " + e.tipo).toLowerCase(); if (s.indexOf(b) < 0) return false; }
+      return true;
+    });
+  }
+  function render() {
+    var l = filtrar();
+    var logins = eventos.filter(function (e) { return e.tipo === "login"; }), pessoas = {}; logins.forEach(function (e) { pessoas[e.email] = 1; });
+    var docs = eventos.filter(function (e) { return e.tipo === "documento" || e.tipo === "export"; }).length, falhas = eventos.filter(function (e) { return /negado|falha|bloqueado|erro/.test(e.tipo); }).length;
+    $("#kpis").innerHTML = [["Eventos no mês", eventos.length], ["Logins", logins.length], ["Pessoas distintas", Object.keys(pessoas).length], ["Documentos gerados", docs], ["Falhas e negados", falhas]].map(function (k) { return '<div class="kpi"><div class="l">' + k[0] + '</div><div class="v">' + k[1] + "</div></div>"; }).join("");
+    $("#tb").innerHTML = l.length ? l.map(function (e) { var n = NOMES[e.tipo] || [e.tipo, ""]; return "<tr><td class=\"mono\">" + esc(e.t.replace("T", " ").slice(0, 19)) + '</td><td><span class="pill ' + n[1] + '">' + esc(n[0]) + "</span></td><td>" + esc(e.email) + "</td><td>" + esc(detalhe(e)) + '</td><td class="mono">' + esc(e.ip) + "</td><td>" + esc(e.pais) + '</td><td class="muted" title="' + esc(e.ua) + '">' + esc((e.ua || "").slice(0, 40)) + "</td></tr>"; }).join("") : '<tr><td colspan="7" class="muted">Nenhum evento com esse filtro.</td></tr>';
+  }
+  async function carregar() {
+    try { var j = await api("?acao=logs&mes=" + $("#mes").value); eventos = j.eventos || []; render(); } catch (e) { erro(e.message); }
+  }
+  function renderLista() {
+    $("#regras").textContent = "domínios: " + (lista.dominios.join(", ") || "—") + " · administradores: " + (lista.admins.join(", ") || "—");
+    var rows = lista.emails.map(function (x) { var o = typeof x === "string" ? { email: x } : x; return "<tr><td>" + esc(o.email) + "</td><td>" + esc(o.nota || "") + "</td><td>" + esc(o.por || "") + "</td><td class=\"mono\">" + esc((o.em || "").slice(0, 10)) + '</td><td><button class="danger" data-acao="remove" data-email="' + esc(o.email) + '">remover</button> <button data-acao="block" data-email="' + esc(o.email) + '">bloquear</button></td></tr>'; });
+    lista.bloqueados.forEach(function (e) { rows.push("<tr><td>" + esc(e) + '</td><td><span class="pill bad">bloqueado</span></td><td></td><td></td><td><button data-acao="unblock" data-email="' + esc(e) + '">desbloquear</button></td></tr>'); });
+    $("#tbEmails").innerHTML = rows.join("") || '<tr><td colspan="5" class="muted">Nenhum e-mail avulso; só os domínios e administradores entram.</td></tr>';
+  }
+  async function carregarLista() { try { lista = await api("?acao=lista"); renderLista(); } catch (e) { erro(e.message); } }
+  $("#fadd").addEventListener("submit", async function (ev) { ev.preventDefault(); try { var j = await api("", { acao: "add", email: $("#novo").value, nota: $("#nota").value }); lista.emails = j.emails; lista.bloqueados = j.bloqueados; renderLista(); $("#novo").value = ""; $("#nota").value = ""; } catch (e) { erro(e.message); } });
+  $("#tbEmails").addEventListener("click", async function (ev) { var b = ev.target.closest("button[data-acao]"); if (!b) return; try { var j = await api("", { acao: b.dataset.acao, email: b.dataset.email }); lista.emails = j.emails; lista.bloqueados = j.bloqueados; renderLista(); } catch (e) { erro(e.message); } });
+  $("#csv").addEventListener("click", function () {
+    var l = filtrar(), linhas = [["quando", "evento", "email", "detalhe", "ip", "pais", "navegador"]].concat(l.map(function (e) { return [e.t, e.tipo, e.email, detalhe(e), e.ip, e.pais, e.ua]; }));
+    var csv = "﻿" + linhas.map(function (r) { return r.map(function (c) { return '"' + String(c == null ? "" : c).replace(/"/g, '""') + '"'; }).join(";"); }).join("\r\n");
+    var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "acessos_" + $("#mes").value + ".csv"; a.click();
+  });
+  $("#mes").value = new Date().toISOString().slice(0, 7);
+  $("#mes").addEventListener("change", carregar); $("#tipo").addEventListener("change", render); $("#busca").addEventListener("input", render);
+  carregar(); carregarLista();
+})();
+</script>
+</body>
+</html>

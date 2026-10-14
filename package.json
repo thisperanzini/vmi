@@ -1,0 +1,9 @@
+{
+  "name": "ferramentas-vmi",
+  "private": true,
+  "description": "S&S Partners · Financiamento VMI (site financiamento.sespartners.com.br)",
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.0"
+  }
+}

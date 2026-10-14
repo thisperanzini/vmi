@@ -5,6 +5,14 @@
   var S = { base: clone(BASE_PADRAO), baseSalva: false, catalogo: clone(BASE_PADRAO.catalogo), catSalvo: false, casos: {}, ordem: [], atual: null, tab: "casos",
     db: null, modo: "carregando", pend: {}, sample: null, downloads: null, ia: {}, av: null, simAtual: null, roiAtual: null, entAtual: null, aberto: {} };
 
+
+  /* ---------- registro de uso (só no domínio hospedado, com a camada de login) ---------- */
+  var NO_DOMINIO = /\.sespartners\.com\.br$/.test(location.hostname);
+  function registrarUso(tipo, extra) {
+    if (!NO_DOMINIO) return;
+    try { fetch("/.netlify/functions/log", { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", keepalive: true, body: JSON.stringify(Object.assign({ tipo: tipo, path: location.pathname }, extra || {})) }).catch(function () {}); } catch (e) {}
+  }
+
   /* ---------- utilidades ---------- */
   function clone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -147,7 +155,7 @@
     var m = $("#main"), fn = PAINEIS[S.tab] || PAINEIS.casos;
     var needCase = ["cliente", "kit", "linhas", "sim", "roi", "saidas"].indexOf(S.tab) >= 0;
     m.innerHTML = '<section role="tabpanel">' + (needCase && !caso() ? semCaso() : fn()) + "</section>";
-    $("#foot").innerHTML = "Base de linhas " + esc(S.base.versao) + (S.baseSalva ? " (editada e salva)" : " (padrão)") + " · Macro: Focus " + dataBR(S.base.macro.focus.data) + ", Selic " + P(S.base.macro.selic.v) + " · Estudo indicativo: aprovação, taxa e garantias finais são do agente financeiro e do BNDES.";
+    $("#foot").innerHTML = (NO_DOMINIO ? '<a href="/.netlify/functions/sair" style="margin-right:10px">Sair</a><a href="/admin/" style="margin-right:10px">Acessos</a>' : "") + "Base de linhas " + esc(S.base.versao) + (S.baseSalva ? " (editada e salva)" : " (padrão)") + " · Macro: Focus " + dataBR(S.base.macro.focus.data) + ", Selic " + P(S.base.macro.selic.v) + " · Estudo indicativo: aprovação, taxa e garantias finais são do agente financeiro e do BNDES.";
     if (foco) { var e = document.getElementById(foco); if (e && e.focus) try { e.focus({ preventScroll: true }); } catch (x) {} }
     pos[S.tab] && pos[S.tab]();
   }
@@ -691,7 +699,7 @@
   /* ---------- eventos ---------- */
   function onChange(ev) {
     var el = ev.target, c = caso();
-    if (el.id === "selCaso") { S.atual = el.value; renderTudo(); return; }
+    if (el.id === "selCaso") { S.atual = el.value; registrarUso("caso", { caso: S.atual, nome: (S.casos[S.atual] || {}).nome }); renderTudo(); return; }
     if (el.dataset.k && c) {
       var v = el.dataset.t === "bool" ? el.checked : el.dataset.t === "num" ? num(String(el.value).replace(/\./g, "").replace(",", ".")) : el.value;
       if (el.dataset.t === "num" && el.value === "") v = null;
@@ -732,7 +740,7 @@
     var a = b.dataset.act, c = caso();
     if (a === "novo") { var n = casoNovo(); S.casos[n.id] = n; S.atual = n.id; S.tab = "cliente"; salvar(n); renderTudo(); }
     else if (a === "exemplo") { var ex = casoExemplo(); S.casos[ex.id] = ex; S.atual = ex.id; salvar(ex); renderTudo(); }
-    else if (a === "abrir") { S.atual = b.dataset.id; S.tab = "linhas"; renderTudo(); }
+    else if (a === "abrir") { S.atual = b.dataset.id; S.tab = "linhas"; registrarUso("caso", { caso: S.atual, nome: (S.casos[S.atual] || {}).nome }); renderTudo(); }
     else if (a === "duplicar") { var d = clone(S.casos[b.dataset.id]); d.id = uid(); d.nome = d.nome + " (cópia)"; d.exemplo = false; d.kit = {}; S.casos[d.id] = d; S.atual = d.id; salvar(d); renderTudo(); }
     else if (a === "excluir") { var cc = S.casos[b.dataset.id]; modal('<h2>Excluir o caso?</h2><p>"' + esc(cc.nome) + '" e tudo o que foi lido no kit somem para todos. Não dá para desfazer.</p><div class="row end"><button data-act="fechar">Cancelar</button><button class="primary" data-act="excluir-ok" data-id="' + esc(cc.id) + '">Excluir</button></div>'); }
     else if (a === "excluir-ok") { var id = b.dataset.id; delete S.casos[id]; if (S.db) S.db.collection("casos").doc(id).delete().catch(function () {}); else lsSet("vmi_casos", S.casos); if (S.atual === id) S.atual = ultimoCaso(); fechar(); renderTudo(); }
@@ -750,7 +758,7 @@
     else if (a === "cat-add") { S.catalogo.push({ id: uid(), modelo: "", modalidade: "", fabricante: "VMI Médica", cfi: "", ncm: "", preco: null, origem: "nacional", fonte: "Cadastro manual" }); renderTudo(); }
     else if (a === "cat-del") { S.catalogo.splice(+b.dataset.k, 1); renderTudo(); }
     else if (a === "cat-save") { salvarConfig("catalogo", { itens: clone(S.catalogo), atualizado: new Date().toISOString(), versao: BASE_PADRAO.catalogo_versao }); S.catSalvo = true; renderTudo(); }
-    else if (a === "gerar" && c) gerar(b.dataset.doc, c);
+    else if (a === "gerar" && c) { registrarUso("documento", { doc: b.dataset.doc, caso: c.id, nome: c.nome }); gerar(b.dataset.doc, c); }
     else if (a === "contrato-ok" && c) { var rep = { cpf: $("#m_cpf").value, rg: $("#m_rg").value, qualif: $("#m_qualif").value, data: $("#m_data").value, linha: $("#m_linha").value }; fechar(); gerarContrato(c, rep); }
   }
   document.addEventListener("toggle", function (ev) { var d = ev.target; if (d && d.dataset && d.dataset.open) S.aberto[d.dataset.open] = d.open; }, true);
@@ -814,6 +822,7 @@
   /* ---------- início ---------- */
   $("#logoTopo").src = LOGO.branco;
   try { var t = localStorage.getItem("vmi_tab"); if (t) S.tab = t; } catch (e) {}
+  registrarUso("pagina");
   document.addEventListener("change", onChange);
   document.addEventListener("input", onInput);
   document.addEventListener("click", onClick);

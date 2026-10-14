@@ -1,0 +1,9 @@
+{
+  "name": "hda-viabilidade",
+  "private": true,
+  "description": "S&S Partners · Imagem Própria HDA (site hda.sespartners.com.br)",
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.0"
+  }
+}

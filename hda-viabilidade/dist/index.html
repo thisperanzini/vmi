@@ -1444,6 +1444,14 @@ if (typeof module !== 'undefined') module.exports = { SCHEMA: SCHEMA, modeloPadr
   var E = Engine, M = Motor, BASE = BASE_PADRAO;
   function $(s, r) { return (r || document).querySelector(s); }
   function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+
+  /* ---------- registro de uso (só no domínio hospedado, com a camada de login) ---------- */
+  var NO_DOMINIO = /\.sespartners\.com\.br$/.test(location.hostname);
+  function registrarUso(tipo, extra) {
+    if (!NO_DOMINIO) return;
+    try { fetch('/.netlify/functions/log', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', keepalive: true, body: JSON.stringify(Object.assign({ tipo: tipo, path: location.pathname }, extra || {})) }).catch(function () {}); } catch (e) {}
+  }
+
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   var NF0 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
@@ -1839,6 +1847,7 @@ if (typeof module !== 'undefined') module.exports = { SCHEMA: SCHEMA, modeloPadr
   }
   function congelar() {
     var nome = ($('#inVerNome').value || '').trim() || ('Versão ' + new Date().toLocaleString('pt-BR'));
+    registrarUso('versao', { nome: nome });
     var v = { nome: nome, em: new Date().toISOString(), model: clone(model), kpis: { vpl: calc.flSel.vpl, prop: calc.cen.prop.resultado, linha: calc.C.escolha ? calc.C.escolha.linha.nome : '' } };
     if (db) db.collection('versoes').add(v).then(function () { toast('Versão "' + nome + '" congelada.'); }).catch(function () { toast('Não foi possível salvar a versão.'); });
     else { v.id = 'v' + Date.now(); versoes.unshift(v); lsSet('hda:versoes', JSON.stringify(versoes)); renderVersoes(); toast('Versão congelada neste navegador.'); }
@@ -1973,6 +1982,7 @@ if (typeof module !== 'undefined') module.exports = { SCHEMA: SCHEMA, modeloPadr
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(en), 'Crédito entidade');
     var out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     var nome = 'HDA_viabilidade_imagem_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+    registrarUso('export', { doc: 'xlsx' });
     if (downloads) downloads.save({ filename: nome, data: new Blob([out]) }).then(function () { toast('Planilha salva.'); }).catch(function (e) { if (!e || e.code !== 'declined') toast('Não foi possível salvar a planilha aqui.'); });
     else { try { var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([out])); a.download = nome; a.click(); } catch (e) { toast('Download indisponível nesta visualização.'); } }
   }
@@ -1980,6 +1990,8 @@ if (typeof module !== 'undefined') module.exports = { SCHEMA: SCHEMA, modeloPadr
 
   /* ================= boot ================= */
   $('#logoTopo').src = LOGO.navy;
+  if (NO_DOMINIO) { var ft = $('#foot'); ft.innerHTML = '<a href="/.netlify/functions/sair" style="margin-right:10px">Sair</a><a href="/admin/" style="margin-right:10px">Acessos</a>' + ft.innerHTML; }
+  registrarUso('pagina');
   recompute(); renderAll();
   var t0 = lsGet('hda:tab'); showTab(t0 && $('#tab-' + t0) ? t0 : 'tese');
   initCaps();

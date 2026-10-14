@@ -9,6 +9,7 @@ Saídas (determinísticas, commitadas):
   dist/financiamento-vmi/index.html      site financiamento (netlify.toml da raiz: publish = dist/financiamento-vmi)
   hda-viabilidade/dist/index.html        site HDA (base directory = hda-viabilidade; seu netlify.toml: publish = dist)
   artifacts/<pasta>.html      mesma página sem o invólucro de site, para publicar no claude.ai
+  netlify/functions, netlify/edge-functions, <dist>/entrar, <dist>/admin   camada de login (copiada de auth/)
 
 Uso: python3 build.py            (as duas páginas)
      python3 build.py --check    (só confere a sintaxe dos scripts com node)
@@ -68,6 +69,15 @@ def build_hda():
     write("artifacts/hda-viabilidade.html", page)
     write("hda-viabilidade/dist/index.html", SITE_HEAD % "Hospital Dom Alvarenga: viabilidade da internalização do serviço de imagem com equipamentos VMI/Alfamed. S&S Partners." + page + "</body>\n</html>\n")
 
+AUTH_FUNCS = ["_lib.mjs", "pedir-codigo.mjs", "validar-codigo.mjs", "sair.mjs", "log.mjs", "admin.mjs"]
+def build_auth(base, dist):
+    """Copia a camada de login (auth/) para o site: funções, edge function e páginas /entrar e /admin."""
+    for f in AUTH_FUNCS: write(os.path.join(base, "netlify/functions", f), read("auth/functions/" + f))
+    write(os.path.join(base, "netlify/edge-functions/gate.ts"), read("auth/edge/gate.ts"))
+    write(os.path.join(dist, "entrar/index.html"), read("auth/pages/entrar.html"))
+    write(os.path.join(dist, "admin/index.html"), read("auth/pages/admin.html"))
+    write(os.path.join(dist, "robots.txt"), "User-agent: *\nDisallow: /\n")
+
 def check():
     ok = True
     for p in ["shared/base.js", "shared/catalogo.js", "shared/motor.js", "shared/logo.js", "financiamento-vmi/src/docs.js", "financiamento-vmi/src/app.js", "hda-viabilidade/src/engine.js", "hda-viabilidade/src/premissas.js", "hda-viabilidade/src/app.js"]:
@@ -80,5 +90,6 @@ if __name__ == "__main__":
     if not check(): sys.exit(1)
     if "--check" in sys.argv: sys.exit(0)
     build_financiamento(); build_hda()
+    build_auth(".", "dist/financiamento-vmi"); build_auth("hda-viabilidade", "hda-viabilidade/dist")
     for p in ["dist/financiamento-vmi/index.html", "hda-viabilidade/dist/index.html", "artifacts/financiamento-vmi.html", "artifacts/hda-viabilidade.html"]:
         print("%7d bytes  %s" % (os.path.getsize(os.path.join(ROOT, p)), p))
