@@ -1,0 +1,508 @@
+{
+ "casos": [
+  {
+   "atualizado": "2026-10-09T21:32:09.623Z",
+   "cliente": {
+    "cep": "08730-020",
+    "cnpj": "16.721.715/0001-73",
+    "contato": {},
+    "email": "ceman@centromedicoandrade.com.br",
+    "endereco": "Avenida Braz de Pina, 90, Vila Vitória",
+    "fantasia": "CEMAN",
+    "municipio": "Mogi das Cruzes",
+    "natureza": "privada",
+    "porte_decl": "media",
+    "razao": "ANDRADE E MALATESTA SERVIÇOS MÉDICOS ESPECIALIZADOS LTDA",
+    "regime": "presumido",
+    "rep": {
+     "cargo": "Sócio-administrador",
+     "nome": "Dr. Thiago Andrade"
+    },
+    "rob": null,
+    "uf": "SP"
+   },
+   "criado": "2026-10-09",
+   "exemplo": true,
+   "financeiro": {
+    "exercicios": []
+   },
+   "flags": {},
+   "honorario_pct": 2,
+   "id": "ceman-cignus600",
+   "kit": {},
+   "nome": "CEMAN · Cignus 600",
+   "notas": "Caso de teste a partir do contrato FINAME CEMAN. Faturamento e balanços ainda não recebidos: porte declarado como média empresa até o DRE chegar.",
+   "operacao": {
+    "carModo": "pagos",
+    "carencia": 6,
+    "catalogo_id": "cignus600",
+    "equipamento": {
+     "cfi": "04252454",
+     "descricao": "Sistema de Ressonância Magnética CIGNUS 600 1.5T (24 canais)",
+     "fabricante": "VMI Tecnologias Ltda",
+     "modalidade": "rm_15t",
+     "modelo": "Cignus 600 1,5T (24 canais)",
+     "ncm": "9018.13.00",
+     "origem": "nacional"
+    },
+    "finalidade": "Implantação de serviço de ressonância magnética 1,5T na clínica.",
+    "fornecedor": "VMI Tecnologias Ltda",
+    "inicio": "2026-11",
+    "prazo": 72,
+    "sistema": "SAC",
+    "valor_equip": 4329000,
+    "valor_financiar": 4329000,
+    "valor_obra": 0
+   },
+   "roi": {
+    "ate": false,
+    "ativo": false,
+    "energia": 8000,
+    "equiparacao": true,
+    "equipe": 30000,
+    "horizonte": 10,
+    "inicio_op": 3,
+    "iss": 5,
+    "mix_conv": 0,
+    "mix_part": 0,
+    "mix_sus": 100,
+    "modalidade": "rm_15t",
+    "ocupacao": 80,
+    "ramp_ini": 30,
+    "ramp_meses": 12,
+    "regime": "presumido"
+   },
+   "sim": {},
+   "status": "Kit em montagem"
+  },
+  {
+   "atualizado": "2026-10-14T19:20:00.000Z",
+   "cliente": {
+    "contato": {},
+    "fantasia": "Hospital Dom Alvarenga",
+    "municipio": "São Paulo",
+    "natureza": "filantropica",
+    "porte_decl": "media",
+    "razao": "Associação Beneficente Nossa Senhora de Nazaré (ABENSENA)",
+    "regime": "presumido",
+    "rep": {
+     "cargo": "CEO"
+    },
+    "rob": 148565763,
+    "uf": "SP"
+   },
+   "criado": "2026-10-14",
+   "financeiro": {
+    "caixa": 2688810,
+    "divida_total": 29523469,
+    "dividas": [
+     {
+      "banco": "Funsai",
+      "fim": "2030-12",
+      "liquida_evento": true,
+      "mod": "Mútuo",
+      "parcela": 13145.69,
+      "saldo": 949283.47
+     },
+     {
+      "banco": "Bradesco",
+      "fim": "2027-04",
+      "liquida_evento": true,
+      "mod": "Capital de giro",
+      "parcela": 155360.01,
+      "saldo": 2230439.52
+     },
+     {
+      "banco": "Bradesco",
+      "fim": "2030-02",
+      "liquida_evento": true,
+      "mod": "FGI",
+      "parcela": 279738.59,
+      "saldo": 7495100
+     },
+     {
+      "banco": "Bradesco",
+      "fim": "2029-10",
+      "liquida_evento": true,
+      "mod": "Capital de giro",
+      "parcela": 89210.69,
+      "saldo": 2483626.07
+     },
+     {
+      "banco": "Bradesco",
+      "fim": "2026-12",
+      "liquida_evento": true,
+      "mod": "Capital de giro",
+      "parcela": 230956.58,
+      "saldo": 2500000
+     },
+     {
+      "banco": "Itaú",
+      "fim": "2028-07",
+      "liquida_evento": true,
+      "mod": "Capital de giro",
+      "parcela": 80358.55,
+      "saldo": 1767149.07
+     },
+     {
+      "banco": "Itaú",
+      "fim": "2028-10",
+      "liquida_evento": true,
+      "mod": "Capital de giro",
+      "parcela": 54911.36,
+      "saldo": 1700214.02
+     },
+     {
+      "banco": "Banco do Brasil",
+      "fim": "2028-09",
+      "liquida_evento": true,
+      "mod": "Capital de giro",
+      "parcela": 311337.45,
+      "saldo": 6971033.39
+     },
+     {
+      "banco": "Banco do Brasil",
+      "fim": "2026-09",
+      "liquida_evento": true,
+      "mod": "Capital de giro",
+      "parcela": 138477.92,
+      "saldo": 1125000
+     },
+     {
+      "banco": "Arrendamento mercantil",
+      "fim": "2028-08",
+      "liquida_evento": false,
+      "mod": "Leasing",
+      "parcela": 17670,
+      "saldo": 565436.13
+     }
+    ],
+    "ebitda_anual": 10749243,
+    "ebitda_cresc": 0,
+    "evento": {
+     "mes": "2027-03",
+     "nome": "TDC (potencial construtivo)"
+    },
+    "exercicios": []
+   },
+   "flags": {
+    "sus_complementar": true
+   },
+   "honorario_pct": 2,
+   "id": "hda-imagem-propria",
+   "kit": {},
+   "nome": "HDA · Imagem própria (TC, RX, US)",
+   "notas": "Business case completo na página \"Imagem Própria HDA\" (https://claude.ai/artifact/NYF9xsBNjr61msH8q1mbES). CFI verificado em 14/10/2026: RX Aquila e US Alfamed Dominus L1 credenciados; a TC Pulsar NÃO consta no Catálogo CFI (GE Ascend/Aspire, Siemens, Philips, Canon e Imex constam). Preços VMI/Alfamed a receber. Hospital 20% filantrópico; adesão ao Agora Tem Especialistas a confirmar (habilita FGTS-Saúde). Dívida bancária R$ 29,5 mi, DSCR 2027 ≈ 1,0x sem o projeto; TDC de R$ 50–70 mi previsto para o 1T27. Contratar após o TDC. Mapa de empréstimos de dez/25 (slide 6 do Conselho).",
+   "operacao": {
+    "carModo": "pagos",
+    "carencia": 24,
+    "equipamento": {
+     "cfi": "03538400",
+     "descricao": "Pacote de imagem: TC 64 canais/128 cortes, 2 ultrassons Alfamed Dominus L1 (CFI 04313989), RX móvel Aquila 320 S (CFI 03538400) e Aquila 500 D (CFI 04279825), placa DR",
+     "fabricante": "VMI Médica / Alfa Med",
+     "modalidade": "tc",
+     "modelo": "Aquila 320 S + Aquila 500 D + Dominus L1 + TC (a definir)",
+     "ncm": "9022.14.19",
+     "origem": "nacional"
+    },
+    "finalidade": "Internalização do serviço de diagnóstico por imagem hoje terceirizado (EMG); substituição do parque e verticalização.",
+    "fornecedor": "VMI Tecnologias Ltda",
+    "inicio": "2027-03",
+    "prazo": 120,
+    "sistema": "SAC",
+    "valor_equip": 2934024.8,
+    "valor_financiar": 2934024.8,
+    "valor_obra": 0
+   },
+   "roi": {
+    "ativo": true,
+    "cresc_aa": 0,
+    "cv_atual": 5.21,
+    "cv_proprio": 5.21,
+    "desconto": 15,
+    "equiparacao": true,
+    "fixos_atuais": 284845.54,
+    "fixos_novos": 20183,
+    "garantia": 12,
+    "horizonte": 10,
+    "inicio_op": 3,
+    "iss": 5,
+    "manut": 4.69,
+    "mix_conv": 90,
+    "mix_part": 10,
+    "mix_sus": 0,
+    "modalidade": "tc",
+    "modo": "internalizacao",
+    "ocupacao": 65,
+    "outros_capex": 30000,
+    "ramp_ini": 100,
+    "ramp_meses": 0,
+    "reajuste_aa": 0,
+    "rec_mes": 616240.92,
+    "regime": "presumido",
+    "rep_atual": 59.32,
+    "rep_proprio": 22.2,
+    "transicao": 3,
+    "volume_mes": 3568,
+    "volume_var": 0
+   },
+   "sim": {},
+   "status": "Prospecção"
+  }
+ ],
+ "catalogo": [
+  {
+   "id": "cignus600",
+   "fabricante": "VMI Médica (VMI Tecnologias Ltda)",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Cignus 600 1,5T (24 canais)",
+   "modalidade": "rm_15t",
+   "cfi": "04252454",
+   "ncm": "9018.13.00",
+   "preco": 4329000,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026; preço: contrato FINAME CEMAN"
+  },
+  {
+   "id": "aquila320s",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Aquila 320 S (RX móvel)",
+   "modalidade": "rx_movel",
+   "cfi": "03538400",
+   "ncm": "9022.14.19",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "aquila320d",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Aquila 320 D (RX móvel digital)",
+   "modalidade": "rx_movel",
+   "cfi": "03538253",
+   "ncm": "9022.14.19",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "aquila500s",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Aquila 500 S (RX móvel)",
+   "modalidade": "rx_movel",
+   "cfi": "04290476",
+   "ncm": "9022.14.19",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "aquila500d",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Aquila 500 D (RX móvel digital)",
+   "modalidade": "rx_movel",
+   "cfi": "04279825",
+   "ncm": "9022.14.19",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "apolos",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Apolo S (RX fixo)",
+   "modalidade": "rx_dr",
+   "cfi": "03538399",
+   "ncm": "9022.14.19",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "apolod",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Apolo D (RX fixo digital)",
+   "modalidade": "rx_dr",
+   "cfi": "03538246",
+   "ncm": "9022.14.19",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "apolodrf",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Apolo DRF (RX telecomandado)",
+   "modalidade": "rx_dr",
+   "cfi": "03989142",
+   "ncm": "9022.14.19",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "digimamos",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Digimamo S (mamografia)",
+   "modalidade": "mamografia",
+   "cfi": "03538260",
+   "ncm": "9022.14.11",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "digimamod",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Digimamo D (mamografia digital)",
+   "modalidade": "mamografia",
+   "cfi": "03538417",
+   "ncm": "9022.14.11",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "digimamotm",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Digimamo TM (mamografia)",
+   "modalidade": "mamografia",
+   "cfi": "03902575",
+   "ncm": "9022.14.11",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "digimamotm3d",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Digimamo TM 3D (tomossíntese)",
+   "modalidade": "mamografia",
+   "cfi": "04267577",
+   "ncm": "9022.14.11",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "fenixfaf",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Fênix FAF (arco cirúrgico)",
+   "modalidade": "arco",
+   "cfi": "03902582",
+   "ncm": "9022.14.19",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "fenixfag",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Fênix FAG (arco cirúrgico)",
+   "modalidade": "arco",
+   "cfi": "04256011",
+   "ncm": "9022.14.19",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "centauros",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Centauro S (RX veterinário)",
+   "modalidade": "rx_dr",
+   "cfi": "03893005",
+   "ncm": "9022.14.19",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "centaurod",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Centauro D (RX veterinário digital)",
+   "modalidade": "rx_dr",
+   "cfi": "03902778",
+   "ncm": "9022.14.19",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "pulsar128",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Pulsar 128 (TC 64 canais / 128 cortes)",
+   "modalidade": "tc",
+   "cfi": "",
+   "ncm": "9022.12.00",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "NÃO CONSTA no Catálogo CFI em 14/10/2026 (nem Pulsar 32/64). Credenciar antes de ofertar FINAME; até lá, só linhas sem CFI."
+  },
+  {
+   "id": "pulsar64",
+   "fabricante": "VMI Médica",
+   "cnpj": "02.659.246/0001-03",
+   "modelo": "Pulsar 64 (TC 32 canais / 64 cortes)",
+   "modalidade": "tc",
+   "cfi": "",
+   "ncm": "9022.12.00",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Não consta no Catálogo CFI em 14/10/2026."
+  },
+  {
+   "id": "dominusl1",
+   "fabricante": "Alfa Med Sistemas Médicos Ltda (grupo Prime)",
+   "cnpj": "11.405.384/0001-49",
+   "modelo": "Dominus L1 (ultrassom)",
+   "modalidade": "us",
+   "cfi": "04313989",
+   "ncm": "9018.12.10",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "arcanjox",
+   "fabricante": "Alfa Med Sistemas Médicos Ltda (grupo Prime)",
+   "cnpj": "11.405.384/0001-49",
+   "modelo": "Arcanjo X (monitor multiparamétrico)",
+   "modalidade": "",
+   "cfi": "04251352",
+   "ncm": "9018.19.80",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  },
+  {
+   "id": "virto",
+   "fabricante": "Alfa Med Sistemas Médicos Ltda (grupo Prime)",
+   "cnpj": "11.405.384/0001-49",
+   "modelo": "Virto (oxímetro)",
+   "modalidade": "",
+   "cfi": "04311550",
+   "ncm": "9018.19.80",
+   "preco": null,
+   "origem": "nacional",
+   "fonte": "Catálogo CFI do BNDES, consulta de 14/10/2026"
+  }
+ ],
+ "geradoEm": "2026-10-14"
+}

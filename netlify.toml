@@ -1,0 +1,18 @@
+# Site estático: o dist/ já vem montado pelo build.py e commitado; nada a construir no Netlify.
+[build]
+  publish = "dist"
+  command = ""
+
+# Quem entrar pelo endereço *.netlify.app vai para o domínio próprio (necessário quando houver camada de login na frente).
+[[redirects]]
+  from = "https://silver-mandazi-edca86.netlify.app/*"
+  to = "https://financiamento.sespartners.com.br/:splat"
+  status = 301
+  force = true
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
