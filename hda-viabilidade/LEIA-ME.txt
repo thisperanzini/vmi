@@ -1,0 +1,26 @@
+HDA · Viabilidade da internalização do serviço de imagem (S&S Partners)
+Versão de 14/10/2026 — espelho estático da página publicada no claude.ai.
+
+COMO HOSPEDAR
+1. Envie a pasta "hda-viabilidade" inteira para o servidor (ex.: public_html/hda-viabilidade/).
+2. A página fica em https://sespartners.com.br/hda-viabilidade/ (index.html).
+3. Não há backend: é um único arquivo HTML, com o motor de cálculo embutido.
+
+DEPENDÊNCIAS EXTERNAS (carregadas pelo navegador do visitante)
+- Fontes IBM Plex via fonts.googleapis.com (se bloqueadas, a página usa as fontes do sistema).
+- Biblioteca SheetJS (cdnjs.cloudflare.com) só para o botão "Exportar .xlsx".
+
+COMPORTAMENTO FORA DO CLAUDE.AI
+- As premissas editadas ficam guardadas no navegador de quem edita (localStorage), não num banco compartilhado.
+  Para distribuir um novo caso-base, edite no claude.ai, exporte, ou gere novo zip.
+- "Congelar versão" também grava só no navegador local.
+- O botão "Exportar .xlsx" faz o download direto.
+
+ACESSO RESTRITO (recomendado: dados do hospital)
+- Apache: crie um .htaccess na pasta com AuthType Basic + .htpasswd, ou
+- proteja a pasta pelo painel da hospedagem (diretório protegido por senha).
+- A página já traz <meta name="robots" content="noindex,nofollow">.
+
+CONTEÚDO
+- Motor de financiamento e base de linhas: ferramenta Financiamento VMI (base 2026-10-09), sem alterações.
+- Fontes dos números: planilha Viabilidade v2 (Controladoria HDA), Projeto Radiologia (Jaime), Reunião do Conselho out/26.

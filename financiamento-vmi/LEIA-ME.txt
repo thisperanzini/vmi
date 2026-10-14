@@ -1,0 +1,21 @@
+Financiamento VMI · project finance para equipamentos VMI (S&S Partners)
+Versão de 14/10/2026 — espelho estático da ferramenta publicada no claude.ai (base de linhas 2026-10-14).
+
+COMO HOSPEDAR
+1. Envie a pasta "financiamento-vmi" inteira para o servidor (ex.: public_html/financiamento-vmi/).
+2. A ferramenta fica em https://sespartners.com.br/financiamento-vmi/ (index.html). Sem backend.
+
+O QUE MUDA FORA DO CLAUDE.AI
+- Casos, base de linhas editada e catálogo ficam guardados no navegador de quem usa (localStorage), não num banco compartilhado.
+  A cópia já vem com os casos CEMAN e HDA e o catálogo com os códigos CFI verificados em 14/10/2026.
+  Quem abrir em outro computador/navegador vê só os casos de fábrica; para distribuir casos novos, gere outro zip.
+- Estudo (PDF), dossiê (PDF), kit (.xlsx) e minuta (.docx) baixam direto pelo navegador.
+- A leitura de documentos por IA (kit FINAME) não funciona fora do claude.ai: o cadastro é preenchido à mão.
+
+DEPENDÊNCIAS EXTERNAS (carregadas pelo navegador do visitante)
+- Fontes IBM Plex (fonts.googleapis.com); se bloqueadas, usa fontes do sistema.
+- Bibliotecas só na hora de gerar arquivos: jsPDF + autotable, ExcelJS, docx, pdf.js (cdn.jsdelivr.net).
+
+ACESSO RESTRITO (recomendado: dados de clientes)
+- Proteja a pasta por senha (diretório protegido no painel da hospedagem ou .htaccess com AuthType Basic).
+- A página já traz <meta name="robots" content="noindex,nofollow">.

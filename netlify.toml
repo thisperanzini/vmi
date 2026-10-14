@@ -1,6 +1,8 @@
-# Site estático: o dist/ já vem montado pelo build.py e commitado; nada a construir no Netlify.
+# Site financiamento.sespartners.com.br: publica só a ferramenta de financiamento.
+# O dist/ já vem montado pelo build.py e commitado; nada a construir no Netlify.
+# Para o HDA, um segundo site no Netlify ligado a este repositório com publish = "dist/hda-viabilidade".
 [build]
-  publish = "dist"
+  publish = "dist/financiamento-vmi"
   command = ""
 
 # Quem entrar pelo endereço *.netlify.app vai para o domínio próprio (necessário quando houver camada de login na frente).
