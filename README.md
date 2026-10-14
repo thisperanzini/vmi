@@ -7,7 +7,8 @@ Fonte única das páginas publicadas em `financiamento.sespartners.com.br` (Netl
 | `shared/` | `base.js` (linhas, macro, modalidades, custos padrão), `catalogo.js` (produtos com CFI verificado), `motor.js` (elegibilidade, cronograma, CET, ROI nos dois modos, DSCR da entidade), `logo.js` |
 | `financiamento-vmi/src/` | ferramenta Financiamento VMI: `head.html` (markup e CSS), `docs.js` (PDF/XLSX/DOCX), `app.js` (interface e persistência), `seed.json` (casos e catálogo de partida fora do claude.ai) |
 | `hda-viabilidade/src/` | business case HDA: `head.html`, `engine.js`, `premissas.js`, `app.js` |
-| `dist/` | páginas montadas, o que o Netlify publica (site financiamento: `dist/financiamento-vmi`; site HDA: `dist/hda-viabilidade`) |
+| `dist/financiamento-vmi/` | página montada do site financiamento (`netlify.toml` da raiz) |
+| `hda-viabilidade/dist/` | página montada do site HDA (no Netlify, Base directory = `hda-viabilidade`; `hda-viabilidade/netlify.toml`) |
 | `artifacts/` | as mesmas páginas sem o invólucro de site, para publicar no claude.ai |
 
 ## Fluxo

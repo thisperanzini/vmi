@@ -1,0 +1,18 @@
+# Site hda.sespartners.com.br. No Netlify, este site usa Base directory = "hda-viabilidade";
+# o publish abaixo é relativo à base. O dist/ já vem montado pelo build.py da raiz; nada a construir.
+[build]
+  publish = "dist"
+  command = ""
+
+[[redirects]]
+  from = "https://serene-bubblegum-a5555b.netlify.app/*"
+  to = "https://hda.sespartners.com.br/:splat"
+  status = 301
+  force = true
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"

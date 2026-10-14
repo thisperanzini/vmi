@@ -6,7 +6,8 @@
   hda-viabilidade/src/     head.html · engine.js · premissas.js · app.js
 
 Saídas (determinísticas, commitadas):
-  dist/<pasta>/index.html     página completa para hospedagem (Netlify)
+  dist/financiamento-vmi/index.html      site financiamento (netlify.toml da raiz: publish = dist/financiamento-vmi)
+  hda-viabilidade/dist/index.html        site HDA (base directory = hda-viabilidade; seu netlify.toml: publish = dist)
   artifacts/<pasta>.html      mesma página sem o invólucro de site, para publicar no claude.ai
 
 Uso: python3 build.py            (as duas páginas)
@@ -65,7 +66,7 @@ def build_hda():
     ]
     page = "\n".join(parts) + "\n"
     write("artifacts/hda-viabilidade.html", page)
-    write("dist/hda-viabilidade/index.html", SITE_HEAD % "Hospital Dom Alvarenga: viabilidade da internalização do serviço de imagem com equipamentos VMI/Alfamed. S&S Partners." + page + "</body>\n</html>\n")
+    write("hda-viabilidade/dist/index.html", SITE_HEAD % "Hospital Dom Alvarenga: viabilidade da internalização do serviço de imagem com equipamentos VMI/Alfamed. S&S Partners." + page + "</body>\n</html>\n")
 
 def check():
     ok = True
@@ -79,5 +80,5 @@ if __name__ == "__main__":
     if not check(): sys.exit(1)
     if "--check" in sys.argv: sys.exit(0)
     build_financiamento(); build_hda()
-    for p in ["dist/financiamento-vmi/index.html", "dist/hda-viabilidade/index.html", "artifacts/financiamento-vmi.html", "artifacts/hda-viabilidade.html"]:
+    for p in ["dist/financiamento-vmi/index.html", "hda-viabilidade/dist/index.html", "artifacts/financiamento-vmi.html", "artifacts/hda-viabilidade.html"]:
         print("%7d bytes  %s" % (os.path.getsize(os.path.join(ROOT, p)), p))
