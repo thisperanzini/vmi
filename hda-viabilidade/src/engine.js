@@ -30,8 +30,11 @@ var Engine = (function () {
     return null;
   }
 
-  /* ---------- DRE mensal de uma configuração (EMG ou Própria) ---------- */
-  function dreMensal(m, fator, tipo, anoProj) {
+  /* ---------- DRE mensal de uma configuração (EMG ou Própria) ----------
+     opex (só na própria): { manut, aluguel } em R$/mês de regime, antes do reajuste.
+     Sem opex, a própria sai sem manutenção nem aluguel: é a base que o fluxo usa,
+     somando depois a manutenção ou o aluguel mês a mês (garantia, início da operação). */
+  function dreMensal(m, fator, tipo, anoProj, opex) {
     var b = m.base, p = m.propria, c = m.cenario;
     var reaj = Math.pow(1 + num(c.reajuste_aa), Math.max(0, anoProj - 1));
     var exames = num(b.exames) / num(b.meses) * fator;
@@ -45,15 +48,15 @@ var Engine = (function () {
       d.rep_mat = rl * num(b.rep_mat_pct);
       d.rep_bio = rl * num(b.rep_bio_pct);
       d.rep_sala = rl * num(b.rep_sala_pct);
-      d.manut = 0; d.rispacs = 0;
+      d.manut = 0; d.aluguel = 0; d.rispacs = 0;
     } else {
       d.matmed = rl * num(p.matmed_pct);
       d.rep_med = rl * num(p.rep_med_pct);
       d.rep_mat = num(p.mat_elimina) ? 0 : rl * num(b.rep_mat_pct);
       d.rep_bio = num(p.bio_elimina) ? 0 : rl * num(b.rep_bio_pct);
       d.rep_sala = num(p.sala_elimina) ? 0 : rl * num(b.rep_sala_pct);
-      var manutOn = anoProj >= num(p.manut_inicio_ano);
-      d.manut = manutOn ? (num(p.manut_tc) + num(p.manut_outros) + (num(p.tubo_incluir) ? num(p.tubo) : 0)) * num(p.manut_fator == null ? 1 : p.manut_fator) * reaj : 0;
+      d.manut = num(opex && opex.manut) * reaj;
+      d.aluguel = num(opex && opex.aluguel) * reaj;
       d.rispacs = num(p.rispacs_mes) * reaj;
     }
     d.repasse = d.rep_med + d.rep_mat + d.rep_bio + d.rep_sala;
@@ -61,7 +64,7 @@ var Engine = (function () {
     d.mc = rl - d.cv;
     d.cf_dir = num(b.cf_dir_mes) * reaj;
     d.cf_ind = num(b.cf_ind_mes) * reaj;
-    d.margem_direta = d.mc - d.cf_dir - d.manut - d.rispacs;
+    d.margem_direta = d.mc - d.cf_dir - d.manut - d.aluguel - d.rispacs;
     d.resultado = d.margem_direta - d.cf_ind; /* = EBITDA mensal */
     return d;
   }
@@ -71,6 +74,97 @@ var Engine = (function () {
     var tot = 0, fin = 0, parcelas = 0;
     (itens || []).forEach(function (it) { var v = num(it.qtd) * num(it.preco); tot += v; if (it.fin !== false) fin += v; parcelas += num(it.qtd) * num(it.parcela); });
     return { total: tot, financiavel: fin, parcelaMes: parcelas };
+  }
+
+  /* ---------- Meses cobrados num ano do projeto ----------
+     A operação própria começa no mês (inicio_op_mes + 1) do ano 1. "livres" = meses de operação
+     sem cobrança no início (garantia de fábrica para a manutenção; 0 para o aluguel). */
+  function mesesAno(m, t, livres) {
+    var desde = (num(m.fin.inicio_op_mes) || 0) + num(livres);
+    return Math.max(0, 12 * t - Math.max(12 * (t - 1), desde));
+  }
+  function reajAno(m, t) { return Math.pow(1 + num(m.cenario.reajuste_aa), Math.max(0, t - 1)); }
+  function fatorManut(m) { return m.propria.manut_fator == null ? 1 : num(m.propria.manut_fator); }
+
+  /* ---------- Manutenção pós-garantia de um pacote (B ou C) ----------
+     Por item: contrato Prata (sem tubo, gerador e sistemas de imagem; a TC soma a provisão de tubo)
+     ou Ouro (cobertura total). Começa depois da garantia, contada da instalação.               */
+  function manutPacote(m, itens) {
+    var plano = (m.manut && m.manut.plano) === 'prata' ? 'prata' : 'ouro', G = num(m.manut && m.manut.garantia_meses);
+    var fat = fatorManut(m), tubo = num(m.propria.tubo);
+    var porItem = (itens || []).map(function (it) {
+      var q = num(it.qtd), prata = (num(it.m_prata) + (it.tubo ? tubo : 0)) * q, ouro = num(it.m_ouro) * q;
+      return { id: it.id, nome: it.nome, prata: prata * fat, ouro: ouro * fat, usado: (plano === 'prata' ? prata : ouro) * fat, tubo: it.tubo ? tubo * q * fat : 0 };
+    });
+    var soma = function (k) { return porItem.reduce(function (s, x) { return s + x[k]; }, 0); };
+    var mes = soma('usado');
+    return { plano: plano, garantia: G, fator: fat, porItem: porItem, prata: soma('prata'), ouro: soma('ouro'), mes: mes,
+      ano: function (t) { return mes * mesesAno(m, t, G) * reajAno(m, t); } };
+  }
+  function opexManut(M) { return { tipo: 'manut', mes: M.mes, ano: M.ano }; }
+  function opexAluguel(m, mes) { return { tipo: 'aluguel', mes: mes, ano: function (t) { return mes * mesesAno(m, t, 0) * reajAno(m, t); } }; }
+
+  /* ---------- Locação de longo prazo (alternativa D): aluguel por composição de custos ----------
+     parcela financeira = anuidade, à taxa do locador, sobre (valor − VP do valor residual no fim do prazo)
+     valor residual     = valor × (1 − queda anual do valor de mercado)^(prazo/12)
+     aluguel            = parcela financeira ÷ (1 − tributos do locador) + manutenção Ouro média no prazo
+     (a manutenção do 1º ano é garantia de fábrica: custo zero para o locador)                         */
+  var DEP_D = { tc: 'dep_tc', us: 'dep_us', rxp: 'dep_rx', rxdr: 'dep_rx', dr: 'dep_dr' };
+  function depD(m, it) { var d = m.altD || {}, k = DEP_D[it.id]; return k && d[k] != null ? num(d[k]) : 0.25; }
+  function locacao(m, itens, n) {
+    var d = m.altD || {}, ra = num(d.taxa_base) + num(d.premio), rm = Math.pow(1 + ra, 1 / 12) - 1, tr = num(d.trib);
+    var G = num(m.manut && m.manut.garantia_meses), fat = fatorManut(m);
+    var v = Math.pow(1 + rm, -n), fa = rm > 0 ? rm / (1 - v) : 1 / n;
+    var linhas = (itens || []).map(function (it) {
+      var V = num(it.qtd) * num(it.preco), dep = depD(m, it), rv = Math.pow(1 - dep, n / 12), RV = V * rv;
+      var fin = (V - RV * v) * fa, finBruto = tr < 1 ? fin / (1 - tr) : fin;
+      var man = num(it.m_ouro) * num(it.qtd) * fat * Math.max(0, n - G) / n;
+      return { id: it.id, nome: it.nome, modelo: it.modelo, qtd: num(it.qtd), V: V, dep: dep, rvPct: rv, RV: RV, fin: fin, trib: finBruto - fin, man: man, aluguel: finBruto + man, pctMes: V ? (finBruto + man) / V : null };
+    });
+    var s = function (k) { return linhas.reduce(function (a, x) { return a + x[k]; }, 0); };
+    var V = s('V');
+    return { n: n, taxaAno: ra, taxaMes: rm, linhas: linhas, V: V, RV: s('RV'), fin: s('fin'), trib: s('trib'), man: s('man'), aluguel: s('aluguel'), pctMes: V ? s('aluguel') / V : null };
+  }
+  function altD(m) {
+    var n = Math.max(12, Math.round(num(m.altD && m.altD.prazo) || 60)), L = locacao(m, m.equip.C, n);
+    return { id: 'D', capex: 0, capexFin: 0, custosIni: 0, servico: {}, jurosAno: {}, rows: [], n: n, loc: L, parcela: 0, aluguel: L.aluguel, pagosPrazo: L.aluguel * n, opex: opexAluguel(m, L.aluguel) };
+  }
+  /* Comprar o mesmo pacote (C) e usá-lo pelo mesmo prazo da locação, a valor presente pela taxa de desconto:
+     entrada + parcelas até o mês n + saldo devedor no mês n + manutenção Ouro após a garantia − valor de mercado no mês n.
+     A comparação é com a soma dos aluguéis no prazo, à mesma taxa (vantagem da locação = possuir − alugar).             */
+  function custoPossuirC(m, C, n) {
+    var k = Math.pow(1 + num(m.fin.desconto), 1 / 12) - 1, vp = function (x, j) { return x / Math.pow(1 + k, j); };
+    var G = num(m.manut && m.manut.garantia_meses), fat = fatorManut(m), itens = m.equip.C;
+    var M = itens.reduce(function (s, it) { return s + num(it.m_ouro) * num(it.qtd); }, 0) * fat;
+    var RV = itens.reduce(function (s, it) { return s + num(it.qtd) * num(it.preco) * Math.pow(1 - depD(m, it), n / 12); }, 0);
+    var pvMan = 0, j; for (j = G + 1; j <= n; j++) pvMan += vp(M, j);
+    var vista = C.capex + pvMan - vp(RV, n), fin = null, parcelas = 0, saldo = 0;
+    if (C.escolha && C.rows && C.rows.length) {
+      fin = C.capex - C.capexFin + C.custosIni;
+      for (j = 0; j < Math.min(n, C.rows.length); j++) { fin += vp(C.rows[j].parcela, j + 1); parcelas += C.rows[j].parcela; }
+      saldo = n < C.rows.length ? C.rows[n - 1].saldo : 0;
+      fin += vp(saldo, n) + pvMan - vp(RV, n);
+    }
+    return { pv: fin == null ? vista : fin, pvVista: vista, financiado: fin != null, parcelas: parcelas, saldo: saldo, M: M, pvMan: pvMan, RV: RV };
+  }
+  var PRAZOS_D = [36, 48, 60, 72, 84];
+  function prazosD(m, C) {
+    var k = Math.pow(1 + num(m.fin.desconto), 1 / 12) - 1;
+    return PRAZOS_D.map(function (n) {
+      var L = locacao(m, m.equip.C, n), D = { id: 'D', capex: 0, capexFin: 0, custosIni: 0, servico: {}, n: n, loc: L, opex: opexAluguel(m, L.aluguel) };
+      var fl = fluxo(m, D), pvAlug = 0; for (var j = 1; j <= n; j++) pvAlug += L.aluguel / Math.pow(1 + k, j);
+      var cp = custoPossuirC(m, C, n), anu = pvAlug / (L.aluguel || 1);
+      return { n: n, loc: L, aluguel: L.aluguel, pctMes: L.pctMes, totalPrazo: L.aluguel * n, pvAluguel: pvAlug, custoPossuir: cp.pv, custoVista: cp.pvVista, possuir: cp, vantagem: cp.pv - pvAlug, vantagemVista: cp.pvVista - pvAlug,
+        equilibrio: cp.pv / anu, /* aluguel em que locar e possuir empatam no prazo */
+        vplEnt: fl.vplEnt, acumEnt: fl.acumEnt, fl: fl };
+    });
+  }
+  /* Aluguel em que a locação empata com uma alternativa de compra no VPL para o hospital (horizonte inteiro).
+     O VPL da locação é linear no aluguel: VPL(a) = VPL(a0) − (a − a0) × F, F = Σ meses cobrados × reajuste ÷ (1+r)^t. */
+  function equilibrioD(m, D, flD, flAlvo) {
+    var r = num(m.fin.desconto), H = Math.max(1, Math.round(num(m.fin.horizonte))), F = 0;
+    for (var t = 1; t <= H; t++) F += mesesAno(m, t, 0) * reajAno(m, t) / Math.pow(1 + r, t);
+    return F ? D.aluguel - (flAlvo.vplEnt - flD.vplEnt) / F : null;
   }
 
   /* ---------- Serviço da dívida por ano-projeto a partir de um cronograma mensal ---------- */
@@ -93,8 +187,11 @@ var Engine = (function () {
       var fator = (1 + num(c.volume_var)) * Math.pow(1 + num(c.cresc_aa), Math.max(0, t - 2));
       var frac = t === 1 ? (12 - ini) / 12 : 1;
       var e = dreMensal(m, fator, 'emg', t), p = dreMensal(m, fator, 'propria', t);
-      var ebitdaEmg = e.resultado * 12, ebitdaProp = p.resultado * 12;
-      var inc = (ebitdaProp - ebitdaEmg) * frac;
+      var ebitdaEmg = e.resultado * 12, ebitdaPropBase = p.resultado * 12;
+      var incBase = (ebitdaPropBase - ebitdaEmg) * frac;
+      var opexAno = alt.opex ? alt.opex.ano(t) : 0; /* manutenção pós-garantia (B, C) ou aluguel (D) */
+      var inc = incBase - opexAno;
+      var opReg = alt.opex ? (alt.opex.tipo === 'aluguel' ? { aluguel: alt.opex.mes } : { manut: alt.opex.mes }) : null;
       var depAno = t <= vida ? dep : 0;
       var ebit = inc - depAno;
       var trib = Math.max(0, ebit) * num(f.tributos);
@@ -103,13 +200,14 @@ var Engine = (function () {
       var serv = (alt.servico && alt.servico[t]) || 0;
       var fce = inc - trib - serv + residual;
       acumP += fcp; acumE += fce;
-      anos.push({ t: t, ano: num(f.ano_inicio) + t - 1, fator: fator, frac: frac, exames: p.exames * 12, rl: p.rl * 12, ebitdaEmg: ebitdaEmg, ebitdaProp: ebitdaProp, inc: inc, dep: depAno, ebit: ebit, trib: trib, residual: residual, fcp: fcp, servico: serv, juros: (alt.jurosAno && alt.jurosAno[t]) || 0, fce: fce, acumP: acumP, acumE: acumE, dscr: serv > 0 ? inc / serv : null, dre: { emg: e, prop: p } });
+      anos.push({ t: t, ano: num(f.ano_inicio) + t - 1, fator: fator, frac: frac, exames: p.exames * 12, rl: p.rl * 12, ebitdaEmg: ebitdaEmg, ebitdaPropBase: ebitdaPropBase, incBase: incBase, opex: opexAno, opexTipo: alt.opex ? alt.opex.tipo : null, inc: inc, dep: depAno, ebit: ebit, trib: trib, residual: residual, fcp: fcp, servico: serv, juros: (alt.jurosAno && alt.jurosAno[t]) || 0, fce: fce, acumP: acumP, acumE: acumE, dscr: serv > 0 ? inc / serv : null, desembolso: opexAno + serv, dre: { emg: e, prop: dreMensal(m, fator, 'propria', t, opReg) } });
       proj.push(fcp); ent.push(fce);
     }
     var r = num(f.desconto);
     var dscrs = anos.map(function (a) { return a.dscr; }).filter(function (x) { return x != null; });
     var pagos = 0; Object.keys(alt.servico || {}).forEach(function (k) { pagos += alt.servico[k]; });
-    return {
+    var opexTot = anos.reduce(function (s, a) { return s + a.opex; }, 0);
+    return { opexTot: opexTot, desembolsoTot: opexTot + pagos + (capex - (alt.capexFin || 0)) + (alt.custosIni || 0),
       anos: anos, capex: capex, proj: proj, ent: ent,
       vpl: npv(proj, r), tir: irr(proj), pb: payback(proj, 0), pbDesc: payback(proj, r),
       vplEnt: npv(ent, r), tirEnt: irr(ent), pbEnt: payback(ent, 0), acumEnt: acumE, acumProj: acumP,
@@ -209,30 +307,40 @@ var Engine = (function () {
   }
 
   /* ---------- Cálculo completo ---------- */
-  function calcular(m, Motor, BASE) {
+  function calcular(m, Motor, BASE, opts) {
     var B = altB(m), C = altC(m, Motor, BASE);
-    var A0 = { id: 'A', capex: 0, capexFin: 0, servico: {} };
-    var flB = fluxo(m, B), flC = fluxo(m, C);
-    var base = { emg: dreMensal(m, 1, 'emg', 2), prop: dreMensal(m, 1, 'propria', 2), prop1: dreMensal(m, 1, 'propria', 1) };
+    B.manut = manutPacote(m, m.equip.B); B.opex = opexManut(B.manut);
+    C.manut = manutPacote(m, m.equip.C); C.opex = opexManut(C.manut);
+    var D = altD(m);
+    var flB = fluxo(m, B), flC = fluxo(m, C), flD = fluxo(m, D);
+    var a = m.fin.alternativa, sel = a === 'B' ? B : a === 'D' ? D : C, flSel = a === 'B' ? flB : a === 'D' ? flD : flC;
+    var opReg = sel.opex.tipo === 'aluguel' ? { aluguel: sel.opex.mes } : { manut: sel.opex.mes };
+    var base = { emg: dreMensal(m, 1, 'emg', 2), prop: dreMensal(m, 1, 'propria', 2, opReg) };
     var fator = 1 + num(m.cenario.volume_var);
-    var cen = { emg: dreMensal(m, fator, 'emg', 2), prop: dreMensal(m, fator, 'propria', 2) };
-    var sel = m.fin.alternativa === 'B' ? B : C, flSel = m.fin.alternativa === 'B' ? flB : flC;
+    var cen = { emg: dreMensal(m, fator, 'emg', 2), prop: dreMensal(m, fator, 'propria', 2, opReg), propBase: dreMensal(m, fator, 'propria', 2) };
     var ent = entidade(m, sel, flSel);
-    return { B: B, C: C, flB: flB, flC: flC, base: base, cen: cen, sel: sel, flSel: flSel, ent: ent, tc: capacidadeTC(m),
+    var out = { B: B, C: C, D: D, flB: flB, flC: flC, flD: flD, base: base, cen: cen, sel: sel, flSel: flSel, ent: ent, tc: capacidadeTC(m),
       ganhoMes: cen.prop.resultado - cen.emg.resultado, ganhoMesComParcela: cen.prop.resultado - cen.emg.resultado - (sel.parcela || 0) };
+    if (!(opts && opts.leve)) {
+      out.entAlt = { B: entidade(m, B, flB), C: entidade(m, C, flC), D: entidade(m, D, flD) };
+      out.prazosD = prazosD(m, C);
+      D.equilibrioC = equilibrioD(m, D, flD, flC); D.equilibrioB = equilibrioD(m, D, flD, flB);
+    }
+    return out;
   }
 
   /* ---------- Sensibilidade (tornado sobre o VPL do projeto, alternativa selecionada) ---------- */
   function sensibilidade(m, Motor, BASE, alavancas) {
-    var basev = calcular(m, Motor, BASE).flSel.vpl, out = [];
+    var L = { leve: true }, basev = calcular(m, Motor, BASE, L).flSel.vpl, out = [];
     alavancas.forEach(function (a) {
       var lo = clone(m), hi = clone(m); a.set(lo, a.lo); a.set(hi, a.hi);
-      out.push({ nome: a.nome, lo: calcular(lo, Motor, BASE).flSel.vpl - basev, hi: calcular(hi, Motor, BASE).flSel.vpl - basev, loTxt: a.loTxt, hiTxt: a.hiTxt });
+      out.push({ nome: a.nome, lo: calcular(lo, Motor, BASE, L).flSel.vpl - basev, hi: calcular(hi, Motor, BASE, L).flSel.vpl - basev, loTxt: a.loTxt, hiTxt: a.hiTxt });
     });
     out.sort(function (x, y) { return Math.max(Math.abs(y.lo), Math.abs(y.hi)) - Math.max(Math.abs(x.lo), Math.abs(x.hi)); });
     return { base: basev, itens: out };
   }
 
-  return { num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC };
+  return { num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
+    mesesAno: mesesAno, manutPacote: manutPacote, locacao: locacao, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;

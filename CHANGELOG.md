@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-15 (noite) · HDA: manutenção pós-garantia e locação
+- Manutenção por contrato e por item nas compras (B e C): planos Prata e Ouro (definições VMI), 12 meses de garantia contados da instalação, provisão de tubo só no Prata. Valores VMI para os Aquila; benchmark para o pacote GE e para os itens sem cotação (contratos públicos do PNCP, Jaime). Substitui as linhas agregadas da planilha da Controladoria.
+- Alternativa D: locação de longo prazo do pacote VMI/Alfamed. Aluguel por composição de custos (arrendamento PJ do BCB + prêmio, residual por modalidade, tributos, manutenção Ouro), calibrado na locação de TC 128 canais da SMS-SP. Simulação de 36 a 84 meses, locar × possuir no prazo, aluguel de equilíbrio com a compra.
+- Alternativas: comparativo A/B/C/D (desembolso, dívida, compromisso mensal, VPL para o hospital, DSCR, riscos); Plano em números, Tese, Simulador, Crédito e exportação .xlsx tratam D.
+
 ## 2026-10-15 · base 2026-10-15 · catálogo 2026-10-15
 - Sincronização mensal com o Catálogo CFI do BNDES (scripts/cfi-sync.mjs + GitHub Actions): snapshot em shared/cfi-bndes.json, status BNDES por item e data da última consulta no painel Catálogo; divergências viram pull request.
 - Catálogo cruzado com a tabela FINAME da VMI (16 itens): códigos 1:1; cada item ganha `validade` e `processo` (bloco de 2025 vence mar–ago/2029, Cignus 600 em 27/06/2029; bloco de 2026 em mar/2030). Coluna "Validade / previsão" no painel; importação de planilha aceita a coluna.

@@ -33,17 +33,17 @@ var SCHEMA = [
   { id: 'propria.sala_elimina', bloco: 'Imagem própria: operação', label: 'Zerar "médicos que usam a sala" na imagem própria', un: '1 sim / 0 não', fmt: 'int', def: 1, origem: 'controladoria', fonte: 'A planilha zera a linha. Se a linha for repasse de outras especialidades, pode permanecer.', ui: { choices: [[1, 'Sim (planilha)'], [0, 'Não, mantém']] } },
   { id: 'propria.mat_elimina', bloco: 'Imagem própria: operação', label: 'Zerar repasse de material da EMG', un: '1/0', fmt: 'int', def: 1, origem: 'controladoria', fonte: 'A planilha zera a linha (material passa a ser comprado pelo hospital, ver Mat/Med).', ui: { choices: [[1, 'Sim'], [0, 'Não']] } },
   { id: 'propria.bio_elimina', bloco: 'Imagem própria: operação', label: 'Zerar repasse de biópsias da EMG', un: '1/0', fmt: 'int', def: 1, origem: 'controladoria', fonte: 'A planilha zera a linha.', ui: { choices: [[1, 'Sim'], [0, 'Não']] } },
-  { id: 'propria.manut_tc', bloco: 'Imagem própria: operação', label: 'Manutenção da TC (contrato básico)', un: 'R$/mês', fmt: 'num', def: 11456.81, origem: 'controladoria', fonte: '6% a 8% a.a. do valor à vista (Informações - Validar!G4). Jaime cita plano intermediário de R$ 17 mil/mês com peças.' },
-  { id: 'propria.manut_outros', bloco: 'Imagem própria: operação', label: 'Manutenção de ultrassom e RX', un: 'R$/mês', fmt: 'num', def: 7037.5, origem: 'controladoria', fonte: 'Informações - Validar!G5:G7.' },
-  { id: 'propria.tubo', bloco: 'Imagem própria: operação', label: 'Provisão do tubo da TC', un: 'R$/mês', fmt: 'num', def: 7270.83, origem: 'controladoria', fonte: 'Tubo de R$ 209 mil a cada 2–3 anos (Santa Casa de Birigui, 2020). Não se aplica com Full Service.' },
-  { id: 'propria.tubo_incluir', bloco: 'Imagem própria: operação', label: 'Incluir provisão do tubo', un: '1/0', fmt: 'int', def: 1, origem: 'controladoria', fonte: 'Viabilidade!C20.', ui: { choices: [[1, 'Sim'], [0, 'Não (Full Service)']] } },
-  { id: 'propria.manut_inicio_ano', bloco: 'Imagem própria: operação', label: 'Ano em que a manutenção começa', un: 'ano do projeto', fmt: 'int', def: 2, origem: 'controladoria', fonte: 'Garantia de fábrica cobre o 1º ano (Viabilidade!C32).' },
-  { id: 'propria.manut_fator', bloco: 'Imagem própria: operação', label: 'Fator sobre a manutenção (sensibilidade)', un: '×', fmt: 'num', def: 1, origem: 'ss', fonte: '1,0 = valores acima. Use 1,5 para testar o plano intermediário.' },
   { id: 'propria.rispacs_mes', bloco: 'Imagem própria: operação', label: 'RIS/PACS: mensalidade', un: 'R$/mês', fmt: 'num', def: 5875, origem: 'pendente', fonte: 'Faixa R$ 1.750 a R$ 10.000 (Informações - Validar). Verificar se o hospital já tem RIS/PACS; opção a investigar à parte.' },
   { id: 'propria.rispacs_impl', bloco: 'Imagem própria: operação', label: 'RIS/PACS: implantação (ano 0)', un: 'R$', fmt: 'num', def: 30000, origem: 'pendente', fonte: 'Faixa R$ 10 mil a R$ 50 mil (Informações - Validar).' },
   { id: 'propria.tc_exh', bloco: 'Imagem própria: operação', label: 'Capacidade da TC: exames por hora', un: 'exames/h', fmt: 'num', def: 3, origem: 'ss', fonte: 'Padrão da ferramenta de financiamento (TC).' },
   { id: 'propria.tc_h', bloco: 'Imagem própria: operação', label: 'Capacidade da TC: horas por dia', un: 'h', fmt: 'num', def: 24, origem: 'ss', fonte: 'Hospital com PS 24 h; 1.400 TC/mês não cabem em 12 h.' },
   { id: 'propria.tc_d', bloco: 'Imagem própria: operação', label: 'Capacidade da TC: dias por mês', un: 'dias', fmt: 'num', def: 30, origem: 'ss', fonte: 'Operação contínua.' },
+
+  /* ---- Manutenção pós-garantia (alternativas B e C) ---- */
+  { id: 'manut.plano', bloco: 'Manutenção pós-garantia (B e C)', label: 'Plano de manutenção contratado', un: 'Ouro/Prata', fmt: 'txt', def: 'ouro', origem: 'ss', fonte: 'Definições da VMI (15/10/2026). Ouro: preventiva e corretiva com cobertura total de peças, incluindo tubo, gerador de alta tensão e sistemas de imagem. Prata: preventiva e corretiva com cobertura parcial, exceto tubo, gerador e sistemas de imagem. Ouro é a prática para TC única com PS 24 h e deixa B e C comparáveis à locação (D), que inclui manutenção total. Valores por item em Investimento e financiamento.', ui: { choices: [['ouro', 'Ouro (cobertura total)'], ['prata', 'Prata (sem tubo, gerador e sistemas de imagem)']] } },
+  { id: 'manut.garantia_meses', bloco: 'Manutenção pós-garantia (B e C)', label: 'Garantia de fábrica, a partir da instalação', un: 'meses', fmt: 'int', def: 12, origem: 'controladoria', fonte: 'Garantia de 12 meses (Viabilidade!C32 e pedido do hospital). O contrato começa no 13º mês de operação: com 3 meses de transição no ano 1, a cobrança começa em abril do ano 2.' },
+  { id: 'propria.tubo', bloco: 'Manutenção pós-garantia (B e C)', label: 'Provisão do tubo da TC (só no plano Prata)', un: 'R$/mês', fmt: 'num', def: 7270.83, origem: 'controladoria', fonte: 'Tubo de R$ 209 mil a cada 2–3 anos (Santa Casa de Birigui, 2020; Informações - Validar). No Ouro o tubo está coberto.' },
+  { id: 'propria.manut_fator', bloco: 'Manutenção pós-garantia (B e C)', label: 'Fator sobre todos os contratos (sensibilidade)', un: '×', fmt: 'num', def: 1, origem: 'ss', fonte: '1,0 = valores por item. Aplica-se também à manutenção embutida no aluguel da locação (D).' },
 
   /* ---- Cenário ---- */
   { id: 'cenario.volume_var', bloco: 'Cenário de volume', label: 'Variação de volume vs. base', un: '%', fmt: 'pct', def: 0, origem: 'controladoria', fonte: 'Cenário 1 = volume atual; cenário 2 da Controladoria = +30%. Jaime projeta +27,3% para 2027.' },
@@ -51,7 +51,7 @@ var SCHEMA = [
   { id: 'cenario.reajuste_aa', bloco: 'Cenário de volume', label: 'Reajuste anual de preços e custos', un: '% a.a.', fmt: 'pct', def: 0, origem: 'ss', fonte: '0 = valores constantes, como na planilha. Aplica-se por igual a receita e custos.' },
 
   /* ---- Financeiro ---- */
-  { id: 'fin.alternativa', bloco: 'Parâmetros financeiros', label: 'Alternativa levada ao plano em números', un: 'B/C', fmt: 'txt', def: 'C', origem: 'ss', fonte: 'B = pacote GE financiado pelo HFS em 60x; C = pacote VMI/Alfamed financiado pela melhor linha.', ui: { choices: [['C', 'C · VMI/Alfamed'], ['B', 'B · GE/HFS']] } },
+  { id: 'fin.alternativa', bloco: 'Parâmetros financeiros', label: 'Alternativa levada ao plano em números', un: 'B/C/D', fmt: 'txt', def: 'C', origem: 'ss', fonte: 'B = pacote GE financiado pelo HFS em 60x; C = pacote VMI/Alfamed comprado e financiado pela melhor linha; D = pacote VMI/Alfamed em locação de longo prazo, com manutenção inclusa.', ui: { choices: [['C', 'C · VMI/Alfamed, compra financiada'], ['B', 'B · GE/HFS, compra financiada'], ['D', 'D · VMI/Alfamed, locação']] } },
   { id: 'fin.ano_inicio', bloco: 'Parâmetros financeiros', label: 'Ano 1 do projeto', un: 'ano', fmt: 'int', def: 2027, origem: 'ss', fonte: 'Contratação prevista no 1º trimestre de 2027, junto com a negociação do TDC.' },
   { id: 'fin.inicio_op_mes', bloco: 'Parâmetros financeiros', label: 'Meses do ano 1 ainda com a EMG (transição)', un: 'meses', fmt: 'int', def: 3, origem: 'ss', fonte: 'Instalação e sobreposição de equipes; o ganho do ano 1 é proporcional aos meses restantes.' },
   { id: 'fin.horizonte', bloco: 'Parâmetros financeiros', label: 'Horizonte de análise', un: 'anos', fmt: 'int', def: 10, origem: 'ss', fonte: 'Vida útil fiscal de 10 anos (IN RFB 1.700/2017) e prazo do FINAME. Controladoria usou 5.' },
@@ -68,6 +68,16 @@ var SCHEMA = [
   { id: 'altC.carModo', bloco: 'Financiamento do pacote C (motor Financiamento VMI)', label: 'Juros na carência', un: 'pagos/capitalizados', fmt: 'txt', def: 'pagos', origem: 'ss', fonte: 'Padrão FINAME: juros pagos trimestralmente na carência (aqui mensalizados).', ui: { choices: [['pagos', 'Pagos'], ['capitalizados', 'Capitalizados']] } },
   { id: 'altC.linha', bloco: 'Financiamento do pacote C (motor Financiamento VMI)', label: 'Linha escolhida', un: 'id', fmt: 'txt', def: 'auto', origem: 'ss', fonte: '"auto" = 1ª do ranking por custo total.', ui: { linhas: true } },
   { id: 'altC.honorario_pct', bloco: 'Financiamento do pacote C (motor Financiamento VMI)', label: 'Honorário de intermediação', un: '% do financiado', fmt: 'pct', def: 0, origem: 'ss', fonte: 'Oculto nesta versão (0%).' },
+
+  /* ---- Locação (alternativa D) ---- */
+  { id: 'altD.prazo', bloco: 'Locação do pacote VMI/Alfamed (D)', label: 'Prazo da locação', un: 'meses', fmt: 'int', def: 60, origem: 'ss', fonte: 'Prática para imagem: 48 a 60 meses (vida tecnológica e curva de valor residual da TC). A locação de TC 128 canais da SMS São Paulo (2026) é de 60 meses. O fluxo de 10 anos supõe renovação com equipamento novo ao mesmo aluguel. A aba Investimento simula 36 a 84 meses.', ui: { choices: [[36, '36 meses'], [48, '48 meses'], [60, '60 meses'], [72, '72 meses'], [84, '84 meses']] } },
+  { id: 'altD.taxa_base', bloco: 'Locação do pacote VMI/Alfamed (D)', label: 'Custo de referência do locador', un: '% a.a.', fmt: 'pct', def: 0.1719, origem: 'fonte', fonte: 'Taxa média PJ de arrendamento mercantil de outros bens, ago/2026: 17,19% a.a. (BCB, SGS 20732). É o custo de um leasing financeiro, em que o banco só corre o risco de crédito.' },
+  { id: 'altD.premio', bloco: 'Locação do pacote VMI/Alfamed (D)', label: 'Prêmio da locação operacional', un: 'p.p. a.a.', fmt: 'pct', def: 0.04, origem: 'ss', fonte: 'Risco de valor residual, gestão e troca do equipamento, inadimplência. Calibrado: com 4 p.p. e residual de 25% em 5 anos, o aluguel da TC sai em ~R$ 61 mil/mês, igual ao contrato de locação de TC 128 canais da SMS São Paulo (R$ 62,4 mil/mês, 60 meses, manutenção inclusa; PNCP 2026).' },
+  { id: 'altD.trib', bloco: 'Locação do pacote VMI/Alfamed (D)', label: 'Tributos do locador sobre a parcela financeira', un: '% do aluguel', fmt: 'pct', def: 0.0365, origem: 'ss', fonte: 'PIS/COFINS cumulativo (Lucro Presumido). Locação de bem móvel não paga ISS (STF, Súmula Vinculante 31). A partir de 2027 a CBS substitui PIS/COFINS (EC 132/2023, LC 214/2025); o efeito líquido depende dos créditos do locador. A manutenção entra pelo preço do contrato Ouro, que já traz os tributos do serviço.' },
+  { id: 'altD.dep_tc', bloco: 'Locação do pacote VMI/Alfamed (D)', label: 'Queda anual do valor de mercado: TC', un: '% a.a.', fmt: 'pct', def: 0.24, origem: 'ss', fonte: 'Define o residual que o locador recupera: 24% a.a. deixa a TC com 25% do valor em 5 anos. Calibrado junto com o prêmio (ver acima).' },
+  { id: 'altD.dep_us', bloco: 'Locação do pacote VMI/Alfamed (D)', label: 'Queda anual do valor de mercado: ultrassom', un: '% a.a.', fmt: 'pct', def: 0.30, origem: 'ss', fonte: 'Obsolescência mais rápida: 17% do valor em 5 anos.' },
+  { id: 'altD.dep_rx', bloco: 'Locação do pacote VMI/Alfamed (D)', label: 'Queda anual do valor de mercado: RX móvel', un: '% a.a.', fmt: 'pct', def: 0.20, origem: 'ss', fonte: 'Tecnologia mais estável: 33% do valor em 5 anos.' },
+  { id: 'altD.dep_dr', bloco: 'Locação do pacote VMI/Alfamed (D)', label: 'Queda anual do valor de mercado: placa DR', un: '% a.a.', fmt: 'pct', def: 0.30, origem: 'ss', fonte: 'Detector portátil: desgaste e risco de queda; 17% do valor em 5 anos.' },
 
   /* ---- Cliente (crédito) ---- */
   { id: 'cliente.natureza', bloco: 'Tomador (ABENSENA)', label: 'Natureza jurídica', un: '', fmt: 'txt', def: 'filantropica', origem: 'deck', fonte: 'Associação Beneficente Nossa Senhora de Nazaré (filantrópica).', ui: { choices: [['filantropica', 'Filantrópica'], ['privada', 'Privada com fins lucrativos']] } },
@@ -103,20 +113,42 @@ var EMPRESTIMOS_PADRAO = [
   { id: 'e10', banco: 'Arrendamento mercantil', mod: 'Leasing', parcela: 17670, fim: '2028-08', saldo: 565436.13, liquida_tdc: false, obs: 'Parcela estimada: saldo ÷ 32 meses' }
 ];
 
-/* Equipamentos: pacote B (proposta do Jaime, GE/CDK, HFS 60x) e pacote C (VMI/Alfamed, preço a definir = igual ao B por padrão). */
+/* Equipamentos: pacote B (proposta do Jaime, GE/CDK, HFS 60x) e pacote C (VMI/Alfamed, preço a definir = igual ao B por padrão).
+   m_prata / m_ouro: contrato de manutenção pós-garantia por unidade, R$/mês; tubo: soma a provisão de tubo no Prata. */
 var EQUIP_B_PADRAO = [
-  { id: 'tc', nome: 'Tomografia computadorizada 64/128 canais, Dual Energy', modelo: 'GE (modelo não informado)', qtd: 1, preco: 1964024.80, parcela: 50524.32, n: 60, fin: true, obs: 'Preço em USD convertido a 5,1604; financiamento direto Banco GEHC (HFS)' },
-  { id: 'us', nome: 'Ultrassom', modelo: 'GE LOGIQ e (c/ cardio)', qtd: 2, preco: 110000, parcela: 2867.03, n: 60, fin: true, obs: 'R$ 220 mil o par; parcela R$ 5.734,06' },
-  { id: 'rxp', nome: 'Raio X portátil', modelo: 'CDK Mascote Dynamic', qtd: 1, preco: 150000, parcela: 2500, n: 60, fin: true, obs: '"Sem juros" em 60x: validar' },
-  { id: 'rxdr', nome: 'Raio X portátil com placa DR', modelo: 'Não informado', qtd: 1, preco: 490000, parcela: 13079, n: 60, fin: true, obs: 'Proposta estratégica cita R$ 500 mil' },
-  { id: 'dr', nome: 'Placa DR avulsa', modelo: 'Não informado', qtd: 1, preco: 110000, parcela: 1700, n: 60, fin: true, obs: '60 × R$ 1.700 = R$ 102 mil < R$ 110 mil à vista: erro na proposta' }
+  { id: 'tc', nome: 'Tomografia computadorizada 64/128 canais, Dual Energy', modelo: 'GE (modelo não informado)', qtd: 1, preco: 1964024.80, parcela: 50524.32, n: 60, fin: true, obs: 'Preço em USD convertido a 5,1604; financiamento direto Banco GEHC (HFS)', m_prata: 11456.81, m_ouro: 17000, tubo: true, m_fonte: 'Prata: 7% a.a. do valor (Controladoria) + provisão de tubo. Ouro: plano GE citado pelo Jaime, R$ 17 mil/mês com peças (contratos públicos de TC com tubo: mediana R$ 16.775/mês).' },
+  { id: 'us', nome: 'Ultrassom', modelo: 'GE LOGIQ e (c/ cardio)', qtd: 2, preco: 110000, parcela: 2867.03, n: 60, fin: true, obs: 'R$ 220 mil o par; parcela R$ 5.734,06', m_prata: 1588.62, m_ouro: 2677, m_fonte: 'Ouro: manutenção de ultrassom GE com peças, EBSERH/UFBA, R$ 32.124/ano (PNCP, 2025). Prata: 59,3% do Ouro (razão média das cotações VMI).' },
+  { id: 'rxp', nome: 'Raio X portátil', modelo: 'CDK Mascote Dynamic', qtd: 1, preco: 150000, parcela: 2500, n: 60, fin: true, obs: '"Sem juros" em 60x: validar', m_prata: 3900, m_ouro: 6800, m_fonte: 'Proxy: cotação VMI do Aquila S (média SP, 15/10/2026), mesma classe; sem cotação CDK.' },
+  { id: 'rxdr', nome: 'Raio X portátil com placa DR', modelo: 'Não informado', qtd: 1, preco: 490000, parcela: 13079, n: 60, fin: true, obs: 'Proposta estratégica cita R$ 500 mil', m_prata: 4600, m_ouro: 7500, m_fonte: 'Proxy: cotação VMI do Aquila D (média SP, 15/10/2026), mesma classe; modelo não informado.' },
+  { id: 'dr', nome: 'Placa DR avulsa', modelo: 'Não informado', qtd: 1, preco: 110000, parcela: 1700, n: 60, fin: true, obs: '60 × R$ 1.700 = R$ 102 mil < R$ 110 mil à vista: erro na proposta', m_prata: 0, m_ouro: 700, m_fonte: 'Ouro: diferença entre os contratos VMI do Aquila D e do Aquila S (o detector digital). O Prata não cobre sistemas de imagem.' }
 ];
 var EQUIP_C_PADRAO = [
-  { id: 'tc', nome: 'Tomografia computadorizada 64 canais / 128 cortes', modelo: 'VMI Pulsar 128', qtd: 1, preco: 1964024.80, cfi: 'previsto dez/2026', fin: true, obs: 'CFI PREVISTO: não consta no Catálogo CFI em 14/10/2026; premissa VMI (15/10/2026) de credenciamento até dez/2026, antes da contratação (Gate 2, 2T27). O FINAME só contrata com o código emitido. Preço a definir (padrão = GE); Dual Energy e protocolo cardíaco a confirmar' },
-  { id: 'us', nome: 'Ultrassom', modelo: 'Alfa Med Dominus L1', qtd: 2, preco: 110000, cfi: '04313989', fin: true, obs: 'Grupo Prime; CFI verificado em 14/10/2026. Preço a definir' },
-  { id: 'rxp', nome: 'Raio X móvel', modelo: 'VMI Aquila 320 S', qtd: 1, preco: 150000, cfi: '03538400', fin: true, obs: 'CFI verificado em 14/10/2026; válido até 13/03/2030 (tabela FINAME VMI). Preço a definir' },
-  { id: 'rxdr', nome: 'Raio X móvel digital (DR)', modelo: 'VMI Aquila 500 D', qtd: 1, preco: 490000, cfi: '04279825', fin: true, obs: 'CFI verificado em 14/10/2026; válido até 30/06/2029 (tabela FINAME VMI). Preço a definir' },
-  { id: 'dr', nome: 'Placa DR avulsa', modelo: 'A definir', qtd: 1, preco: 110000, cfi: '', fin: true, obs: 'Detector avulso VMI não consta no catálogo; alternativa: RX fixo Apolo D (CFI 03538246) com detector integrado' }
+  { id: 'tc', nome: 'Tomografia computadorizada 64 canais / 128 cortes', modelo: 'VMI Pulsar 128', qtd: 1, preco: 1964024.80, cfi: 'previsto dez/2026', fin: true, obs: 'CFI PREVISTO: não consta no Catálogo CFI em 14/10/2026; premissa VMI (15/10/2026) de credenciamento até dez/2026, antes da contratação (Gate 2, 2T27). O FINAME só contrata com o código emitido. Preço a definir (padrão = GE); Dual Energy e protocolo cardíaco a confirmar', m_prata: 11456.81, m_ouro: 16775.26, tubo: true, m_fonte: 'Sem cotação VMI. Prata: 7% a.a. do valor + provisão de tubo. Ouro: mediana de 5 contratos públicos de TC com peças e tubo (PNCP 2025–26), R$ 16.775/mês.' },
+  { id: 'us', nome: 'Ultrassom', modelo: 'Alfa Med Dominus L1', qtd: 2, preco: 110000, cfi: '04313989', fin: true, obs: 'Grupo Prime; CFI verificado em 14/10/2026. Preço a definir', m_prata: 1565.82, m_ouro: 2638.59, m_fonte: 'Sem cotação Alfamed. Ouro: mediana de 4 contratos públicos de ultrassom com peças (R$ 2.405 a R$ 2.878/mês; PNCP 2023–26). Prata: 59,3% do Ouro.' },
+  { id: 'rxp', nome: 'Raio X móvel', modelo: 'VMI Aquila 320 S', qtd: 1, preco: 150000, cfi: '03538400', fin: true, obs: 'CFI verificado em 14/10/2026; válido até 13/03/2030 (tabela FINAME VMI). Preço a definir', m_prata: 3900, m_ouro: 6800, m_fonte: 'Cotação VMI (média SP, 15/10/2026).' },
+  { id: 'rxdr', nome: 'Raio X móvel digital (DR)', modelo: 'VMI Aquila 500 D', qtd: 1, preco: 490000, cfi: '04279825', fin: true, obs: 'CFI verificado em 14/10/2026; válido até 30/06/2029 (tabela FINAME VMI). Preço a definir', m_prata: 4600, m_ouro: 7500, m_fonte: 'Cotação VMI (média SP, 15/10/2026).' },
+  { id: 'dr', nome: 'Placa DR avulsa', modelo: 'A definir', qtd: 1, preco: 110000, cfi: '', fin: true, obs: 'Detector avulso VMI não consta no catálogo; alternativa: RX fixo Apolo D (CFI 03538246) com detector integrado', m_prata: 0, m_ouro: 700, m_fonte: 'Ouro: diferença entre os contratos VMI do Aquila D e do Aquila S (o detector digital). O Prata não cobre sistemas de imagem.' }
+];
+
+/* Referências de mercado usadas nas premissas de manutenção e locação (Portal Nacional de Contratações Públicas, contratos 2023–2026).
+   mes = valor global ÷ meses de vigência. */
+var PNCP = 'https://pncp.gov.br/app/contratos/';
+var BENCH_MANUT = [
+  { mod: 'TC', obj: 'Philips Incisive CT, peças inclusive tubos', org: 'Município de Porto Alegre/RS', ano: 2025, total: 402606.12, meses: 24, url: PNCP + '92963560000160/2025/995' },
+  { mod: 'TC', obj: 'Neusoft NeuViz 16 canais, peças e 1 tubo/ano', org: 'FMS Itatiaia/RJ', ano: 2026, total: 164304, meses: 12, url: PNCP + '10476365000140/2026/7' },
+  { mod: 'TC', obj: 'Canon, peças, 1 tubo/ano e detector', org: 'Município de São Luís/MA', ano: 2026, total: 298764, meses: 12, url: PNCP + '06307102000130/2026/859' },
+  { mod: 'TC', obj: 'Tomógrafo, com peças', org: 'Município de Ribeirão Pires/SP', ano: 2026, total: 140100, meses: 12, url: PNCP + '46522967000134/2026/22' },
+  { mod: 'TC', obj: 'Canon Aquilion Lightning, reposição de peças', org: 'SES-PE, Hosp. Barão de Lucena', ano: 2026, total: 432000, meses: 12, url: PNCP + '10572048000632/2026/43' },
+  { mod: 'US', obj: 'Ultrassom GE, peças e testes de segurança', org: 'EBSERH, Maternidade Climério de Oliveira/BA', ano: 2025, total: 32124, meses: 12, url: PNCP + '15126437000143/2025/1229' },
+  { mod: 'US', obj: 'Philips Affiniti 70 G, com peças', org: 'Hospital Militar de Área de São Paulo', ano: 2025, total: 31202.16, meses: 12, url: PNCP + '00394452000103/2025/9480' },
+  { mod: 'US', obj: 'Philips Affiniti 70, peças e mão de obra', org: 'Município de Caxias do Sul/RS', ano: 2023, total: 28864.80, meses: 12, url: PNCP + '88830609000139/2023/475' },
+  { mod: 'US', obj: 'Mindray M6 portátil, com peças', org: 'Inova Capixaba/ES', ano: 2026, total: 17268, meses: 6, url: PNCP + '36901264000163/2026/247' }
+];
+var BENCH_LOC = [
+  { mod: 'TC', obj: 'Locação de TC 128 canais com manutenção, calibração e treinamento (1 unidade)', org: 'SMS São Paulo, Hosp. Fernando Mauro Pires da Rocha', ano: 2026, total: 3744000, meses: 60, url: PNCP + '13864377000130/2026/303' },
+  { mod: 'TC', obj: 'Locação emergencial de TC 64 canais', org: 'Município de São Luís/MA', ano: 2026, total: 660000, meses: 11, url: PNCP + '06307102000130/2026/355' },
+  { mod: 'RX', obj: 'Locação de RX móvel para leitos, UTI e PA', org: 'FMS Campina Grande/PB', ano: 2025, total: 114000, meses: 12, url: PNCP + '24513574000121/2025/217' },
+  { mod: 'RX', obj: 'Locação de RX móvel com manutenção e treinamento', org: 'FMS Paraúna/GO', ano: 2025, total: 14000, meses: 4, url: PNCP + '11171868000170/2025/43' }
 ];
 
 function modeloPadrao() {
@@ -127,6 +159,15 @@ function modeloPadrao() {
   m.altC.custo = 'auto'; m.altC.valor_obra = 0; m.altC.valor_financiar = null;
   return m;
 }
+/* Itens salvos antes dos contratos de manutenção: completa m_prata, m_ouro, tubo e m_fonte pelo item padrão de mesmo id. */
+function completarManut(itens, padrao) {
+  (itens || []).forEach(function (it) {
+    if (it.m_ouro != null) return;
+    var d = padrao.filter(function (x) { return x.id === it.id; })[0];
+    it.m_prata = d ? d.m_prata : 0; it.m_ouro = d ? d.m_ouro : 0; it.tubo = d ? !!d.tubo : false; it.m_fonte = d ? d.m_fonte : 'Item sem contrato informado';
+  });
+  return itens;
+}
 function setPath(o, path, v) { var p = path.split('.'); for (var i = 0; i < p.length - 1; i++) { if (o[p[i]] == null || typeof o[p[i]] !== 'object') o[p[i]] = {}; o = o[p[i]]; } o[p[p.length - 1]] = v; }
 function getPath(o, path) { var p = path.split('.'); for (var i = 0; i < p.length; i++) { if (o == null) return undefined; o = o[p[i]]; } return o; }
-if (typeof module !== 'undefined') module.exports = { SCHEMA: SCHEMA, modeloPadrao: modeloPadrao, setPath: setPath, getPath: getPath, EQUIP_B_PADRAO: EQUIP_B_PADRAO, EQUIP_C_PADRAO: EQUIP_C_PADRAO, EMPRESTIMOS_PADRAO: EMPRESTIMOS_PADRAO };
+if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, BENCH_LOC: BENCH_LOC, SCHEMA: SCHEMA, modeloPadrao: modeloPadrao, completarManut: completarManut, setPath: setPath, getPath: getPath, EQUIP_B_PADRAO: EQUIP_B_PADRAO, EQUIP_C_PADRAO: EQUIP_C_PADRAO, EMPRESTIMOS_PADRAO: EMPRESTIMOS_PADRAO };

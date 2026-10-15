@@ -96,7 +96,9 @@ tr.total td { font-weight: 600; border-top: 1px solid var(--line); background: v
 tr.sub td { color: var(--fg-2); font-size: 12.5px; } tr.sec td { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); font-weight: 600; background: var(--surface-2); }
 tr.pct td { font-style: italic; color: var(--fg-2); font-size: 12px; } tr.hl td { background: var(--accent-soft); }
 td.wrap { white-space: normal; min-width: 200px; max-width: 460px; }
-td input, td select { padding: 4px 6px; } td input.n { width: 120px; } td input.w-s { width: 72px; } td input.w-m { width: 170px; } td input.w-l { width: 240px; }
+.tiny { font-size: 11px; line-height: 1.35; } .h3 { font-size: 14px; margin: 0 0 8px; }
+table.cmpT td:first-child { white-space: normal; min-width: 220px; } table.cmpT td.best { color: var(--good); font-weight: 600; } table.cmpT td.n { white-space: normal; }
+td input, td select { padding: 4px 6px; } td input.n { width: 120px; } td input.w-s { width: 72px; } td input.w-n { width: 96px; } td input.w-m { width: 170px; } td input.w-l { width: 240px; }
 tbody tr:hover td { background: color-mix(in srgb, var(--accent-soft) 35%, transparent); }
 .chart svg { width: 100%; height: auto; display: block; overflow: visible; }
 .chart text { font-family: var(--mono); font-size: 11px; fill: var(--fg-2); }
