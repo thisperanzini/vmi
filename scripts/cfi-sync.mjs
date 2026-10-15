@@ -33,7 +33,7 @@ async function consultar(cnpj) {
     const j = await r.json();
     total = Number(j.total || 0);
     const lote = Array.isArray(j.entidades) ? j.entidades : [];
-    lote.forEach(e => itens.push({ codigo: String(e.codigoFiname || "").padStart(8, "0"), nome: String(e.nomeItem || "").trim(), fabricante: String(e.fabricante || "").trim(), posicao: String(e.posicaoCadastral || "").trim(), cnpj }));
+    lote.forEach(e => itens.push({ codigo: String(e.codigoFiname || "").padStart(8, "0"), nome: String(e.nomeItem || "").replace(/[\s\u00a0\u2000-\u200b\u3000]+/g, " ").trim(), fabricante: String(e.fabricante || "").trim(), posicao: String(e.posicaoCadastral || "").trim(), cnpj }));
     if (!lote.length) break;
     inicio += lote.length;
   }
