@@ -204,6 +204,156 @@ footer { color: var(--fg-3); font-size: 12px; padding-top: 10px; border-top: 1px
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
+/* ===== Snapshot BNDES (shared/cfi-bndes.json) ===== */
+window.CFI_BNDES = {
+ "consultadoEm": "2026-10-14",
+ "fonte": "https://gateway.apis.bndes.gov.br/catalogoCFI/web/itemfinanciavel/buscar",
+ "cnpjs": [
+  "02.659.246/0001-03",
+  "11.405.384/0001-49"
+ ],
+ "total": 19,
+ "itens": [
+  {
+   "codigo": "03538246",
+   "nome": "Aparelho Raios-X Fixo",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03538253",
+   "nome": "Equipamento de Raios-X digital móvel - Aquila D",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03538260",
+   "nome": "APARELHO DE MAMOGRAFIA",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03538399",
+   "nome": "APARELHO RAIOS-X FIXO",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03538400",
+   "nome": "APARELHO RAIOS-X MOVEL AQUILA 320 S",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03538417",
+   "nome": "APARELHO DE MAMOGRAFIA",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03893005",
+   "nome": "EQUIP. RAIOS-X CENTAURO S",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03902575",
+   "nome": "EQUIP.  DE MAMOGRAFIA DIGIMAMO TM",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03902582",
+   "nome": "EQUIP. RAIOS-X ARCO FENIX",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03902778",
+   "nome": "EQUIP RAIOS-X CENTAURO D",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03989142",
+   "nome": "APARELHO DE RAIOS X FIXO APOLO DRF",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "04251352",
+   "nome": "MONITOR MULT. ARCANJO",
+   "fabricante": "ALFA MED SISTEMAS MEDICOS LTDA",
+   "posicao": "Financiável",
+   "cnpj": "11.405.384/0001-49"
+  },
+  {
+   "codigo": "04252454",
+   "nome": "Ressonância Nuclear Magnética 1,5 T",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "04256011",
+   "nome": "APARELHO DE RAIOS-X ARCO CIRURGICO",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "04267577",
+   "nome": "AP DE MAMOGRAFIA DIGIMAMO TM 3D",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "04279825",
+   "nome": "AP RAIOS-X MOVEL AQUILA 500 D",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "04290476",
+   "nome": "AP RAIOS-X MOVEL AQUILA 500 S",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "04311550",
+   "nome": "OXIMETRO",
+   "fabricante": "ALFA MED SISTEMAS MEDICOS LTDA",
+   "posicao": "Financiável",
+   "cnpj": "11.405.384/0001-49"
+  },
+  {
+   "codigo": "04313989",
+   "nome": "ULTRASSOM DOMINUS",
+   "fabricante": "ALFA MED SISTEMAS MEDICOS LTDA",
+   "posicao": "Financiável",
+   "cnpj": "11.405.384/0001-49"
+  }
+ ],
+ "novos": [],
+ "alertas": [],
+ "nota": "Snapshot inicial: consulta de 14/10/2026 ao gateway, registrada manualmente em 15/10/2026; a partir daí a rotina mensal (GitHub Actions) regrava este arquivo."
+};
+</script>
+<script>
 /* ===== Catálogo CFI (shared/catalogo.js) ===== */
 /* Catálogo verificado no Catálogo CFI do BNDES (gateway público catalogoCFI) em 14/10/2026 e cruzado com a tabela FINAME da VMI (16 itens, 15/10/2026): códigos 1:1; validade e nº do processo vêm da tabela. Preços: só os que vieram de proposta. */
 var CAT_FONTE = "Catálogo CFI do BNDES, consulta de 14/10/2026; validade e processo: tabela FINAME VMI de 15/10/2026";

@@ -36,3 +36,9 @@ Variáveis de ambiente (em cada site do Netlify): `SESSION_SECRET` (aleatório, 
 ## Fora do claude.ai
 
 Casos, base editada e catálogo ficam no `localStorage` de quem usa. Downloads são diretos. A leitura de documentos por IA (kit) só existe no claude.ai.
+
+## Catálogo CFI: sincronização mensal com o BNDES
+- `scripts/cfi-sync.mjs` consulta a API pública do Catálogo CFI (`gateway.apis.bndes.gov.br/catalogoCFI`) pelos CNPJs do catálogo, grava `shared/cfi-bndes.json` (snapshot) e compara com `shared/catalogo.js`: código que sumiu ou deixou de ser "Financiável" vira alerta; item "previsto" (ex.: Pulsar) que aparece credenciado recebe o código; credenciado fora do catálogo é relatado.
+- `.github/workflows/cfi-sync.yml` roda no dia 1 de cada mês (ou manualmente em Actions → Run workflow). Sem divergência, publica só a data da consulta em `main`; com divergência, abre um pull request com o relatório. Requer, em Settings → Actions → General, "Allow GitHub Actions to create and approve pull requests".
+- As páginas mostram a data da última consulta e o status BNDES por item (painel Catálogo). Validade dos códigos não vem da API: vem da tabela FINAME da VMI (`validade`, `processo`).
+- Teste offline: `node scripts/cfi-sync.mjs --dry --from snapshot.json`.

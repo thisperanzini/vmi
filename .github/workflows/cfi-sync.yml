@@ -1,0 +1,49 @@
+# Sincronização mensal do catálogo com o Catálogo CFI do BNDES.
+# Dia 1 de cada mês, 08:00 de Brasília (11:00 UTC), ou manualmente em Actions → "Run workflow".
+# Sem divergência: grava a data da consulta em shared/cfi-bndes.json e publica direto em main (Netlify redistribui).
+# Com divergência (código novo, item que sumiu, Pulsar credenciada): abre um pull request com o relatório para revisão humana.
+name: Catálogo CFI (BNDES)
+on:
+  schedule:
+    - cron: "0 11 1 * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+concurrency: cfi-sync
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Consultar o BNDES e comparar com o catálogo
+        id: sync
+        run: node scripts/cfi-sync.mjs
+      - name: Remontar as páginas (dist e artifacts)
+        run: python3 build.py
+      - name: Publicar só a data da consulta (sem divergência)
+        if: steps.sync.outputs.changed == 'false'
+        run: |
+          git config user.name "cfi-sync"
+          git config user.email "cfi-sync@users.noreply.github.com"
+          git add shared/cfi-bndes.json dist artifacts hda-viabilidade/dist
+          git diff --cached --quiet || git commit -m "CFI BNDES: consulta de $(date -u +%Y-%m-%d), sem divergências"
+          git push
+      - name: Abrir pull request (com divergência)
+        if: steps.sync.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: cfi-sync
+          delete-branch: true
+          title: "Catálogo CFI do BNDES: divergências na consulta mensal"
+          body-path: cfi-report.md
+          commit-message: "CFI BNDES: sincronização automática"
+          labels: catalogo-cfi
+          add-paths: |
+            shared/**
+            dist/**
+            artifacts/**
+            hda-viabilidade/dist/**

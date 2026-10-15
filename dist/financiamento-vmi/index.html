@@ -222,6 +222,156 @@ footer { color: var(--fg-3); font-size: 12px; padding-top: 12px; border-top: 1px
 <div id="toast" class="toast" hidden></div>
 
 <script>
+/* ===== Snapshot BNDES (shared/cfi-bndes.json) ===== */
+window.CFI_BNDES = {
+ "consultadoEm": "2026-10-14",
+ "fonte": "https://gateway.apis.bndes.gov.br/catalogoCFI/web/itemfinanciavel/buscar",
+ "cnpjs": [
+  "02.659.246/0001-03",
+  "11.405.384/0001-49"
+ ],
+ "total": 19,
+ "itens": [
+  {
+   "codigo": "03538246",
+   "nome": "Aparelho Raios-X Fixo",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03538253",
+   "nome": "Equipamento de Raios-X digital móvel - Aquila D",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03538260",
+   "nome": "APARELHO DE MAMOGRAFIA",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03538399",
+   "nome": "APARELHO RAIOS-X FIXO",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03538400",
+   "nome": "APARELHO RAIOS-X MOVEL AQUILA 320 S",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03538417",
+   "nome": "APARELHO DE MAMOGRAFIA",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03893005",
+   "nome": "EQUIP. RAIOS-X CENTAURO S",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03902575",
+   "nome": "EQUIP.  DE MAMOGRAFIA DIGIMAMO TM",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03902582",
+   "nome": "EQUIP. RAIOS-X ARCO FENIX",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03902778",
+   "nome": "EQUIP RAIOS-X CENTAURO D",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "03989142",
+   "nome": "APARELHO DE RAIOS X FIXO APOLO DRF",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "04251352",
+   "nome": "MONITOR MULT. ARCANJO",
+   "fabricante": "ALFA MED SISTEMAS MEDICOS LTDA",
+   "posicao": "Financiável",
+   "cnpj": "11.405.384/0001-49"
+  },
+  {
+   "codigo": "04252454",
+   "nome": "Ressonância Nuclear Magnética 1,5 T",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "04256011",
+   "nome": "APARELHO DE RAIOS-X ARCO CIRURGICO",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "04267577",
+   "nome": "AP DE MAMOGRAFIA DIGIMAMO TM 3D",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "04279825",
+   "nome": "AP RAIOS-X MOVEL AQUILA 500 D",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "04290476",
+   "nome": "AP RAIOS-X MOVEL AQUILA 500 S",
+   "fabricante": "VMI MEDICA",
+   "posicao": "Financiável",
+   "cnpj": "02.659.246/0001-03"
+  },
+  {
+   "codigo": "04311550",
+   "nome": "OXIMETRO",
+   "fabricante": "ALFA MED SISTEMAS MEDICOS LTDA",
+   "posicao": "Financiável",
+   "cnpj": "11.405.384/0001-49"
+  },
+  {
+   "codigo": "04313989",
+   "nome": "ULTRASSOM DOMINUS",
+   "fabricante": "ALFA MED SISTEMAS MEDICOS LTDA",
+   "posicao": "Financiável",
+   "cnpj": "11.405.384/0001-49"
+  }
+ ],
+ "novos": [],
+ "alertas": [],
+ "nota": "Snapshot inicial: consulta de 14/10/2026 ao gateway, registrada manualmente em 15/10/2026; a partir daí a rotina mensal (GitHub Actions) regrava este arquivo."
+};
+</script>
+<script>
 /* ===== Catálogo CFI (shared/catalogo.js) ===== */
 /* Catálogo verificado no Catálogo CFI do BNDES (gateway público catalogoCFI) em 14/10/2026 e cruzado com a tabela FINAME da VMI (16 itens, 15/10/2026): códigos 1:1; validade e nº do processo vêm da tabela. Preços: só os que vieram de proposta. */
 var CAT_FONTE = "Catálogo CFI do BNDES, consulta de 14/10/2026; validade e processo: tabela FINAME VMI de 15/10/2026";
@@ -1811,12 +1961,24 @@ window.VMI_SEED = {"casos": [{"atualizado": "2026-10-09T21:32:09.623Z", "cliente
 
     /* ---------- painel: catálogo ---------- */
     catalogo: function () {
+      var snap = window.CFI_BNDES || null, porCod = {};
+      if (snap && snap.itens) snap.itens.forEach(function (b) { porCod[b.codigo] = b; });
+      function bndes(i) {
+        if (!snap) return "—";
+        var c = String(i.cfi || "").trim();
+        if (!c) return '<span class="pill warn">sem CFI</span>';
+        if (!/^\d+$/.test(c)) return '<span class="pill warn">previsto' + (i.cfi_previsao ? " " + esc(i.cfi_previsao) : "") + "</span>";
+        var b = porCod[c]; if (!b) return '<span class="pill bad">não consta</span>';
+        return /financi/i.test(b.posicao) ? '<span class="pill good" title="' + esc(b.nome) + '">' + esc(b.posicao) + "</span>" : '<span class="pill bad">' + esc(b.posicao) + "</span>";
+      }
+      var dataSnap = snap ? dataBR(snap.consultadoEm) : "—";
       var rows = S.catalogo.map(function (i, k) {
-        return "<tr><td>" + inp("cat_" + k + "_modelo", "cat|" + k + "|modelo", i.modelo) + "</td><td>" + selM("cat_" + k + "_mod", "cat|" + k + "|modalidade", i.modalidade) + "</td><td>" + inp("cat_" + k + "_fab", "cat|" + k + "|fabricante", i.fabricante) + "</td><td>" + inp("cat_" + k + "_cfi", "cat|" + k + "|cfi", i.cfi) + "</td><td>" + inp("cat_" + k + "_val", "cat|" + k + "|validade", i.validade || i.cfi_previsao || "") + "</td><td>" + inp("cat_" + k + "_ncm", "cat|" + k + "|ncm", i.ncm) + "</td><td>" + inp("cat_" + k + "_preco", "cat|" + k + "|preco", i.preco, "n") + '</td><td><select id="cat_' + k + '_or" data-cat="cat|' + k + '|origem"><option value="nacional"' + (i.origem === "nacional" ? " selected" : "") + '>Nacional</option><option value="importado"' + (i.origem === "importado" ? " selected" : "") + ">Importado</option></select></td><td class=\"tiny\">" + esc(i.fonte || "") + '</td><td><button class="sm ghost danger" data-act="cat-del" data-k="' + k + '">Remover</button></td></tr>';
+        return "<tr><td>" + inp("cat_" + k + "_modelo", "cat|" + k + "|modelo", i.modelo) + "</td><td>" + selM("cat_" + k + "_mod", "cat|" + k + "|modalidade", i.modalidade) + "</td><td>" + inp("cat_" + k + "_fab", "cat|" + k + "|fabricante", i.fabricante) + "</td><td>" + inp("cat_" + k + "_cfi", "cat|" + k + "|cfi", i.cfi) + "</td><td>" + inp("cat_" + k + "_val", "cat|" + k + "|validade", i.validade || i.cfi_previsao || "") + "</td><td>" + bndes(i) + "</td><td>" + inp("cat_" + k + "_ncm", "cat|" + k + "|ncm", i.ncm) + "</td><td>" + inp("cat_" + k + "_preco", "cat|" + k + "|preco", i.preco, "n") + '</td><td><select id="cat_' + k + '_or" data-cat="cat|' + k + '|origem"><option value="nacional"' + (i.origem === "nacional" ? " selected" : "") + '>Nacional</option><option value="importado"' + (i.origem === "importado" ? " selected" : "") + ">Importado</option></select></td><td class=\"tiny\">" + esc(i.fonte || "") + '</td><td><button class="sm ghost danger" data-act="cat-del" data-k="' + k + '">Remover</button></td></tr>';
       }).join("");
       return '<div class="card"><div class="card-h"><h2>Catálogo de equipamentos VMI e Alfamed</h2><div class="row"><span class="pill ' + (S.catSalvo ? "good" : "warn") + '">' + (S.catSalvo ? "salvo" : "inicial") + '</span><button class="sm" data-act="cat-add">Adicionar item</button><label class="drop" for="catFile" style="padding:6px 10px">Importar planilha (.xlsx ou .csv)<input type="file" id="catFile" accept=".xlsx,.csv" hidden></label></div></div>' +
         '<p class="small muted">O código CFI é a trava do FINAME: sem ele, as linhas do BNDES ficam bloqueadas. Códigos verificados no Catálogo CFI do BNDES em ' + esc(BASE_PADRAO.catalogo_versao) + ' (VMI Médica, CNPJ 02.659.246/0001-03: 16 itens; Alfa Med, CNPJ 11.405.384/0001-49: 3 itens). Validade por item conforme a tabela FINAME da VMI (15/10/2026): o bloco credenciado em 2025 vence entre mar e ago/2029 (Cignus 600 em 27/06/2029), o de 2026 em mar/2030. <b>A TC Pulsar não consta</b>; por premissa da VMI (15/10/2026) o credenciamento sai até dez/2026, e o catálogo a traz como "previsto": simula, mas só contrata com o código emitido. TCs credenciadas de concorrentes: ' + esc(BASE_PADRAO.cfi_tc_concorrentes.map(function (x) { return x[0] + " (" + x[1] + ")"; }).join("; ")) + '. Confirme cada código em ' + linkF("f_cfi") + ". Importação: a primeira linha precisa ter colunas com estes nomes (em qualquer ordem): modelo, modalidade, fabricante, cfi, ncm, preco, origem.</p>" +
-        '<div class="tw"><table><thead><tr><th>Modelo</th><th>Modalidade</th><th>Fabricante</th><th>CFI</th><th>Validade / previsão</th><th>NCM</th><th class="n">Preço de lista</th><th>Origem</th><th>Fonte</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div><div class="row end" style="margin-top:12px"><button class="primary" data-act="cat-save">Salvar catálogo</button></div></div>';
+        (snap ? '<p class="small"><b>Última consulta automática ao Catálogo CFI do BNDES: ' + esc(dataSnap) + '</b> · ' + snap.total + ' itens credenciados nos CNPJs VMI Médica e Alfa Med' + (snap.alertas && snap.alertas.length ? ' · <span class="pill bad">' + snap.alertas.length + ' alerta(s)</span>' : ' · sem divergências') + (snap.novos && snap.novos.length ? ' · ' + snap.novos.length + ' credenciado(s) fora do catálogo: ' + esc(snap.novos.join(", ")) : "") + '. A rotina roda no dia 1 de cada mês (GitHub Actions); divergências chegam como pull request para revisão.</p>' : "") +
+        '<div class="tw"><table><thead><tr><th>Modelo</th><th>Modalidade</th><th>Fabricante</th><th>CFI</th><th>Validade / previsão</th><th>BNDES</th><th>NCM</th><th class="n">Preço de lista</th><th>Origem</th><th>Fonte</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div><div class="row end" style="margin-top:12px"><button class="primary" data-act="cat-save">Salvar catálogo</button></div></div>';
     },
 
     /* ---------- painel: método ---------- */

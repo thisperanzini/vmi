@@ -42,6 +42,7 @@ def build_financiamento():
     seed_js = "/* Casos e catálogo de partida fora do claude.ai (financiamento-vmi/src/seed.json). */\nwindow.VMI_SEED = " + json.dumps(seed, ensure_ascii=False) + ";"
     parts = [
         read("financiamento-vmi/src/head.html"),
+        script("Snapshot BNDES (shared/cfi-bndes.json)", "window.CFI_BNDES = " + read("shared/cfi-bndes.json").strip() + ";"),
         script("Catálogo CFI (shared/catalogo.js)", read("shared/catalogo.js")),
         script("Base de linhas (shared/base.js)", read("shared/base.js")),
         script("Logo (shared/logo.js)", read("shared/logo.js")),
@@ -57,6 +58,7 @@ def build_financiamento():
 def build_hda():
     parts = [
         read("hda-viabilidade/src/head.html"),
+        script("Snapshot BNDES (shared/cfi-bndes.json)", "window.CFI_BNDES = " + read("shared/cfi-bndes.json").strip() + ";"),
         script("Catálogo CFI (shared/catalogo.js)", read("shared/catalogo.js")),
         script("Base de linhas (shared/base.js)", read("shared/base.js")),
         script("Motor (shared/motor.js)", read("shared/motor.js")),
