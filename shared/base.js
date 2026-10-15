@@ -2,8 +2,8 @@
    Cada número tem fonte, data e confiança. A página usa esta base como padrão
    e a substitui pela versão salva no banco (config/base), quando houver. */
 var BASE_PADRAO = {
-  versao: "2026-10-14",
-  nota: "Levantamento S&S de 09/10/2026; catálogo CFI verificado em 14/10/2026 e modos internalização/entidade adicionados. Valores de fontes oficiais lidas na data; os marcados 'calculado' derivam de fórmula oficial com insumos oficiais.",
+  versao: "2026-10-15",
+  nota: "Levantamento S&S de 09/10/2026; catálogo CFI verificado em 14/10/2026 e cruzado com a tabela FINAME VMI em 15/10/2026 (validade por item; Pulsar com CFI previsto para dez/2026, premissa VMI); modos internalização/entidade adicionados. Valores de fontes oficiais lidas na data; os marcados 'calculado' derivam de fórmula oficial com insumos oficiais.",
 
   /* ---------- Macro ---------- */
   macro: {
@@ -363,7 +363,7 @@ var BASE_PADRAO = {
 
   /* ---------- Catálogo: produtos credenciados (Catálogo CFI do BNDES, 14/10/2026) ---------- */
   catalogo: CATALOGO_VMI,
-  catalogo_versao: "2026-10-14",
+  catalogo_versao: "2026-10-15",
   cfi_tc_concorrentes: CFI_TC_CONCORRENTES,
 
   /* Pedidos VMI jan–set/2026 (análise interna enviada em 09/10/2026) */

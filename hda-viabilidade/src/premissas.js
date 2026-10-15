@@ -74,7 +74,7 @@ var SCHEMA = [
   { id: 'cliente.uf', bloco: 'Tomador (ABENSENA)', label: 'UF', un: '', fmt: 'txt', def: 'SP', origem: 'deck', fonte: 'Ipiranga, São Paulo.' },
   { id: 'cliente.rob', bloco: 'Tomador (ABENSENA)', label: 'Receita bruta anual (porte BNDES)', un: 'R$', fmt: 'num', def: 99043842 / 8 * 12, origem: 'deck', fonte: 'Receita total jan–ago/26 R$ 99,04 mi anualizada (DRE gerencial). Porte média empresa.' },
   { id: 'cliente.flags.sus_complementar', bloco: 'Tomador (ABENSENA)', label: 'Filantrópica complementar ao SUS, aderente ao Agora Tem Especialistas', un: '1/0', fmt: 'int', def: 1, origem: 'pendente', fonte: 'Hospital 20% filantrópico. Adesão ao programa a confirmar: habilita FGTS-Saúde (Caixa).', ui: { choices: [[1, 'Sim (a confirmar)'], [0, 'Não']] } },
-  { id: 'altC.cfi_presumido', bloco: 'Tomador (ABENSENA)', label: 'Tratar o pacote como credenciado (CFI) mesmo com itens sem código', un: '1/0', fmt: 'int', def: 0, origem: 'fonte', fonte: 'Catálogo CFI do BNDES (14/10/2026): Aquila e Dominus L1 constam; a TC Pulsar e a placa DR avulsa não. Com 0, o FINAME só financia os itens com CFI; a TC vai para linha sem exigência de CFI ou recurso próprio.', ui: { choices: [[0, 'Não (catálogo real)'], [1, 'Sim (hipótese: Pulsar credenciada)']] } },
+  { id: 'altC.cfi_presumido', bloco: 'Tomador (ABENSENA)', label: 'Tratar o pacote como credenciado (CFI) mesmo com itens sem código', un: '1/0', fmt: 'int', def: 1, origem: 'premissa', fonte: 'Catálogo CFI do BNDES (14/10/2026) e tabela FINAME VMI (15/10/2026): Aquila e Dominus L1 constam; a TC Pulsar está com credenciamento previsto até dez/2026 (premissa VMI) e a placa DR avulsa não tem código. Com 1, o FINAME financia o pacote inteiro (contratação em 2027, depois do credenciamento); com 0, só os itens com código emitido hoje.', ui: { choices: [[1, 'Sim (Pulsar credenciada até dez/2026; placa DR a resolver)'], [0, 'Não (só códigos emitidos hoje)']] } },
 
   /* ---- Entidade ---- */
   { id: 'entidade.ebitda_periodo', bloco: 'Hospital: capacidade de crédito', label: 'EBITDA do hospital no período', un: 'R$', fmt: 'num', def: 7166162, origem: 'deck', fonte: 'DRE gerencial jan–ago/26 (7% da receita).' },
@@ -112,10 +112,10 @@ var EQUIP_B_PADRAO = [
   { id: 'dr', nome: 'Placa DR avulsa', modelo: 'Não informado', qtd: 1, preco: 110000, parcela: 1700, n: 60, fin: true, obs: '60 × R$ 1.700 = R$ 102 mil < R$ 110 mil à vista: erro na proposta' }
 ];
 var EQUIP_C_PADRAO = [
-  { id: 'tc', nome: 'Tomografia computadorizada 64 canais / 128 cortes', modelo: 'VMI Pulsar 128', qtd: 1, preco: 1964024.80, cfi: '', fin: true, obs: 'SEM CFI: não consta no Catálogo CFI do BNDES em 14/10/2026. Só entra em linha sem exigência de CFI (FGTS-Saúde) até o credenciamento. Preço a definir (padrão = GE); Dual Energy e protocolo cardíaco a confirmar' },
+  { id: 'tc', nome: 'Tomografia computadorizada 64 canais / 128 cortes', modelo: 'VMI Pulsar 128', qtd: 1, preco: 1964024.80, cfi: 'previsto dez/2026', fin: true, obs: 'CFI PREVISTO: não consta no Catálogo CFI em 14/10/2026; premissa VMI (15/10/2026) de credenciamento até dez/2026, antes da contratação (Gate 2, 2T27). O FINAME só contrata com o código emitido. Preço a definir (padrão = GE); Dual Energy e protocolo cardíaco a confirmar' },
   { id: 'us', nome: 'Ultrassom', modelo: 'Alfa Med Dominus L1', qtd: 2, preco: 110000, cfi: '04313989', fin: true, obs: 'Grupo Prime; CFI verificado em 14/10/2026. Preço a definir' },
-  { id: 'rxp', nome: 'Raio X móvel', modelo: 'VMI Aquila 320 S', qtd: 1, preco: 150000, cfi: '03538400', fin: true, obs: 'CFI verificado em 14/10/2026. Preço a definir' },
-  { id: 'rxdr', nome: 'Raio X móvel digital (DR)', modelo: 'VMI Aquila 500 D', qtd: 1, preco: 490000, cfi: '04279825', fin: true, obs: 'CFI verificado em 14/10/2026. Preço a definir' },
+  { id: 'rxp', nome: 'Raio X móvel', modelo: 'VMI Aquila 320 S', qtd: 1, preco: 150000, cfi: '03538400', fin: true, obs: 'CFI verificado em 14/10/2026; válido até 13/03/2030 (tabela FINAME VMI). Preço a definir' },
+  { id: 'rxdr', nome: 'Raio X móvel digital (DR)', modelo: 'VMI Aquila 500 D', qtd: 1, preco: 490000, cfi: '04279825', fin: true, obs: 'CFI verificado em 14/10/2026; válido até 30/06/2029 (tabela FINAME VMI). Preço a definir' },
   { id: 'dr', nome: 'Placa DR avulsa', modelo: 'A definir', qtd: 1, preco: 110000, cfi: '', fin: true, obs: 'Detector avulso VMI não consta no catálogo; alternativa: RX fixo Apolo D (CFI 03538246) com detector integrado' }
 ];
 

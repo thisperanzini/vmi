@@ -96,7 +96,7 @@
         renderTudo();
       }, function (e) { setSync("dirty", "Banco indisponível (" + (e && e.code) + ")"); });
       db.doc("config/base").onSnapshot(function (d) { if (d.exists) { var b = clone(d.data()); if (b && b.linhas) { S.base = b; S.baseSalva = true; } } else { S.base = clone(BASE_PADRAO); S.baseSalva = false; } renderTudo(); });
-      db.doc("config/catalogo").onSnapshot(function (d) { if (d.exists && d.data().itens) { S.catalogo = clone(d.data().itens); S.catSalvo = true; } renderTudo(); });
+      db.doc("config/catalogo").onSnapshot(function (d) { if (d.exists && d.data().itens) { S.catalogo = mesclarCatalogo(d.data()); S.catSalvo = true; } renderTudo(); });
     }).catch(modoLocal);
     w.use("sample").then(function (s) { S.sample = s; renderTudo(); }).catch(function () {});
     w.use("downloads").then(function (d) { S.downloads = d; renderTudo(); }).catch(function () {});
@@ -109,9 +109,20 @@
     else { var ex = casoExemplo(); S.casos[ex.id] = ex; }
     /* base e catálogo guardados localmente só valem se forem da mesma versão do código; versão nova no código prevalece */
     var b = lsJson("vmi_base"); if (b && b.linhas && String(b.versao || "") >= String(BASE_PADRAO.versao)) { S.base = b; S.baseSalva = true; } else if (b) try { localStorage.removeItem("vmi_base"); } catch (e) {}
-    var ct = lsJson("vmi_catalogo"); if (ct && ct.itens && String(ct.versao || "") >= String(BASE_PADRAO.catalogo_versao)) { S.catalogo = clone(ct.itens); S.catSalvo = true; } else if (window.VMI_SEED && window.VMI_SEED.catalogo) S.catalogo = clone(window.VMI_SEED.catalogo);
+    var ct = lsJson("vmi_catalogo"); if (ct && ct.itens) { S.catalogo = mesclarCatalogo(ct); S.catSalvo = true; }
     S.atual = ultimoCaso();
     setSync("local", "Fora do claude.ai: casos guardados neste navegador"); renderTudo();
+  }
+  /* Catálogo guardado (banco ou navegador) × catálogo do código: se o guardado é da mesma versão ou mais novo, vale como está;
+     se o código trouxe versão nova, os códigos CFI, validade e fonte vêm do código e ficam do guardado só os preços e os itens cadastrados à mão. */
+  function mesclarCatalogo(salvo) {
+    var itens = clone(salvo.itens || []);
+    if (String(salvo.versao || "") >= String(BASE_PADRAO.catalogo_versao)) return itens;
+    var porId = {}; itens.forEach(function (i) { porId[i.id] = i; });
+    var out = BASE_PADRAO.catalogo.map(function (c) { var s = porId[c.id], n = clone(c); if (s && num(s.preco)) n.preco = num(s.preco); return n; });
+    var ids = {}; BASE_PADRAO.catalogo.forEach(function (c) { ids[c.id] = 1; });
+    itens.forEach(function (i) { if (!ids[i.id]) out.push(i); });
+    return out;
   }
   function ultimoCaso() {
     var l = Object.keys(S.casos).map(function (k) { return S.casos[k]; }).sort(function (a, b) { return String(b.atualizado).localeCompare(String(a.atualizado)); });
@@ -199,7 +210,7 @@
     cliente: function () {
       var c = caso(), cl = c.cliente, op = c.operacao, eq = op.equipamento || {}, ctx = M.contexto(c, S.base);
       var porteTxt = ctx.rob != null ? PORTES[ctx.porte] + " pela receita bruta" : (cl.porte_decl ? PORTES[cl.porte_decl] + " (declarado)" : "não informado");
-      var catOpts = '<option value="">— escolher do catálogo —</option>' + S.catalogo.map(function (i) { return '<option value="' + esc(i.id) + '"' + (op.catalogo_id === i.id ? " selected" : "") + ">" + esc(i.modelo) + (i.cfi ? " · CFI " + esc(i.cfi) : " · sem CFI") + "</option>"; }).join("") + '<option value="__manual"' + (op.catalogo_id === "__manual" ? " selected" : "") + ">Outro equipamento (manual)</option>";
+      var catOpts = '<option value="">— escolher do catálogo —</option>' + S.catalogo.map(function (i) { return '<option value="' + esc(i.id) + '"' + (op.catalogo_id === i.id ? " selected" : "") + ">" + esc(i.modelo) + (i.cfi ? (/^\d+$/.test(i.cfi) ? " · CFI " + esc(i.cfi) + (i.validade ? " até " + esc(i.validade.slice(0, 7)) : "") : " · CFI " + esc(i.cfi) + (i.cfi_previsao ? " (" + esc(i.cfi_previsao) + ")" : "")) : " · sem CFI") + "</option>"; }).join("") + '<option value="__manual"' + (op.catalogo_id === "__manual" ? " selected" : "") + ">Outro equipamento (manual)</option>";
       var ind = indicadoresBloco(c);
       return '<div class="card"><div class="card-h"><h2>Caso</h2><span class="tiny">Atualizado ' + esc(new Date(c.atualizado).toLocaleString("pt-BR")) + "</span></div><div class=\"form\">" +
         fi("nome", "Nome do caso", c.nome) + fs("status", "Status", c.status, STATUS_CASO.map(function (s) { return [s, s]; })) + fi("honorario_pct", "Honorário de êxito (%)", c.honorario_pct, "num", "Contrato S&S: 2% sobre o valor desembolsado") +
@@ -219,7 +230,7 @@
         '</div><p class="tiny" style="margin-top:10px">CPF e RG não ficam na base: são pedidos só na hora de gerar a minuta do contrato.</p></div></div>' +
         '<div class="card"><div class="card-h"><h2>Operação</h2><span class="tiny">Investimento = equipamento + obra; o motor limita o financiado à participação de cada linha.</span></div><div class="form">' +
         '<label class="f w2" for="f_catalogo">Equipamento<select id="f_catalogo" data-act="catalogo">' + catOpts + "</select></label>" +
-        fi("operacao.equipamento.modelo", "Modelo", eq.modelo) + fi("operacao.equipamento.fabricante", "Fabricante", eq.fabricante) + fi("operacao.equipamento.cfi", "Código FINAME (CFI)", eq.cfi, "", "Vazio = sem credenciamento: FINAME fica bloqueado. Catálogo CFI verificado em " + esc(S.base.catalogo_versao || "—")) +
+        fi("operacao.equipamento.modelo", "Modelo", eq.modelo) + fi("operacao.equipamento.fabricante", "Fabricante", eq.fabricante) + fi("operacao.equipamento.cfi", "Código FINAME (CFI)", eq.cfi, "", "Vazio = sem credenciamento: FINAME fica bloqueado. \"previsto\" = credenciamento em curso: simula, mas só contrata com o código emitido. Catálogo CFI verificado em " + esc(S.base.catalogo_versao || "—") + (eq.cfi_validade ? "; validade do CFI: " + esc(eq.cfi_validade) : "")) +
         fs("operacao.equipamento.origem", "Origem", eq.origem, [["nacional", "Nacional"], ["importado", "Importado"]]) + fi("operacao.equipamento.ncm", "NCM", eq.ncm) +
         fs("operacao.equipamento.modalidade", "Modalidade", eq.modalidade, [["", "—"]].concat(S.base.modalidades.map(function (m) { return [m.id, m.nome]; }))) +
         fi("operacao.valor_equip", "Valor do equipamento (R$)", op.valor_equip, "num") + fi("operacao.valor_obra", "Obra e instalação (R$)", op.valor_obra, "num", "Blindagem, gaiola de RF, bunker") + fi("operacao.valor_financiar", "Valor a financiar (R$)", op.valor_financiar, "num", "Vazio = investimento total") +
@@ -252,7 +263,7 @@
     linhas: function () {
       var c = caso(), av = S.av, ctx = av.ctx, eq = ctx.eq;
       var resumo = '<div class="card"><div class="card-h"><h2>Linhas para ' + esc(c.cliente.fantasia || c.nome) + '</h2><span class="tiny">Ranking pelo custo total da captação (CET do agente + honorário de ' + N(ctx.honor, 1) + "%), cenário base</span></div>" +
-        '<div class="kpis">' + kpi("Valor a financiar", Rm(ctx.fin), "investimento " + Rm(ctx.invest)) + kpi("Porte", ctx.porte ? PORTES[ctx.porte] : "—", ctx.rob != null ? "receita " + Rm(ctx.rob) : "declarado") + kpi("UF", ctx.uf || "—", ctx.nne ? "Norte/Nordeste: Taxa do BNDES 0,75%" : "") + kpi("Equipamento", eq.cfi ? "CFI " + eq.cfi : "sem CFI", eq.modelo || "") + kpi("Prazo / carência", ctx.prazo + " / " + ctx.carencia + " meses", (c.operacao.sistema || "SAC") + ", juros na carência " + (c.operacao.carModo || "pagos")) + "</div></div>";
+        '<div class="kpis">' + kpi("Valor a financiar", Rm(ctx.fin), "investimento " + Rm(ctx.invest)) + kpi("Porte", ctx.porte ? PORTES[ctx.porte] : "—", ctx.rob != null ? "receita " + Rm(ctx.rob) : "declarado") + kpi("UF", ctx.uf || "—", ctx.nne ? "Norte/Nordeste: Taxa do BNDES 0,75%" : "") + kpi("Equipamento", eq.cfi ? (/^\d+$/.test(eq.cfi) ? "CFI " + eq.cfi : "CFI " + eq.cfi + (eq.cfi_previsao ? " (" + eq.cfi_previsao + ")" : "")) : "sem CFI", (eq.modelo || "") + (eq.cfi_validade ? " · válido até " + eq.cfi_validade : "")) + kpi("Prazo / carência", ctx.prazo + " / " + ctx.carencia + " meses", (c.operacao.sistema || "SAC") + ", juros na carência " + (c.operacao.carModo || "pagos")) + "</div></div>";
       if (!av.ranking.length) resumo += '<div class="notice bad">Nenhuma linha com regra pública ficou elegível. Veja os bloqueios abaixo: o mais comum é equipamento sem código FINAME ou porte/UF não informados.</div>';
       var chart = '<div class="card"><div class="card-h"><h3>Custo total por linha elegível</h3><span class="tiny">barra = faixa mín.–máx. dos spreads; traço = cenário base; linha tracejada = média BCB de aquisição de bens PJ</span></div><div class="chart" id="chLinhas"></div></div>';
       var cards = av.ranking.map(function (x) { return cardLinha(x, ctx); }).join("");
@@ -349,7 +360,7 @@
     saidas: function () {
       var c = caso(), kp = kitProg(c), s = S.simAtual;
       var faltas = [];
-      if (!c.cliente.cnpj) faltas.push("CNPJ"); if (!c.cliente.razao) faltas.push("razão social"); if (!num(c.operacao.valor_equip)) faltas.push("valor do equipamento"); if (!(c.operacao.equipamento || {}).cfi) faltas.push("código CFI");
+      if (!c.cliente.cnpj) faltas.push("CNPJ"); if (!c.cliente.razao) faltas.push("razão social"); if (!num(c.operacao.valor_equip)) faltas.push("valor do equipamento"); if (!(c.operacao.equipamento || {}).cfi) faltas.push("código CFI"); else if (!/^\d+$/.test(String(c.operacao.equipamento.cfi))) faltas.push("código CFI emitido (hoje: " + c.operacao.equipamento.cfi + ")");
       var semDl = (!S.downloads && S.modo !== "local") ? '<div class="notice warn">O download de arquivos não está disponível nesta visualização. Abra pelo claude.ai com sua conta.</div>' : "";
       function card(id, t, d, extra) { return '<div class="card out"><h3>' + t + '</h3><p class="small muted">' + d + "</p>" + (extra || "") + '<div class="row"><button class="primary" data-act="gerar" data-doc="' + id + '"' + (S.downloads || S.modo === "local" ? "" : " disabled") + ">Gerar " + (id === "contrato" ? ".docx" : id === "kit" ? ".xlsx" : "PDF") + "</button></div></div>"; }
       return semDl + (faltas.length ? '<div class="notice warn">Faltam no cadastro: ' + esc(faltas.join(", ")) + ". Os documentos saem com esses campos em branco.</div>" : "") +
@@ -386,11 +397,11 @@
     /* ---------- painel: catálogo ---------- */
     catalogo: function () {
       var rows = S.catalogo.map(function (i, k) {
-        return "<tr><td>" + inp("cat_" + k + "_modelo", "cat|" + k + "|modelo", i.modelo) + "</td><td>" + selM("cat_" + k + "_mod", "cat|" + k + "|modalidade", i.modalidade) + "</td><td>" + inp("cat_" + k + "_fab", "cat|" + k + "|fabricante", i.fabricante) + "</td><td>" + inp("cat_" + k + "_cfi", "cat|" + k + "|cfi", i.cfi) + "</td><td>" + inp("cat_" + k + "_ncm", "cat|" + k + "|ncm", i.ncm) + "</td><td>" + inp("cat_" + k + "_preco", "cat|" + k + "|preco", i.preco, "n") + '</td><td><select id="cat_' + k + '_or" data-cat="cat|' + k + '|origem"><option value="nacional"' + (i.origem === "nacional" ? " selected" : "") + '>Nacional</option><option value="importado"' + (i.origem === "importado" ? " selected" : "") + ">Importado</option></select></td><td class=\"tiny\">" + esc(i.fonte || "") + '</td><td><button class="sm ghost danger" data-act="cat-del" data-k="' + k + '">Remover</button></td></tr>';
+        return "<tr><td>" + inp("cat_" + k + "_modelo", "cat|" + k + "|modelo", i.modelo) + "</td><td>" + selM("cat_" + k + "_mod", "cat|" + k + "|modalidade", i.modalidade) + "</td><td>" + inp("cat_" + k + "_fab", "cat|" + k + "|fabricante", i.fabricante) + "</td><td>" + inp("cat_" + k + "_cfi", "cat|" + k + "|cfi", i.cfi) + "</td><td>" + inp("cat_" + k + "_val", "cat|" + k + "|validade", i.validade || i.cfi_previsao || "") + "</td><td>" + inp("cat_" + k + "_ncm", "cat|" + k + "|ncm", i.ncm) + "</td><td>" + inp("cat_" + k + "_preco", "cat|" + k + "|preco", i.preco, "n") + '</td><td><select id="cat_' + k + '_or" data-cat="cat|' + k + '|origem"><option value="nacional"' + (i.origem === "nacional" ? " selected" : "") + '>Nacional</option><option value="importado"' + (i.origem === "importado" ? " selected" : "") + ">Importado</option></select></td><td class=\"tiny\">" + esc(i.fonte || "") + '</td><td><button class="sm ghost danger" data-act="cat-del" data-k="' + k + '">Remover</button></td></tr>';
       }).join("");
       return '<div class="card"><div class="card-h"><h2>Catálogo de equipamentos VMI e Alfamed</h2><div class="row"><span class="pill ' + (S.catSalvo ? "good" : "warn") + '">' + (S.catSalvo ? "salvo" : "inicial") + '</span><button class="sm" data-act="cat-add">Adicionar item</button><label class="drop" for="catFile" style="padding:6px 10px">Importar planilha (.xlsx ou .csv)<input type="file" id="catFile" accept=".xlsx,.csv" hidden></label></div></div>' +
-        '<p class="small muted">O código CFI é a trava do FINAME: sem ele, as linhas do BNDES ficam bloqueadas. Códigos verificados no Catálogo CFI do BNDES em ' + esc(BASE_PADRAO.catalogo_versao) + ' (VMI Médica, CNPJ 02.659.246/0001-03: 16 itens; Alfa Med, CNPJ 11.405.384/0001-49: 3 itens). <b>A TC Pulsar não consta</b>: até o credenciamento, a tomografia VMI só entra em linhas sem CFI. TCs credenciadas de concorrentes: ' + esc(BASE_PADRAO.cfi_tc_concorrentes.map(function (x) { return x[0] + " (" + x[1] + ")"; }).join("; ")) + '. Confirme cada código em ' + linkF("f_cfi") + ". Importação: a primeira linha precisa ter colunas com estes nomes (em qualquer ordem): modelo, modalidade, fabricante, cfi, ncm, preco, origem.</p>" +
-        '<div class="tw"><table><thead><tr><th>Modelo</th><th>Modalidade</th><th>Fabricante</th><th>CFI</th><th>NCM</th><th class="n">Preço de lista</th><th>Origem</th><th>Fonte</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div><div class="row end" style="margin-top:12px"><button class="primary" data-act="cat-save">Salvar catálogo</button></div></div>';
+        '<p class="small muted">O código CFI é a trava do FINAME: sem ele, as linhas do BNDES ficam bloqueadas. Códigos verificados no Catálogo CFI do BNDES em ' + esc(BASE_PADRAO.catalogo_versao) + ' (VMI Médica, CNPJ 02.659.246/0001-03: 16 itens; Alfa Med, CNPJ 11.405.384/0001-49: 3 itens). Validade por item conforme a tabela FINAME da VMI (15/10/2026): o bloco credenciado em 2025 vence entre mar e ago/2029 (Cignus 600 em 27/06/2029), o de 2026 em mar/2030. <b>A TC Pulsar não consta</b>; por premissa da VMI (15/10/2026) o credenciamento sai até dez/2026, e o catálogo a traz como "previsto": simula, mas só contrata com o código emitido. TCs credenciadas de concorrentes: ' + esc(BASE_PADRAO.cfi_tc_concorrentes.map(function (x) { return x[0] + " (" + x[1] + ")"; }).join("; ")) + '. Confirme cada código em ' + linkF("f_cfi") + ". Importação: a primeira linha precisa ter colunas com estes nomes (em qualquer ordem): modelo, modalidade, fabricante, cfi, ncm, preco, origem.</p>" +
+        '<div class="tw"><table><thead><tr><th>Modelo</th><th>Modalidade</th><th>Fabricante</th><th>CFI</th><th>Validade / previsão</th><th>NCM</th><th class="n">Preço de lista</th><th>Origem</th><th>Fonte</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div><div class="row end" style="margin-top:12px"><button class="primary" data-act="cat-save">Salvar catálogo</button></div></div>';
     },
 
     /* ---------- painel: método ---------- */
@@ -710,7 +721,7 @@
     }
     if (el.dataset.act === "catalogo" && c) {
       var it = catItem(el.value); c.operacao.catalogo_id = el.value;
-      if (it) { c.operacao.equipamento = { modelo: it.modelo, fabricante: it.fabricante, cfi: it.cfi, ncm: it.ncm, origem: it.origem || (it.cfi ? "nacional" : "importado"), modalidade: it.modalidade, descricao: it.modelo }; if (num(it.preco)) { c.operacao.valor_equip = num(it.preco); c.operacao.valor_financiar = num(it.preco); } if (it.modalidade && c.roi) c.roi.modalidade = it.modalidade; }
+      if (it) { c.operacao.equipamento = { modelo: it.modelo, fabricante: it.fabricante, cfi: it.cfi, cfi_previsao: it.cfi_previsao || null, cfi_validade: it.validade || null, ncm: it.ncm, origem: it.origem || (it.cfi ? "nacional" : "importado"), modalidade: it.modalidade, descricao: it.modelo }; if (num(it.preco)) { c.operacao.valor_equip = num(it.preco); c.operacao.valor_financiar = num(it.preco); } if (it.modalidade && c.roi) c.roi.modalidade = it.modalidade; }
       salvar(c); renderTudo(); return;
     }
     if (el.dataset.sim && c) {
@@ -767,12 +778,12 @@
   function importarCatalogo(file) {
     var norm = function (s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]/g, ""); };
     var mapear = function (linhas) {
-      var cab = linhas[0].map(norm), idx = {}; ["modelo", "modalidade", "fabricante", "cfi", "ncm", "preco", "origem"].forEach(function (k) { idx[k] = cab.findIndex(function (h) { return h.indexOf(k) === 0 || (k === "cfi" && /finame/.test(h)) || (k === "preco" && /valor|lista/.test(h)); }); });
+      var cab = linhas[0].map(norm), idx = {}; ["modelo", "modalidade", "fabricante", "cfi", "ncm", "preco", "origem", "validade"].forEach(function (k) { idx[k] = cab.findIndex(function (h) { return h.indexOf(k) === 0 || (k === "cfi" && /finame|c.digo/.test(h)) || (k === "preco" && /valor|lista/.test(h)) || (k === "validade" && /expira|vencim/.test(h)); }); });
       if (idx.modelo < 0) { toast("A planilha precisa de uma coluna 'modelo'."); return; }
       var novos = linhas.slice(1).filter(function (l) { return l[idx.modelo]; }).map(function (l) {
         var g = function (k) { return idx[k] >= 0 ? l[idx[k]] : null; }, mod = norm(g("modalidade")), modId = (S.base.modalidades.filter(function (m) { return norm(m.nome).indexOf(mod) >= 0 || m.id.replace("_", "") === mod; })[0] || {}).id || "";
         var pr = g("preco"); pr = typeof pr === "number" ? pr : num(String(pr || "").replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", "."));
-        return { id: uid(), modelo: String(g("modelo")), modalidade: modId, fabricante: g("fabricante") || "VMI Tecnologias Ltda", cfi: g("cfi") ? String(g("cfi")) : "", ncm: g("ncm") ? String(g("ncm")) : "", preco: pr, origem: /import/i.test(g("origem") || "") ? "importado" : "nacional", fonte: "Importado de " + file.name };
+        return { id: uid(), modelo: String(g("modelo")), modalidade: modId, fabricante: g("fabricante") || "VMI Tecnologias Ltda", cfi: g("cfi") ? String(g("cfi")) : "", ncm: g("ncm") ? String(g("ncm")) : "", validade: g("validade") ? String(g("validade")) : "", preco: pr, origem: /import/i.test(g("origem") || "") ? "importado" : "nacional", fonte: "Importado de " + file.name };
       });
       S.catalogo = S.catalogo.concat(novos); renderTudo(); toast(novos.length + " itens importados. Revise e clique em Salvar catálogo.");
     };

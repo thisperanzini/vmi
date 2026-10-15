@@ -163,7 +163,8 @@ var Motor = (function () {
     var origem = ctx.eq.origem || (ctx.eq.cfi ? "nacional" : null);
     if (e.exige_cfi) {
       if (!ctx.eq.cfi) B.push("Equipamento sem código FINAME (CFI): exige bem novo, nacional e credenciado");
-      else P.push("Equipamento credenciado no BNDES (CFI " + ctx.eq.cfi + ")");
+      else if (/^\d+$/.test(String(ctx.eq.cfi))) P.push("Equipamento credenciado no BNDES (CFI " + ctx.eq.cfi + ")");
+      else { P.push("CFI tratado como existente (" + ctx.eq.cfi + (ctx.eq.cfi_previsao ? ", previsão " + ctx.eq.cfi_previsao : "") + ")"); A.push("CFI ainda não emitido: a linha só contrata com o código publicado no Catálogo CFI; a simulação vale como premissa"); }
     }
     if (origem === "importado") {
       if (e.importado === "nao") B.push("Linha não aceita equipamento importado");

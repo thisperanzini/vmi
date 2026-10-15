@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-15 · base 2026-10-15 · catálogo 2026-10-15
+- Catálogo cruzado com a tabela FINAME da VMI (16 itens): códigos 1:1; cada item ganha `validade` e `processo` (bloco de 2025 vence mar–ago/2029, Cignus 600 em 27/06/2029; bloco de 2026 em mar/2030). Coluna "Validade / previsão" no painel; importação de planilha aceita a coluna.
+- TC Pulsar 128/64 com CFI "previsto" (dez/2026, premissa VMI): o motor simula as linhas com CFI e emite aviso de que a contratação depende do código publicado; o kit aponta "código CFI emitido" como pendência.
+- Catálogo guardado (banco/navegador) de versão anterior é mesclado com o do código (códigos, validade e fonte do código; preços e itens manuais do guardado). O seed deixa de carregar cópia do catálogo.
+- HDA: premissa "pacote credenciado" passa a 1 (Pulsar prevista); engine distingue CFI emitido, previsto e ausente; avisos e narrativa atualizados; Gate 1 ganha a condição "CFI da Pulsar publicado".
+
 ## 2026-10-14 (noite) · camada de login
 - Login por e-mail + código de uso único (Resend), sessão assinada de 7 dias, porteiro em Edge Function; listas por site (domínios e admins por variável de ambiente, e-mails avulsos na página /admin).
 - Logs de acesso e de uso (login, falhas, caso aberto, documento gerado, exportação) em Netlify Blobs, página /admin com filtros e CSV.
