@@ -363,7 +363,7 @@ var BASE_PADRAO = {
 
   /* ---------- Catálogo: produtos credenciados (Catálogo CFI do BNDES, 14/10/2026) ---------- */
   catalogo: CATALOGO_VMI,
-  catalogo_versao: "2026-10-15",
+  catalogo_versao: "2026-10-15.2",
   cfi_tc_concorrentes: CFI_TC_CONCORRENTES,
 
   /* Pedidos VMI jan–set/2026 (análise interna enviada em 09/10/2026) */

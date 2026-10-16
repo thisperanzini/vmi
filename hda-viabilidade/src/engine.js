@@ -235,7 +235,7 @@ var Engine = (function () {
     return (lo + hi) / 2;
   }
 
-  /* ---------- Alternativa C: pacote VMI/Alfamed financiado pelo Motor (ferramenta Financiamento VMI) ---------- */
+  /* ---------- Alternativa C: pacote VMI financiado pelo Motor (ferramenta Financiamento VMI) ---------- */
   function altC(m, Motor, BASE) {
     var itens = m.equip.C, cx = capexDe(itens), ac = m.altC, cl = m.cliente;
     var cfiInfo = (function () { var com = 0, prev = 0, sem = 0, semItens = [], prevItens = []; itens.forEach(function (i) { if (i.fin === false) return; var v = num(i.qtd) * num(i.preco), c = String(i.cfi || '').trim(); if (/^\d+$/.test(c)) com += v; else if (c) { prev += v; prevItens.push(i.nome + ' (' + c + ')'); } else { sem += v; semItens.push(i.nome); } }); return { com: com, prev: prev, sem: sem, semItens: semItens, prevItens: prevItens, todos: sem === 0 && com + prev > 0 }; })();

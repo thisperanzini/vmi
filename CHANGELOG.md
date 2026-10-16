@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-15 (noite, 2) · preços VMI no pacote C
+- Pacote C com os preços VMI de 15/10/2026: Pulsar 128/64 R$ 1.950.000; ultrassom portátil Invictus R$ 117.000 (×2); Aquila 320 S R$ 139.000; Apolo D (RX digital fixo) R$ 290.000 no lugar do Aquila 500 D; placa DR VMI R$ 107.000. Total R$ 2,72 mi (−7,3% vs GE).
+- Invictus e placa DR não aparecem no Catálogo CFI (só FGTS-Saúde ou credenciamento); Apolo D tem CFI 03538246. Manutenção do Apolo pela cotação do Aquila D (proxy).
+- Catálogo compartilhado (versão 2026-10-15.2): preços VMI em Aquila 320 S, Apolo D e Pulsar 128; itens Invictus e placa DR VMI.
+
 ## 2026-10-15 (noite) · HDA: manutenção pós-garantia e locação
 - Manutenção por contrato e por item nas compras (B e C): planos Prata e Ouro (definições VMI), 12 meses de garantia contados da instalação, provisão de tubo só no Prata. Valores VMI para os Aquila; benchmark para o pacote GE e para os itens sem cotação (contratos públicos do PNCP, Jaime). Substitui as linhas agregadas da planilha da Controladoria.
 - Alternativa D: locação de longo prazo do pacote VMI/Alfamed. Aluguel por composição de custos (arrendamento PJ do BCB + prêmio, residual por modalidade, tributos, manutenção Ouro), calibrado na locação de TC 128 canais da SMS-SP. Simulação de 36 a 84 meses, locar × possuir no prazo, aluguel de equilíbrio com a compra.
