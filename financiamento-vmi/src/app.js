@@ -95,7 +95,7 @@
         if (!S.atual || !S.casos[S.atual]) S.atual = ultimoCaso();
         renderTudo();
       }, function (e) { setSync("dirty", "Banco indisponível (" + (e && e.code) + ")"); });
-      db.doc("config/base").onSnapshot(function (d) { if (d.exists) { var b = clone(d.data()); if (b && b.linhas) { S.base = b; S.baseSalva = true; } } else { S.base = clone(BASE_PADRAO); S.baseSalva = false; } renderTudo(); });
+      db.doc("config/base").onSnapshot(function (d) { var b = d.exists ? clone(d.data()) : null; if (b && b.linhas && String(b.versao || "") >= String(BASE_PADRAO.versao)) { S.base = b; S.baseSalva = true; } else { S.base = clone(BASE_PADRAO); S.baseSalva = false; } renderTudo(); }); /* base salva de versão anterior ao código não prevalece */
       db.doc("config/catalogo").onSnapshot(function (d) { if (d.exists && d.data().itens) { S.catalogo = mesclarCatalogo(d.data()); S.catSalvo = true; } renderTudo(); });
     }).catch(modoLocal);
     w.use("sample").then(function (s) { S.sample = s; renderTudo(); }).catch(function () {});
@@ -239,9 +239,9 @@
         fi("operacao.fornecedor", "Fornecedor", op.fornecedor) + fi("operacao.banco_pretendido", "Banco pretendido", op.banco_pretendido) + fi("operacao.finalidade", "Finalidade do investimento", op.finalidade, "area", "", "w2") +
         '</div></div><div class="card"><div class="card-h"><h2>Condições que abrem linhas</h2><span class="tiny">Marque só o que estiver comprovado ou confirmado com o agente.</span></div><div class="grid g2">' +
         fc("flags.mais_inovacao", "Equipamento enquadrado no Programa Mais Inovação (FINAME a taxa fixa)", c.flags.mais_inovacao) + fc("flags.projeto_inovacao", "Projeto com componente de inovação (Finep Inovacred)", c.flags.projeto_inovacao) +
-        fc("flags.sus_complementar", "Filantrópica complementar ao SUS, aderente ao Agora Tem Especialistas (FGTS-Saúde)", c.flags.sus_complementar) + fc("flags.fiis_selecionado", "Proposta já selecionada no FIIS Saúde", c.flags.fiis_selecionado) +
+        fc("flags.sus_complementar", "Filantrópica complementar ao SUS, participante do Agora Tem Especialistas (FGTS-Saúde; ver requisitos abaixo)", c.flags.sus_complementar) + fc("flags.fiis_selecionado", "Proposta já selecionada no FIIS Saúde", c.flags.fiis_selecionado) +
         fc("flags.sem_similar", "Importado sem similar nacional comprovado", c.flags.sem_similar) + fc("flags.sudene", "Município do norte de MG/ES na área da Sudene (FNE)", c.flags.sudene) + "</div></div>" +
-        ind + dividasBloco(c) + '<div class="card"><div class="card-h"><h2>Notas</h2></div>' + fi("notas", "", c.notas, "area") + "</div>";
+        fgtsBloco(c) + ind + dividasBloco(c) + '<div class="card"><div class="card-h"><h2>Notas</h2></div>' + fi("notas", "", c.notas, "area") + "</div>";
     },
 
     /* ---------- painel: kit ---------- */
@@ -271,7 +271,7 @@
         return "<tr><td><b>" + esc(x.linha.nome) + "</b></td><td class=\"n num\">" + P(x.sim.taxaAno1) + '</td><td class="n num">' + P(x.sim.cet) + '</td><td class="n num">' + P(x.sim.custoTotal) + '</td><td class="n num">' + R(x.sim.parcelaPosCarencia) + "</td><td class=\"small\">" + esc(x.linha.obs) + " " + (x.linha.fontes || []).map(linkF).join(" ") + "</td></tr>";
       }).join("") + "</tbody></table></div></div>" : "";
       var cond = av.condicionais.length ? '<div class="card"><div class="card-h"><h3>Dependem de confirmação</h3><span class="tiny">Entram no ranking quando a condição for marcada na aba Cliente</span></div><div class="tw"><table><thead><tr><th>Linha</th><th>Condição a confirmar</th><th class="n">Custo total se confirmada</th><th class="n">Parcela pós-carência</th></tr></thead><tbody>' + av.condicionais.map(function (x) {
-        return "<tr><td><b>" + esc(x.linha.nome) + '</b><div class="tiny">' + esc(x.linha.obs) + "</div></td><td class=\"small\">" + esc(x.linha.elig.condicao.rotulo) + '</td><td class="n num"><b>' + P(x.sim.custoTotal) + '</b></td><td class="n num">' + R(x.sim.parcelaPosCarencia) + "</td></tr>";
+        return "<tr><td><b>" + esc(x.linha.nome) + '</b><div class="tiny">' + esc(x.linha.obs) + "</div></td><td class=\"small\">" + x.el.bloqueios.map(function (b) { return esc(b.replace(/^Condição não marcada no caso: /, "")); }).join("<br>") + '</td><td class="n num"><b>' + P(x.sim.custoTotal) + '</b></td><td class="n num">' + R(x.sim.parcelaPosCarencia) + "</td></tr>";
       }).join("") + "</tbody></table></div></div>" : "";
       var nao = av.todas.filter(function (x) { return !x.el.ok && !x.linha.benchmark && !x.condicional; });
       var bloq = nao.length ? '<div class="card"><details><summary>Linhas não elegíveis para este caso (' + nao.length + ")</summary><div class=\"tw\"><table><thead><tr><th>Linha</th><th>Por que não</th><th class=\"n\">Custo total se fosse elegível</th></tr></thead><tbody>" + nao.map(function (x) {
@@ -509,6 +509,27 @@
   }
 
   /* ---------- Cliente: dívidas existentes e capacidade de pagamento da entidade ---------- */
+  /* FGTS-Saúde: as três perguntas do Manual de Fomento (CEBAS 60% SUS, créditos SUS de 12 meses, Teto MAC já consignado) e a margem. */
+  function fgtsBloco(c) {
+    var cl = c.cliente || {}, f = c.flags || {};
+    if (cl.natureza !== "filantropica") return "";
+    var av = S.av || M.avaliar(c, S.base), fg = av.todas.filter(function (x) { return x.linha.id === "fgts-saude"; })[0];
+    var mg = fg ? fg.el.margemSus : null, sim = fg ? fg.sim : null;
+    var linhas = [];
+    if (mg) {
+      linhas.push(["Média mensal dos créditos SUS", R(mg.media)], ["Margem bruta (" + mg.pct + "%)", R(mg.bruta)], ["Já descontado do Teto MAC", R(mg.consignado)], ["Margem líquida disponível", "<b>" + R(mg.liquida) + "</b>"]);
+      if (sim) linhas.push(["Maior parcela do FGTS-Saúde nesta operação", R(mg.parcelaMax) + " (" + sim.n + " meses, sem carência)"], ["Situação", mg.cabe ? '<span class="pill good">cabe na margem</span>' : '<span class="pill bad">não cabe</span> valor máximo ≈ ' + R(mg.valorMax)], ["Créditos SUS de 12 meses necessários", R(mg.creditosMin12m)]);
+    }
+    var status = !fg ? "" : fg.el.ok ? '<span class="pill good">FGTS-Saúde no ranking</span>' : '<span class="pill warn">fora do ranking</span> ' + fg.el.bloqueios.map(function (b) { return esc(b.replace(/^Condição não marcada no caso: /, "falta: ")); }).join(" · ");
+    return '<div class="card"><div class="card-h"><h2>FGTS-Saúde: requisitos e margem consignável</h2><span class="tiny">Manual de Fomento FGTS Saúde, versão 002 (vigência 11/08/2026). Para equipamento só a modalidade I está operacional: até 60 meses, sem carência e sem contrapartida.</span></div><div class="form">' +
+      fs("flags.cebas_sus60", "Tem CEBAS na modalidade de prestação de serviços ao SUS, com no mínimo 60% de atendimento SUS?", f.cebas_sus60, [["", "Não informado"], ["sim", "Sim"], ["nao", "Não"]]) +
+      fi("cliente.sus_creditos_12m", "Créditos SUS nos últimos 12 meses (R$)", cl.sus_creditos_12m, "num", "Produção aprovada e incentivos; o FNS publica a média de 12 meses") +
+      fs("cliente.sus_mac_outros", "Já tem outros empréstimos consumindo o repasse do SUS (Teto MAC)?", cl.sus_mac_outros, [["", "Não informado"], ["nao", "Não"], ["sim", "Sim"]]) +
+      fi("cliente.sus_mac_parcelas", "Parcelas desses empréstimos descontadas do Teto MAC (R$/mês)", cl.sus_mac_parcelas, "num", "Só se a resposta acima for Sim") +
+      '</div><p class="small" style="margin-top:10px">' + status + '</p>' +
+      (linhas.length ? '<div class="tw" style="margin-top:8px"><table><tbody>' + linhas.map(function (r) { return '<tr><td>' + r[0] + '</td><td class="n num">' + r[1] + '</td></tr>'; }).join("") + '</tbody></table></div>' : '') +
+      '<p class="tiny" style="margin-top:8px">A parcela é descontada do Teto MAC e paga pelo Fundo Nacional de Saúde ao agente (cessão de direitos creditórios, Portaria GM/MS 2.182/2015). Margem: 35% da média mensal dos créditos SUS dos últimos 12 meses, menos o já consignado (Manual, Cap. III, 5.1.2). A modalidade III (investimento em até 20 anos) ainda não foi regulamentada pela Caixa.</p></div>';
+  }
   function dividasBloco(c) {
     var fin = c.financeiro || (c.financeiro = {}), div = fin.dividas || [], ev = fin.evento || {}, en = S.entAtual, ult = (fin.exercicios || [])[(fin.exercicios || []).length - 1];
     var rows = div.map(function (d, i) {

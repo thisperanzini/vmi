@@ -1,9 +1,9 @@
-/* Base de linhas, taxas e parâmetros — versão 2026-10-09.
+/* Base de linhas, taxas e parâmetros — versão 2026-10-16 (levantamento de 09/10/2026; FGTS-Saúde revisto em 16/10/2026).
    Cada número tem fonte, data e confiança. A página usa esta base como padrão
    e a substitui pela versão salva no banco (config/base), quando houver. */
 var BASE_PADRAO = {
-  versao: "2026-10-15",
-  nota: "Levantamento S&S de 09/10/2026; catálogo CFI verificado em 14/10/2026 e cruzado com a tabela FINAME VMI em 15/10/2026 (validade por item; Pulsar com CFI previsto para dez/2026, premissa VMI); modos internalização/entidade adicionados. Valores de fontes oficiais lidas na data; os marcados 'calculado' derivam de fórmula oficial com insumos oficiais.",
+  versao: "2026-10-16",
+  nota: "Levantamento S&S de 09/10/2026; FGTS-Saúde refeito pela Res. CCFGTS 1.152/2026 e pelo Manual de Fomento v002 em 16/10/2026 (só modalidade I para equipamento); catálogo CFI verificado em 14/10/2026 e cruzado com a tabela FINAME VMI em 15/10/2026 (validade por item; Pulsar com CFI previsto para dez/2026, premissa VMI); modos internalização/entidade adicionados. Valores de fontes oficiais lidas na data; os marcados 'calculado' derivam de fórmula oficial com insumos oficiais.",
 
   /* ---------- Macro ---------- */
   macro: {
@@ -179,21 +179,40 @@ var BASE_PADRAO = {
       fontes: ["f_bdmg"]
     },
     {
-      id: "fgts-saude", familia: "Filantrópicos", nome: "FGTS-Saúde / Caixa Hospitais FGTS",
-      operador: "Caixa", status: "aberta",
+      id: "fgts-saude", familia: "Filantrópicos", nome: "FGTS-Saúde – modalidade I, sem destinação específica",
+      operador: "Caixa, Banco do Brasil ou BNDES (agentes habilitados)", status: "aberta",
       elig: { natureza: ["filantropica"], portes: ["micro", "pequena", "media", "grande"], exige_cfi: false, importado: "a_confirmar", ufs: null,
-        condicao: { campo: "sus_complementar", rotulo: "Filantrópica complementar ao SUS, aderente ao Agora Tem Especialistas" } },
-      cond: { part: 95, prazo: 240, carencia: 12, obras: true },
+        condicao: { campo: "sus_complementar", rotulo: "Participa do Programa Agora Tem Especialistas (complementar ao SUS)" },
+        cebas_sus60: true, margem_sus: { pct: 35 } },
+      cond: { part: 100, prazo: 60, carencia: 0, obras: true },
       custos: ["TR"],
       spreads: [
         { nome: "Juros FGTS", base: 8.66, min: 8.66, max: 8.66, fonte: "f_fgts" },
-        { nome: "Taxa de risco do agente", base: 3.0, min: 0, max: 3.0, fonte: "f_fgts" }
+        { nome: "Taxa de risco do agente", base: 3.0, min: 0, max: 3.0, fonte: "f_fgts_mfom" }
       ],
       tarifa: 0.5,
       iof: "regular", iof_base: "Não confirmado; filantrópica pode ter não incidência (art. 2º, §3º, III)",
-      garantias: "Cessão ou alienação fiduciária, aval, fundos garantidores, recebíveis.",
-      obs: "Res. CCFGTS 1.152/2026: R$ 8,5 bi; equipamentos em até 20 anos, obras em até 30. Prorrogado até 2030 (Lei 15.486/2026).",
-      fontes: ["f_fgts", "f_fgts_ms"]
+      garantias: "Cessão de direitos creditórios do SUS, com desconto da parcela no Teto MAC pelo FNS (Portaria GM/MS 2.182/2015), além das garantias da Lei 8.036/1990, fundos garantidores e alienação fiduciária.",
+      obs: "Modalidade I do Manual de Fomento (versão 002, vigência 11/08/2026): amortização em até 60 meses, sem carência (1ª parcela em até 45 dias, encargos do intervalo incorporados ao saldo), sem contrapartida, desembolso em parcela única. A parcela cabe na margem consignável: 35% da média mensal dos créditos SUS dos últimos 12 meses, menos o que outros empréstimos já descontam do Teto MAC. Exige CEBAS na modalidade de prestação de serviços ao SUS com no mínimo 60%, anuência do gestor local do SUS e participação no Agora Tem Especialistas. A modalidade III (investimento, até 20 anos e 12 de carência) está na Res. CCFGTS 1.152/2026, mas não foi regulamentada pelo Agente Operador: o manual só cobre as modalidades I e II.",
+      fontes: ["f_fgts", "f_fgts_mfom", "f_fgts_ms"]
+    },
+    {
+      id: "fgts-saude-reestr", familia: "Filantrópicos", nome: "FGTS-Saúde – modalidade II, reestruturação financeira",
+      operador: "Caixa, Banco do Brasil ou BNDES (agentes habilitados)", status: "informativa",
+      elig: { natureza: ["filantropica"], portes: ["micro", "pequena", "media", "grande"], exige_cfi: false, importado: "a_confirmar", ufs: null,
+        condicao: { campo: "sus_complementar", rotulo: "Participa do Programa Agora Tem Especialistas (complementar ao SUS)" },
+        cebas_sus60: true, margem_sus: { pct: 35 } },
+      cond: { part: 100, prazo: 180, carencia: 0, obras: false },
+      custos: ["TR"],
+      spreads: [
+        { nome: "Juros FGTS", base: 8.66, min: 8.66, max: 8.66, fonte: "f_fgts" },
+        { nome: "Taxa de risco do agente", base: 3.0, min: 0, max: 3.0, fonte: "f_fgts_mfom" }
+      ],
+      tarifa: 0.5,
+      iof: "regular",
+      garantias: "As mesmas da modalidade I (recebíveis do SUS via Teto MAC).",
+      obs: "Não financia equipamento: quita dívidas mais caras, fornecedores e passivos trabalhistas, com Plano de Trabalho e de Gestão (Anexo II do manual). Amortização em até 15 anos, sem carência, dentro da mesma margem consignável de 35% dos créditos SUS. Não entra no ranking do equipamento; relevante para a dívida existente do tomador.",
+      fontes: ["f_fgts", "f_fgts_mfom"]
     },
     {
       id: "cartao-bndes", familia: "BNDES", nome: "Cartão BNDES",
@@ -259,7 +278,8 @@ var BASE_PADRAO = {
     f_tfc: { t: "Res. CMN 5.013/2022 – taxa dos fundos constitucionais (calculado com Com. BCB 45.161, 45.491 e CDR do IBGE)", u: "https://www.bcb.gov.br/estabilidadefinanceira/exibenormativo?tipo=Resolu%C3%A7%C3%A3o%20CMN&numero=5013", d: "2026-10-09", c: "media" },
     f_inovacred: { t: "GoiásFomento e AgeRio – Finep Inovacred", u: "https://www.goiasfomento.com/linhas-de-credito/finep/", d: "2026-10-09", c: "media" },
     f_bdmg: { t: "BDMG – BDMG Investimentos", u: "https://www.bdmg.mg.gov.br/grandes-empresas/?bdmg-investimentos", d: "2026-10-09", c: "media" },
-    f_fgts: { t: "Res. CCFGTS 1.152/2026", u: "https://www.lex.com.br/resolucao-ccfgts-no-1-152-de-24-de-marco-de-2026/", d: "2026-03-24", c: "media" },
+    f_fgts: { t: "Res. CCFGTS 1.152/2026 (DOU de 27/04/2026): modalidades, juros de 8,66% a.a., risco até 3% a.a., tarifa até 0,5%", u: "https://www.lex.com.br/resolucao-ccfgts-no-1-152-de-24-de-marco-de-2026/", d: "2026-04-27", c: "alta" },
+    f_fgts_mfom: { t: "CAIXA – Manual de Fomento FGTS Saúde, versão 002, vigência 11/08/2026 (Circular CAIXA 1.121/2026): só modalidades I e II; prazos, margem de 35% dos créditos SUS, CEBAS 60% SUS", u: "https://drive.google.com/file/d/1oUPYXrnjkgy-VN3J8yMkP0kTmt18zN3V/view", d: "2026-08-11", c: "alta" },
     f_fgts_ms: { t: "Ministério da Saúde – prorrogação do FGTS para filantrópicas", u: "https://www.gov.br/saude/pt-br/assuntos/noticias-ms/2026/agosto/lei-prorroga-aplicacao-de-recursos-do-fgts-a-entidades-hospitalares-filantropicas-que-atuam-no-sus", d: "2026-08-07", c: "alta" },
     f_cartao: { t: "BNDES – Cartão BNDES", u: "https://www.bndes.gov.br/wps/portal/site/home/financiamento/produto/cartao-bndes", d: "2026-10-09", c: "alta" },
     f_fiis: { t: "Casa Civil – Edital CGFIIS 2 (atualizado em 29/06/2026)", u: "https://www.gov.br/casacivil/pt-br/acesso-a-informacao/fundos/fundo-fiis/editais/sei_7675972_edital_2_atualizado.pdf/@@download/file", d: "2026-06-29", c: "alta" },
@@ -325,9 +345,15 @@ var BASE_PADRAO = {
     { id: "k23", n: "23", cat: "E", nome: "Valor do investimento e percentual a financiar", ob: "Obrigatório", resp: "Cliente", onde: "Empresa", fmt: "Texto", val: "—", obs: "Preenchido automaticamente pela operação", ia: null, auto: "operacao" },
     { id: "k24", n: "24", cat: "F", nome: "Aval dos sócios", ob: "Obrigatório (usual)", resp: "Banco / Cliente", onde: "Definido pelo agente financeiro", fmt: "—", val: "—", obs: "Exigido na maioria das operações", ia: null },
     { id: "k25", n: "25", cat: "F", nome: "Alienação fiduciária do bem financiado", ob: "Usual", resp: "Banco", onde: "Agente financeiro", fmt: "—", val: "—", obs: "Confirmar com o agente: a redação do item 7.3 da Circ. 13/2022 é ambígua", ia: null },
-    { id: "k26", n: "26", cat: "F", nome: "Adesão a Fundo Garantidor (FGI)", ob: "Se aplicável", resp: "Banco", onde: "Agente financeiro", fmt: "—", val: "—", obs: "Quando houver insuficiência de garantias (só MPME)", ia: null }
+    { id: "k26", n: "26", cat: "F", nome: "Adesão a Fundo Garantidor (FGI)", ob: "Se aplicável", resp: "Banco", onde: "Agente financeiro", fmt: "—", val: "—", obs: "Quando houver insuficiência de garantias (só MPME)", ia: null },
+    { id: "k27", n: "27", cat: "G", nome: "CEBAS na modalidade de prestação de serviços ao SUS (mínimo de 60%), publicado no DOU", ob: "Se FGTS-Saúde", resp: "Cliente", onde: "Ministério da Saúde / DOU", fmt: "PDF", val: "Vigente", obs: "Requisito do Manual de Fomento FGTS Saúde (Cap. III, 5.5.1 g). Sem ele a linha não abre.", ia: null },
+    { id: "k28", n: "28", cat: "G", nome: "Créditos SUS dos últimos 12 meses (produção aprovada e incentivos)", ob: "Se FGTS-Saúde", resp: "Cliente", onde: "Portal do Fundo Nacional de Saúde (média publicada pela SAES)", fmt: "PDF / planilha", val: "12 meses", obs: "Define a margem consignável: 35% da média mensal, menos o que outros empréstimos já descontam do Teto MAC.", ia: null },
+    { id: "k29", n: "29", cat: "G", nome: "Contratos de empréstimos com desconto no Teto MAC (cessões vigentes)", ob: "Se FGTS-Saúde", resp: "Cliente", onde: "Agentes financeiros / FNS", fmt: "PDF", val: "Vigentes", obs: "Reduzem a margem disponível para a nova operação.", ia: null },
+    { id: "k30", n: "30", cat: "G", nome: "Anuência do gestor local do SUS e termo de cessão de direitos creditórios", ob: "Se FGTS-Saúde", resp: "Cliente / Secretaria de Saúde", onde: "Secretaria municipal ou estadual de Saúde", fmt: "PDF", val: "—", obs: "Portaria GM/MS 2.182/2015: a parcela é descontada do Teto MAC e paga pelo FNS ao agente.", ia: null },
+    { id: "k31", n: "31", cat: "G", nome: "Comprovação de participação no Programa Agora Tem Especialistas", ob: "Se FGTS-Saúde", resp: "Cliente", onde: "Declaração enviada a declaracao.pate@saude.gov.br; Termo de Execução ou códigos no CNES", fmt: "PDF / e-mail", val: "—", obs: "Manual de Fomento, Cap. III, 5.5.1 k.", ia: null },
+    { id: "k32", n: "32", cat: "G", nome: "Cadastro no CNES", ob: "Se FGTS-Saúde", resp: "Cliente", onde: "CNES (cnes.datasus.gov.br)", fmt: "Print / PDF", val: "Atualizado", obs: "", ia: null },
   ],
-  kit_cats: { A: "Documentos societários e cadastrais", B: "Sócios e representantes legais", C: "Regularidade fiscal e cadastros", D: "Documentos econômico-financeiros", E: "Operação e bem (equipamento médico)", F: "Garantias" },
+  kit_cats: { A: "Documentos societários e cadastrais", B: "Sócios e representantes legais", C: "Regularidade fiscal e cadastros", D: "Documentos econômico-financeiros", E: "Operação e bem (equipamento médico)", F: "Garantias", G: "FGTS-Saúde (só para filantrópicas que usarem a linha)" },
 
   /* ---------- Modalidades (ROI) ---------- */
   modalidades: [

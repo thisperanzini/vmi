@@ -408,12 +408,12 @@ var CFI_TC_CONCORRENTES = [
 </script>
 <script>
 /* ===== Base de linhas (shared/base.js) ===== */
-/* Base de linhas, taxas e parâmetros — versão 2026-10-09.
+/* Base de linhas, taxas e parâmetros — versão 2026-10-16 (levantamento de 09/10/2026; FGTS-Saúde revisto em 16/10/2026).
    Cada número tem fonte, data e confiança. A página usa esta base como padrão
    e a substitui pela versão salva no banco (config/base), quando houver. */
 var BASE_PADRAO = {
-  versao: "2026-10-15",
-  nota: "Levantamento S&S de 09/10/2026; catálogo CFI verificado em 14/10/2026 e cruzado com a tabela FINAME VMI em 15/10/2026 (validade por item; Pulsar com CFI previsto para dez/2026, premissa VMI); modos internalização/entidade adicionados. Valores de fontes oficiais lidas na data; os marcados 'calculado' derivam de fórmula oficial com insumos oficiais.",
+  versao: "2026-10-16",
+  nota: "Levantamento S&S de 09/10/2026; FGTS-Saúde refeito pela Res. CCFGTS 1.152/2026 e pelo Manual de Fomento v002 em 16/10/2026 (só modalidade I para equipamento); catálogo CFI verificado em 14/10/2026 e cruzado com a tabela FINAME VMI em 15/10/2026 (validade por item; Pulsar com CFI previsto para dez/2026, premissa VMI); modos internalização/entidade adicionados. Valores de fontes oficiais lidas na data; os marcados 'calculado' derivam de fórmula oficial com insumos oficiais.",
 
   /* ---------- Macro ---------- */
   macro: {
@@ -589,21 +589,40 @@ var BASE_PADRAO = {
       fontes: ["f_bdmg"]
     },
     {
-      id: "fgts-saude", familia: "Filantrópicos", nome: "FGTS-Saúde / Caixa Hospitais FGTS",
-      operador: "Caixa", status: "aberta",
+      id: "fgts-saude", familia: "Filantrópicos", nome: "FGTS-Saúde – modalidade I, sem destinação específica",
+      operador: "Caixa, Banco do Brasil ou BNDES (agentes habilitados)", status: "aberta",
       elig: { natureza: ["filantropica"], portes: ["micro", "pequena", "media", "grande"], exige_cfi: false, importado: "a_confirmar", ufs: null,
-        condicao: { campo: "sus_complementar", rotulo: "Filantrópica complementar ao SUS, aderente ao Agora Tem Especialistas" } },
-      cond: { part: 95, prazo: 240, carencia: 12, obras: true },
+        condicao: { campo: "sus_complementar", rotulo: "Participa do Programa Agora Tem Especialistas (complementar ao SUS)" },
+        cebas_sus60: true, margem_sus: { pct: 35 } },
+      cond: { part: 100, prazo: 60, carencia: 0, obras: true },
       custos: ["TR"],
       spreads: [
         { nome: "Juros FGTS", base: 8.66, min: 8.66, max: 8.66, fonte: "f_fgts" },
-        { nome: "Taxa de risco do agente", base: 3.0, min: 0, max: 3.0, fonte: "f_fgts" }
+        { nome: "Taxa de risco do agente", base: 3.0, min: 0, max: 3.0, fonte: "f_fgts_mfom" }
       ],
       tarifa: 0.5,
       iof: "regular", iof_base: "Não confirmado; filantrópica pode ter não incidência (art. 2º, §3º, III)",
-      garantias: "Cessão ou alienação fiduciária, aval, fundos garantidores, recebíveis.",
-      obs: "Res. CCFGTS 1.152/2026: R$ 8,5 bi; equipamentos em até 20 anos, obras em até 30. Prorrogado até 2030 (Lei 15.486/2026).",
-      fontes: ["f_fgts", "f_fgts_ms"]
+      garantias: "Cessão de direitos creditórios do SUS, com desconto da parcela no Teto MAC pelo FNS (Portaria GM/MS 2.182/2015), além das garantias da Lei 8.036/1990, fundos garantidores e alienação fiduciária.",
+      obs: "Modalidade I do Manual de Fomento (versão 002, vigência 11/08/2026): amortização em até 60 meses, sem carência (1ª parcela em até 45 dias, encargos do intervalo incorporados ao saldo), sem contrapartida, desembolso em parcela única. A parcela cabe na margem consignável: 35% da média mensal dos créditos SUS dos últimos 12 meses, menos o que outros empréstimos já descontam do Teto MAC. Exige CEBAS na modalidade de prestação de serviços ao SUS com no mínimo 60%, anuência do gestor local do SUS e participação no Agora Tem Especialistas. A modalidade III (investimento, até 20 anos e 12 de carência) está na Res. CCFGTS 1.152/2026, mas não foi regulamentada pelo Agente Operador: o manual só cobre as modalidades I e II.",
+      fontes: ["f_fgts", "f_fgts_mfom", "f_fgts_ms"]
+    },
+    {
+      id: "fgts-saude-reestr", familia: "Filantrópicos", nome: "FGTS-Saúde – modalidade II, reestruturação financeira",
+      operador: "Caixa, Banco do Brasil ou BNDES (agentes habilitados)", status: "informativa",
+      elig: { natureza: ["filantropica"], portes: ["micro", "pequena", "media", "grande"], exige_cfi: false, importado: "a_confirmar", ufs: null,
+        condicao: { campo: "sus_complementar", rotulo: "Participa do Programa Agora Tem Especialistas (complementar ao SUS)" },
+        cebas_sus60: true, margem_sus: { pct: 35 } },
+      cond: { part: 100, prazo: 180, carencia: 0, obras: false },
+      custos: ["TR"],
+      spreads: [
+        { nome: "Juros FGTS", base: 8.66, min: 8.66, max: 8.66, fonte: "f_fgts" },
+        { nome: "Taxa de risco do agente", base: 3.0, min: 0, max: 3.0, fonte: "f_fgts_mfom" }
+      ],
+      tarifa: 0.5,
+      iof: "regular",
+      garantias: "As mesmas da modalidade I (recebíveis do SUS via Teto MAC).",
+      obs: "Não financia equipamento: quita dívidas mais caras, fornecedores e passivos trabalhistas, com Plano de Trabalho e de Gestão (Anexo II do manual). Amortização em até 15 anos, sem carência, dentro da mesma margem consignável de 35% dos créditos SUS. Não entra no ranking do equipamento; relevante para a dívida existente do tomador.",
+      fontes: ["f_fgts", "f_fgts_mfom"]
     },
     {
       id: "cartao-bndes", familia: "BNDES", nome: "Cartão BNDES",
@@ -669,7 +688,8 @@ var BASE_PADRAO = {
     f_tfc: { t: "Res. CMN 5.013/2022 – taxa dos fundos constitucionais (calculado com Com. BCB 45.161, 45.491 e CDR do IBGE)", u: "https://www.bcb.gov.br/estabilidadefinanceira/exibenormativo?tipo=Resolu%C3%A7%C3%A3o%20CMN&numero=5013", d: "2026-10-09", c: "media" },
     f_inovacred: { t: "GoiásFomento e AgeRio – Finep Inovacred", u: "https://www.goiasfomento.com/linhas-de-credito/finep/", d: "2026-10-09", c: "media" },
     f_bdmg: { t: "BDMG – BDMG Investimentos", u: "https://www.bdmg.mg.gov.br/grandes-empresas/?bdmg-investimentos", d: "2026-10-09", c: "media" },
-    f_fgts: { t: "Res. CCFGTS 1.152/2026", u: "https://www.lex.com.br/resolucao-ccfgts-no-1-152-de-24-de-marco-de-2026/", d: "2026-03-24", c: "media" },
+    f_fgts: { t: "Res. CCFGTS 1.152/2026 (DOU de 27/04/2026): modalidades, juros de 8,66% a.a., risco até 3% a.a., tarifa até 0,5%", u: "https://www.lex.com.br/resolucao-ccfgts-no-1-152-de-24-de-marco-de-2026/", d: "2026-04-27", c: "alta" },
+    f_fgts_mfom: { t: "CAIXA – Manual de Fomento FGTS Saúde, versão 002, vigência 11/08/2026 (Circular CAIXA 1.121/2026): só modalidades I e II; prazos, margem de 35% dos créditos SUS, CEBAS 60% SUS", u: "https://drive.google.com/file/d/1oUPYXrnjkgy-VN3J8yMkP0kTmt18zN3V/view", d: "2026-08-11", c: "alta" },
     f_fgts_ms: { t: "Ministério da Saúde – prorrogação do FGTS para filantrópicas", u: "https://www.gov.br/saude/pt-br/assuntos/noticias-ms/2026/agosto/lei-prorroga-aplicacao-de-recursos-do-fgts-a-entidades-hospitalares-filantropicas-que-atuam-no-sus", d: "2026-08-07", c: "alta" },
     f_cartao: { t: "BNDES – Cartão BNDES", u: "https://www.bndes.gov.br/wps/portal/site/home/financiamento/produto/cartao-bndes", d: "2026-10-09", c: "alta" },
     f_fiis: { t: "Casa Civil – Edital CGFIIS 2 (atualizado em 29/06/2026)", u: "https://www.gov.br/casacivil/pt-br/acesso-a-informacao/fundos/fundo-fiis/editais/sei_7675972_edital_2_atualizado.pdf/@@download/file", d: "2026-06-29", c: "alta" },
@@ -735,9 +755,15 @@ var BASE_PADRAO = {
     { id: "k23", n: "23", cat: "E", nome: "Valor do investimento e percentual a financiar", ob: "Obrigatório", resp: "Cliente", onde: "Empresa", fmt: "Texto", val: "—", obs: "Preenchido automaticamente pela operação", ia: null, auto: "operacao" },
     { id: "k24", n: "24", cat: "F", nome: "Aval dos sócios", ob: "Obrigatório (usual)", resp: "Banco / Cliente", onde: "Definido pelo agente financeiro", fmt: "—", val: "—", obs: "Exigido na maioria das operações", ia: null },
     { id: "k25", n: "25", cat: "F", nome: "Alienação fiduciária do bem financiado", ob: "Usual", resp: "Banco", onde: "Agente financeiro", fmt: "—", val: "—", obs: "Confirmar com o agente: a redação do item 7.3 da Circ. 13/2022 é ambígua", ia: null },
-    { id: "k26", n: "26", cat: "F", nome: "Adesão a Fundo Garantidor (FGI)", ob: "Se aplicável", resp: "Banco", onde: "Agente financeiro", fmt: "—", val: "—", obs: "Quando houver insuficiência de garantias (só MPME)", ia: null }
+    { id: "k26", n: "26", cat: "F", nome: "Adesão a Fundo Garantidor (FGI)", ob: "Se aplicável", resp: "Banco", onde: "Agente financeiro", fmt: "—", val: "—", obs: "Quando houver insuficiência de garantias (só MPME)", ia: null },
+    { id: "k27", n: "27", cat: "G", nome: "CEBAS na modalidade de prestação de serviços ao SUS (mínimo de 60%), publicado no DOU", ob: "Se FGTS-Saúde", resp: "Cliente", onde: "Ministério da Saúde / DOU", fmt: "PDF", val: "Vigente", obs: "Requisito do Manual de Fomento FGTS Saúde (Cap. III, 5.5.1 g). Sem ele a linha não abre.", ia: null },
+    { id: "k28", n: "28", cat: "G", nome: "Créditos SUS dos últimos 12 meses (produção aprovada e incentivos)", ob: "Se FGTS-Saúde", resp: "Cliente", onde: "Portal do Fundo Nacional de Saúde (média publicada pela SAES)", fmt: "PDF / planilha", val: "12 meses", obs: "Define a margem consignável: 35% da média mensal, menos o que outros empréstimos já descontam do Teto MAC.", ia: null },
+    { id: "k29", n: "29", cat: "G", nome: "Contratos de empréstimos com desconto no Teto MAC (cessões vigentes)", ob: "Se FGTS-Saúde", resp: "Cliente", onde: "Agentes financeiros / FNS", fmt: "PDF", val: "Vigentes", obs: "Reduzem a margem disponível para a nova operação.", ia: null },
+    { id: "k30", n: "30", cat: "G", nome: "Anuência do gestor local do SUS e termo de cessão de direitos creditórios", ob: "Se FGTS-Saúde", resp: "Cliente / Secretaria de Saúde", onde: "Secretaria municipal ou estadual de Saúde", fmt: "PDF", val: "—", obs: "Portaria GM/MS 2.182/2015: a parcela é descontada do Teto MAC e paga pelo FNS ao agente.", ia: null },
+    { id: "k31", n: "31", cat: "G", nome: "Comprovação de participação no Programa Agora Tem Especialistas", ob: "Se FGTS-Saúde", resp: "Cliente", onde: "Declaração enviada a declaracao.pate@saude.gov.br; Termo de Execução ou códigos no CNES", fmt: "PDF / e-mail", val: "—", obs: "Manual de Fomento, Cap. III, 5.5.1 k.", ia: null },
+    { id: "k32", n: "32", cat: "G", nome: "Cadastro no CNES", ob: "Se FGTS-Saúde", resp: "Cliente", onde: "CNES (cnes.datasus.gov.br)", fmt: "Print / PDF", val: "Atualizado", obs: "", ia: null },
   ],
-  kit_cats: { A: "Documentos societários e cadastrais", B: "Sócios e representantes legais", C: "Regularidade fiscal e cadastros", D: "Documentos econômico-financeiros", E: "Operação e bem (equipamento médico)", F: "Garantias" },
+  kit_cats: { A: "Documentos societários e cadastrais", B: "Sócios e representantes legais", C: "Regularidade fiscal e cadastros", D: "Documentos econômico-financeiros", E: "Operação e bem (equipamento médico)", F: "Garantias", G: "FGTS-Saúde (só para filantrópicas que usarem a linha)" },
 
   /* ---------- Modalidades (ROI) ---------- */
   modalidades: [
@@ -917,6 +943,21 @@ var Motor = (function () {
   function fmtP(v, d) { if (v == null || !isFinite(v)) return "—"; return v.toLocaleString("pt-BR", { minimumFractionDigits: d == null ? 2 : d, maximumFractionDigits: d == null ? 2 : d }) + "%"; }
   function fmtR(v) { if (v == null || !isFinite(v)) return "—"; return "R$ " + Math.round(v).toLocaleString("pt-BR"); }
 
+  /* FGTS-Saúde: respostas do tomador (CEBAS 60% SUS, créditos SUS de 12 meses, empréstimos já descontados do Teto MAC). */
+  function simNao(v) { if (v === true || v === 1 || v === "sim") return "sim"; if (v === false || v === 0 || v === "nao") return "nao"; return ""; }
+  function susCtx(caso) {
+    var cl = caso.cliente || {}, f = caso.flags || {};
+    var cred = num(cl.sus_creditos_12m), outros = simNao(cl.sus_mac_outros), cons = num(cl.sus_mac_parcelas);
+    return { cebas: simNao(f.cebas_sus60), creditos12m: cred && cred > 0 ? cred : null, outros: outros, consignado: outros === "sim" ? (cons || 0) : 0, consignadoInformado: outros !== "sim" || cons != null };
+  }
+  /* Margem consignável (Manual de Fomento FGTS Saúde, Cap. III, 5.1.2): pct% da média mensal dos créditos SUS de 12 meses, menos o já consignado. */
+  function margemSus(ctx, pct) {
+    var s = ctx.sus || {};
+    if (!s.creditos12m) return null;
+    var media = s.creditos12m / 12, bruta = media * (pct || 35) / 100;
+    return { pct: pct || 35, media: media, bruta: bruta, consignado: s.consignado || 0, liquida: Math.max(0, bruta - (s.consignado || 0)) };
+  }
+
   /* Contexto do caso */
   function contexto(caso, base) {
     var rob = num(caso.cliente && caso.cliente.rob);
@@ -931,6 +972,7 @@ var Motor = (function () {
       faixaFundos: faixaFundos(rob, base) || (porte === "grande" ? base.porte.fundos[5] : porte === "micro" || porte === "pequena" ? base.porte.fundos[1] : base.porte.fundos[3]),
       natureza: (caso.cliente && caso.cliente.natureza) || "privada", eq: eq, invest: invest, valorEquip: num(op.valor_equip) || 0, valorObra: num(op.valor_obra) || 0,
       fin: fin, prazo: num(op.prazo) || 60, carencia: num(op.carencia) || 0, flags: caso.flags || {}, honor: num(caso.honorario_pct) == null ? 2 : num(caso.honorario_pct),
+      sus: susCtx(caso),
       ini: op.inicio ? { y: +op.inicio.slice(0, 4), m: +op.inicio.slice(5, 7) } : { y: 2026, m: 11 }
     };
   }
@@ -945,6 +987,18 @@ var Motor = (function () {
     }
     if (e.natureza && e.natureza.indexOf(ctx.natureza) < 0) B.push("Natureza jurídica não atendida (" + (ctx.natureza === "filantropica" ? "filantrópica" : "privada com fins lucrativos") + ")");
     else if (e.natureza) P.push("Natureza jurídica aceita");
+    if (e.cebas_sus60) {
+      var cb = (ctx.sus || {}).cebas;
+      if (cb === "nao") B.push("Sem CEBAS na modalidade de prestação de serviços ao SUS com no mínimo 60% (requisito do Manual de Fomento FGTS Saúde, Cap. III, 5.5.1 g)");
+      else if (cb !== "sim") B.push("Condição não marcada no caso: CEBAS na modalidade de prestação de serviços ao SUS, mínimo de 60%");
+      else P.push("CEBAS por prestação de serviços ao SUS (≥ 60%) informado");
+    }
+    if (e.margem_sus) {
+      var su = ctx.sus || {};
+      if (!su.creditos12m) B.push("Condição não marcada no caso: créditos SUS dos últimos 12 meses (definem a margem consignável de " + e.margem_sus.pct + "%)");
+      if (su.outros === "") A.push("Não informado se há outros empréstimos descontados do Teto MAC; a margem foi calculada sem desconto");
+      else if (su.outros === "sim" && !su.consignado) A.push("Há empréstimos no Teto MAC, mas o valor mensal já consignado não foi informado");
+    }
     if (e.portes) {
       if (!ctx.porte) A.push("Porte não informado; preencha a receita bruta anual");
       else if (e.portes.indexOf(ctx.porte) < 0) B.push("Porte fora da linha: " + PORTE_NOME[ctx.porte]);
@@ -971,7 +1025,7 @@ var Motor = (function () {
     if (e.valor_min && ctx.fin < e.valor_min) B.push("Valor abaixo do mínimo (" + fmtR(e.valor_min) + ")");
     if (e.valor_max && ctx.fin > e.valor_max) B.push("Valor acima do máximo (" + fmtR(e.valor_max) + ")");
     if (ctx.valorObra > 0 && linha.cond && linha.cond.obras === false) A.push("Obra/instalação não é financiável nesta linha; entra como recurso próprio ou linha à parte");
-    if (linha.status === "informativa") A.push("Linha sem taxa publicada no mês: não entra no ranking");
+    if (linha.status === "informativa") A.push(linha.info || (linha.id === "fgts-saude-reestr" ? "Reestruturação de dívidas, não financia equipamento: não entra no ranking" : "Linha sem taxa publicada no mês: não entra no ranking"));
     return { ok: B.length === 0, bloqueios: B, avisos: A, porques: P };
   }
 
@@ -1031,6 +1085,19 @@ var Motor = (function () {
           alternativas.push(s);
           if (!melhor || s.custoTotal < melhor.custoTotal) melhor = s;
         });
+      }
+      if (l.elig && l.elig.margem_sus) {
+        var mg = margemSus(ctx, l.elig.margem_sus.pct);
+        if (mg && melhor) {
+          var pmax = melhor.rows.reduce(function (m, r) { return Math.max(m, r.parcela); }, 0);
+          var im = Math.pow(1 + (melhor.taxaAno1 || 0) / 100, 1 / 12) - 1, nn = melhor.n;
+          var fator = (melhor.sistema === "Price") ? (im > 0 ? im / (1 - Math.pow(1 + im, -nn)) : 1 / nn) : (1 / nn + im);
+          mg.parcelaMax = pmax; mg.valorMax = fator > 0 ? mg.liquida / fator : null; mg.creditosMin12m = (pmax + mg.consignado) / (mg.pct / 100) * 12; mg.cabe = pmax <= mg.liquida + 0.5;
+          if (!mg.cabe) { el.bloqueios.push("Parcela de " + fmtR(pmax) + " acima da margem consignável líquida de " + fmtR(mg.liquida) + " (" + mg.pct + "% de " + fmtR(mg.media) + "/mês de créditos SUS" + (mg.consignado ? " − " + fmtR(mg.consignado) + " já consignados" : "") + "); valor máximo financiável ≈ " + fmtR(mg.valorMax)); el.ok = false; }
+          else el.porques.push("Parcela de " + fmtR(pmax) + " cabe na margem consignável de " + fmtR(mg.liquida) + "/mês");
+        }
+        el.margemSus = mg;
+        if (melhor) melhor.margemSus = mg;
       }
       var cond = !el.ok && el.bloqueios.length > 0 && el.bloqueios.every(function (b) { return /^Condição não marcada/.test(b); });
       out.push({ linha: l, el: el, sim: melhor, alternativas: alternativas, condicional: cond });
@@ -1223,7 +1290,7 @@ var Motor = (function () {
       dlEbitdaProj: ebitda0 ? (divTot - caixa + (simRes ? simRes.P : 0)) / (ebitda0 + (linhas[1] ? linhas[1].inc : 0)) : null, dlAposEvento: Math.max(0, divTot - caixa - liq), evento: ev, temDividas: div.length > 0 };
   }
 
-  return { num: num, porteBNDES: porteBNDES, roiInternalizacao: roiInternalizacao, entidade: entidade, faixaFundos: faixaFundos, custoFinanceiro: custoFinanceiro, taxaAnual: taxaAnual, cronograma: cronograma, calcIOF: calcIOF, irr: irr, aa: aa,
+  return { num: num, margemSus: margemSus, susCtx: susCtx, simNao: simNao, porteBNDES: porteBNDES, roiInternalizacao: roiInternalizacao, entidade: entidade, faixaFundos: faixaFundos, custoFinanceiro: custoFinanceiro, taxaAnual: taxaAnual, cronograma: cronograma, calcIOF: calcIOF, irr: irr, aa: aa,
     contexto: contexto, elegibilidade: elegibilidade, simular: simular, avaliar: avaliar, indicadores: indicadores, roi: roi, fmtP: fmtP, fmtR: fmtR, PORTE_NOME: PORTE_NOME, ipcaAno: ipcaAno };
 })();
 if (typeof module !== "undefined") module.exports = Motor;
@@ -1661,7 +1728,7 @@ window.VMI_SEED = {"casos": [{"atualizado": "2026-10-09T21:32:09.623Z", "cliente
         if (!S.atual || !S.casos[S.atual]) S.atual = ultimoCaso();
         renderTudo();
       }, function (e) { setSync("dirty", "Banco indisponível (" + (e && e.code) + ")"); });
-      db.doc("config/base").onSnapshot(function (d) { if (d.exists) { var b = clone(d.data()); if (b && b.linhas) { S.base = b; S.baseSalva = true; } } else { S.base = clone(BASE_PADRAO); S.baseSalva = false; } renderTudo(); });
+      db.doc("config/base").onSnapshot(function (d) { var b = d.exists ? clone(d.data()) : null; if (b && b.linhas && String(b.versao || "") >= String(BASE_PADRAO.versao)) { S.base = b; S.baseSalva = true; } else { S.base = clone(BASE_PADRAO); S.baseSalva = false; } renderTudo(); }); /* base salva de versão anterior ao código não prevalece */
       db.doc("config/catalogo").onSnapshot(function (d) { if (d.exists && d.data().itens) { S.catalogo = mesclarCatalogo(d.data()); S.catSalvo = true; } renderTudo(); });
     }).catch(modoLocal);
     w.use("sample").then(function (s) { S.sample = s; renderTudo(); }).catch(function () {});
@@ -1805,9 +1872,9 @@ window.VMI_SEED = {"casos": [{"atualizado": "2026-10-09T21:32:09.623Z", "cliente
         fi("operacao.fornecedor", "Fornecedor", op.fornecedor) + fi("operacao.banco_pretendido", "Banco pretendido", op.banco_pretendido) + fi("operacao.finalidade", "Finalidade do investimento", op.finalidade, "area", "", "w2") +
         '</div></div><div class="card"><div class="card-h"><h2>Condições que abrem linhas</h2><span class="tiny">Marque só o que estiver comprovado ou confirmado com o agente.</span></div><div class="grid g2">' +
         fc("flags.mais_inovacao", "Equipamento enquadrado no Programa Mais Inovação (FINAME a taxa fixa)", c.flags.mais_inovacao) + fc("flags.projeto_inovacao", "Projeto com componente de inovação (Finep Inovacred)", c.flags.projeto_inovacao) +
-        fc("flags.sus_complementar", "Filantrópica complementar ao SUS, aderente ao Agora Tem Especialistas (FGTS-Saúde)", c.flags.sus_complementar) + fc("flags.fiis_selecionado", "Proposta já selecionada no FIIS Saúde", c.flags.fiis_selecionado) +
+        fc("flags.sus_complementar", "Filantrópica complementar ao SUS, participante do Agora Tem Especialistas (FGTS-Saúde; ver requisitos abaixo)", c.flags.sus_complementar) + fc("flags.fiis_selecionado", "Proposta já selecionada no FIIS Saúde", c.flags.fiis_selecionado) +
         fc("flags.sem_similar", "Importado sem similar nacional comprovado", c.flags.sem_similar) + fc("flags.sudene", "Município do norte de MG/ES na área da Sudene (FNE)", c.flags.sudene) + "</div></div>" +
-        ind + dividasBloco(c) + '<div class="card"><div class="card-h"><h2>Notas</h2></div>' + fi("notas", "", c.notas, "area") + "</div>";
+        fgtsBloco(c) + ind + dividasBloco(c) + '<div class="card"><div class="card-h"><h2>Notas</h2></div>' + fi("notas", "", c.notas, "area") + "</div>";
     },
 
     /* ---------- painel: kit ---------- */
@@ -1837,7 +1904,7 @@ window.VMI_SEED = {"casos": [{"atualizado": "2026-10-09T21:32:09.623Z", "cliente
         return "<tr><td><b>" + esc(x.linha.nome) + "</b></td><td class=\"n num\">" + P(x.sim.taxaAno1) + '</td><td class="n num">' + P(x.sim.cet) + '</td><td class="n num">' + P(x.sim.custoTotal) + '</td><td class="n num">' + R(x.sim.parcelaPosCarencia) + "</td><td class=\"small\">" + esc(x.linha.obs) + " " + (x.linha.fontes || []).map(linkF).join(" ") + "</td></tr>";
       }).join("") + "</tbody></table></div></div>" : "";
       var cond = av.condicionais.length ? '<div class="card"><div class="card-h"><h3>Dependem de confirmação</h3><span class="tiny">Entram no ranking quando a condição for marcada na aba Cliente</span></div><div class="tw"><table><thead><tr><th>Linha</th><th>Condição a confirmar</th><th class="n">Custo total se confirmada</th><th class="n">Parcela pós-carência</th></tr></thead><tbody>' + av.condicionais.map(function (x) {
-        return "<tr><td><b>" + esc(x.linha.nome) + '</b><div class="tiny">' + esc(x.linha.obs) + "</div></td><td class=\"small\">" + esc(x.linha.elig.condicao.rotulo) + '</td><td class="n num"><b>' + P(x.sim.custoTotal) + '</b></td><td class="n num">' + R(x.sim.parcelaPosCarencia) + "</td></tr>";
+        return "<tr><td><b>" + esc(x.linha.nome) + '</b><div class="tiny">' + esc(x.linha.obs) + "</div></td><td class=\"small\">" + x.el.bloqueios.map(function (b) { return esc(b.replace(/^Condição não marcada no caso: /, "")); }).join("<br>") + '</td><td class="n num"><b>' + P(x.sim.custoTotal) + '</b></td><td class="n num">' + R(x.sim.parcelaPosCarencia) + "</td></tr>";
       }).join("") + "</tbody></table></div></div>" : "";
       var nao = av.todas.filter(function (x) { return !x.el.ok && !x.linha.benchmark && !x.condicional; });
       var bloq = nao.length ? '<div class="card"><details><summary>Linhas não elegíveis para este caso (' + nao.length + ")</summary><div class=\"tw\"><table><thead><tr><th>Linha</th><th>Por que não</th><th class=\"n\">Custo total se fosse elegível</th></tr></thead><tbody>" + nao.map(function (x) {
@@ -2075,6 +2142,27 @@ window.VMI_SEED = {"casos": [{"atualizado": "2026-10-09T21:32:09.623Z", "cliente
   }
 
   /* ---------- Cliente: dívidas existentes e capacidade de pagamento da entidade ---------- */
+  /* FGTS-Saúde: as três perguntas do Manual de Fomento (CEBAS 60% SUS, créditos SUS de 12 meses, Teto MAC já consignado) e a margem. */
+  function fgtsBloco(c) {
+    var cl = c.cliente || {}, f = c.flags || {};
+    if (cl.natureza !== "filantropica") return "";
+    var av = S.av || M.avaliar(c, S.base), fg = av.todas.filter(function (x) { return x.linha.id === "fgts-saude"; })[0];
+    var mg = fg ? fg.el.margemSus : null, sim = fg ? fg.sim : null;
+    var linhas = [];
+    if (mg) {
+      linhas.push(["Média mensal dos créditos SUS", R(mg.media)], ["Margem bruta (" + mg.pct + "%)", R(mg.bruta)], ["Já descontado do Teto MAC", R(mg.consignado)], ["Margem líquida disponível", "<b>" + R(mg.liquida) + "</b>"]);
+      if (sim) linhas.push(["Maior parcela do FGTS-Saúde nesta operação", R(mg.parcelaMax) + " (" + sim.n + " meses, sem carência)"], ["Situação", mg.cabe ? '<span class="pill good">cabe na margem</span>' : '<span class="pill bad">não cabe</span> valor máximo ≈ ' + R(mg.valorMax)], ["Créditos SUS de 12 meses necessários", R(mg.creditosMin12m)]);
+    }
+    var status = !fg ? "" : fg.el.ok ? '<span class="pill good">FGTS-Saúde no ranking</span>' : '<span class="pill warn">fora do ranking</span> ' + fg.el.bloqueios.map(function (b) { return esc(b.replace(/^Condição não marcada no caso: /, "falta: ")); }).join(" · ");
+    return '<div class="card"><div class="card-h"><h2>FGTS-Saúde: requisitos e margem consignável</h2><span class="tiny">Manual de Fomento FGTS Saúde, versão 002 (vigência 11/08/2026). Para equipamento só a modalidade I está operacional: até 60 meses, sem carência e sem contrapartida.</span></div><div class="form">' +
+      fs("flags.cebas_sus60", "Tem CEBAS na modalidade de prestação de serviços ao SUS, com no mínimo 60% de atendimento SUS?", f.cebas_sus60, [["", "Não informado"], ["sim", "Sim"], ["nao", "Não"]]) +
+      fi("cliente.sus_creditos_12m", "Créditos SUS nos últimos 12 meses (R$)", cl.sus_creditos_12m, "num", "Produção aprovada e incentivos; o FNS publica a média de 12 meses") +
+      fs("cliente.sus_mac_outros", "Já tem outros empréstimos consumindo o repasse do SUS (Teto MAC)?", cl.sus_mac_outros, [["", "Não informado"], ["nao", "Não"], ["sim", "Sim"]]) +
+      fi("cliente.sus_mac_parcelas", "Parcelas desses empréstimos descontadas do Teto MAC (R$/mês)", cl.sus_mac_parcelas, "num", "Só se a resposta acima for Sim") +
+      '</div><p class="small" style="margin-top:10px">' + status + '</p>' +
+      (linhas.length ? '<div class="tw" style="margin-top:8px"><table><tbody>' + linhas.map(function (r) { return '<tr><td>' + r[0] + '</td><td class="n num">' + r[1] + '</td></tr>'; }).join("") + '</tbody></table></div>' : '') +
+      '<p class="tiny" style="margin-top:8px">A parcela é descontada do Teto MAC e paga pelo Fundo Nacional de Saúde ao agente (cessão de direitos creditórios, Portaria GM/MS 2.182/2015). Margem: 35% da média mensal dos créditos SUS dos últimos 12 meses, menos o já consignado (Manual, Cap. III, 5.1.2). A modalidade III (investimento em até 20 anos) ainda não foi regulamentada pela Caixa.</p></div>';
+  }
   function dividasBloco(c) {
     var fin = c.financeiro || (c.financeiro = {}), div = fin.dividas || [], ev = fin.evento || {}, en = S.entAtual, ult = (fin.exercicios || [])[(fin.exercicios || []).length - 1];
     var rows = div.map(function (d, i) {

@@ -120,6 +120,21 @@ var Motor = (function () {
   function fmtP(v, d) { if (v == null || !isFinite(v)) return "—"; return v.toLocaleString("pt-BR", { minimumFractionDigits: d == null ? 2 : d, maximumFractionDigits: d == null ? 2 : d }) + "%"; }
   function fmtR(v) { if (v == null || !isFinite(v)) return "—"; return "R$ " + Math.round(v).toLocaleString("pt-BR"); }
 
+  /* FGTS-Saúde: respostas do tomador (CEBAS 60% SUS, créditos SUS de 12 meses, empréstimos já descontados do Teto MAC). */
+  function simNao(v) { if (v === true || v === 1 || v === "sim") return "sim"; if (v === false || v === 0 || v === "nao") return "nao"; return ""; }
+  function susCtx(caso) {
+    var cl = caso.cliente || {}, f = caso.flags || {};
+    var cred = num(cl.sus_creditos_12m), outros = simNao(cl.sus_mac_outros), cons = num(cl.sus_mac_parcelas);
+    return { cebas: simNao(f.cebas_sus60), creditos12m: cred && cred > 0 ? cred : null, outros: outros, consignado: outros === "sim" ? (cons || 0) : 0, consignadoInformado: outros !== "sim" || cons != null };
+  }
+  /* Margem consignável (Manual de Fomento FGTS Saúde, Cap. III, 5.1.2): pct% da média mensal dos créditos SUS de 12 meses, menos o já consignado. */
+  function margemSus(ctx, pct) {
+    var s = ctx.sus || {};
+    if (!s.creditos12m) return null;
+    var media = s.creditos12m / 12, bruta = media * (pct || 35) / 100;
+    return { pct: pct || 35, media: media, bruta: bruta, consignado: s.consignado || 0, liquida: Math.max(0, bruta - (s.consignado || 0)) };
+  }
+
   /* Contexto do caso */
   function contexto(caso, base) {
     var rob = num(caso.cliente && caso.cliente.rob);
@@ -134,6 +149,7 @@ var Motor = (function () {
       faixaFundos: faixaFundos(rob, base) || (porte === "grande" ? base.porte.fundos[5] : porte === "micro" || porte === "pequena" ? base.porte.fundos[1] : base.porte.fundos[3]),
       natureza: (caso.cliente && caso.cliente.natureza) || "privada", eq: eq, invest: invest, valorEquip: num(op.valor_equip) || 0, valorObra: num(op.valor_obra) || 0,
       fin: fin, prazo: num(op.prazo) || 60, carencia: num(op.carencia) || 0, flags: caso.flags || {}, honor: num(caso.honorario_pct) == null ? 2 : num(caso.honorario_pct),
+      sus: susCtx(caso),
       ini: op.inicio ? { y: +op.inicio.slice(0, 4), m: +op.inicio.slice(5, 7) } : { y: 2026, m: 11 }
     };
   }
@@ -148,6 +164,18 @@ var Motor = (function () {
     }
     if (e.natureza && e.natureza.indexOf(ctx.natureza) < 0) B.push("Natureza jurídica não atendida (" + (ctx.natureza === "filantropica" ? "filantrópica" : "privada com fins lucrativos") + ")");
     else if (e.natureza) P.push("Natureza jurídica aceita");
+    if (e.cebas_sus60) {
+      var cb = (ctx.sus || {}).cebas;
+      if (cb === "nao") B.push("Sem CEBAS na modalidade de prestação de serviços ao SUS com no mínimo 60% (requisito do Manual de Fomento FGTS Saúde, Cap. III, 5.5.1 g)");
+      else if (cb !== "sim") B.push("Condição não marcada no caso: CEBAS na modalidade de prestação de serviços ao SUS, mínimo de 60%");
+      else P.push("CEBAS por prestação de serviços ao SUS (≥ 60%) informado");
+    }
+    if (e.margem_sus) {
+      var su = ctx.sus || {};
+      if (!su.creditos12m) B.push("Condição não marcada no caso: créditos SUS dos últimos 12 meses (definem a margem consignável de " + e.margem_sus.pct + "%)");
+      if (su.outros === "") A.push("Não informado se há outros empréstimos descontados do Teto MAC; a margem foi calculada sem desconto");
+      else if (su.outros === "sim" && !su.consignado) A.push("Há empréstimos no Teto MAC, mas o valor mensal já consignado não foi informado");
+    }
     if (e.portes) {
       if (!ctx.porte) A.push("Porte não informado; preencha a receita bruta anual");
       else if (e.portes.indexOf(ctx.porte) < 0) B.push("Porte fora da linha: " + PORTE_NOME[ctx.porte]);
@@ -174,7 +202,7 @@ var Motor = (function () {
     if (e.valor_min && ctx.fin < e.valor_min) B.push("Valor abaixo do mínimo (" + fmtR(e.valor_min) + ")");
     if (e.valor_max && ctx.fin > e.valor_max) B.push("Valor acima do máximo (" + fmtR(e.valor_max) + ")");
     if (ctx.valorObra > 0 && linha.cond && linha.cond.obras === false) A.push("Obra/instalação não é financiável nesta linha; entra como recurso próprio ou linha à parte");
-    if (linha.status === "informativa") A.push("Linha sem taxa publicada no mês: não entra no ranking");
+    if (linha.status === "informativa") A.push(linha.info || (linha.id === "fgts-saude-reestr" ? "Reestruturação de dívidas, não financia equipamento: não entra no ranking" : "Linha sem taxa publicada no mês: não entra no ranking"));
     return { ok: B.length === 0, bloqueios: B, avisos: A, porques: P };
   }
 
@@ -234,6 +262,19 @@ var Motor = (function () {
           alternativas.push(s);
           if (!melhor || s.custoTotal < melhor.custoTotal) melhor = s;
         });
+      }
+      if (l.elig && l.elig.margem_sus) {
+        var mg = margemSus(ctx, l.elig.margem_sus.pct);
+        if (mg && melhor) {
+          var pmax = melhor.rows.reduce(function (m, r) { return Math.max(m, r.parcela); }, 0);
+          var im = Math.pow(1 + (melhor.taxaAno1 || 0) / 100, 1 / 12) - 1, nn = melhor.n;
+          var fator = (melhor.sistema === "Price") ? (im > 0 ? im / (1 - Math.pow(1 + im, -nn)) : 1 / nn) : (1 / nn + im);
+          mg.parcelaMax = pmax; mg.valorMax = fator > 0 ? mg.liquida / fator : null; mg.creditosMin12m = (pmax + mg.consignado) / (mg.pct / 100) * 12; mg.cabe = pmax <= mg.liquida + 0.5;
+          if (!mg.cabe) { el.bloqueios.push("Parcela de " + fmtR(pmax) + " acima da margem consignável líquida de " + fmtR(mg.liquida) + " (" + mg.pct + "% de " + fmtR(mg.media) + "/mês de créditos SUS" + (mg.consignado ? " − " + fmtR(mg.consignado) + " já consignados" : "") + "); valor máximo financiável ≈ " + fmtR(mg.valorMax)); el.ok = false; }
+          else el.porques.push("Parcela de " + fmtR(pmax) + " cabe na margem consignável de " + fmtR(mg.liquida) + "/mês");
+        }
+        el.margemSus = mg;
+        if (melhor) melhor.margemSus = mg;
       }
       var cond = !el.ok && el.bloqueios.length > 0 && el.bloqueios.every(function (b) { return /^Condição não marcada/.test(b); });
       out.push({ linha: l, el: el, sim: melhor, alternativas: alternativas, condicional: cond });
@@ -426,7 +467,7 @@ var Motor = (function () {
       dlEbitdaProj: ebitda0 ? (divTot - caixa + (simRes ? simRes.P : 0)) / (ebitda0 + (linhas[1] ? linhas[1].inc : 0)) : null, dlAposEvento: Math.max(0, divTot - caixa - liq), evento: ev, temDividas: div.length > 0 };
   }
 
-  return { num: num, porteBNDES: porteBNDES, roiInternalizacao: roiInternalizacao, entidade: entidade, faixaFundos: faixaFundos, custoFinanceiro: custoFinanceiro, taxaAnual: taxaAnual, cronograma: cronograma, calcIOF: calcIOF, irr: irr, aa: aa,
+  return { num: num, margemSus: margemSus, susCtx: susCtx, simNao: simNao, porteBNDES: porteBNDES, roiInternalizacao: roiInternalizacao, entidade: entidade, faixaFundos: faixaFundos, custoFinanceiro: custoFinanceiro, taxaAnual: taxaAnual, cronograma: cronograma, calcIOF: calcIOF, irr: irr, aa: aa,
     contexto: contexto, elegibilidade: elegibilidade, simular: simular, avaliar: avaliar, indicadores: indicadores, roi: roi, fmtP: fmtP, fmtR: fmtR, PORTE_NOME: PORTE_NOME, ipcaAno: ipcaAno };
 })();
 if (typeof module !== "undefined") module.exports = Motor;
