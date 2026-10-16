@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-16 (noite) · HDA: locação com a tabela real da VMI e sumário executivo
+- Alternativa D usa a tabela de locação da VMI de 16/10/2026 (R$/mês por unidade, 12 a 84 meses) para TC, Aquila S e Aquila D (este na linha do RX digital; na compra é o Apolo D). Prazos intermediários por interpolação; ultrassons e placa DR seguem a composição de custos. Prazo padrão 48 meses (sugestão VMI); simulação de 24 a 84 meses.
+- Nova premissa "a cotação VMI inclui manutenção?" (padrão: não, a confirmar). Com "não", o hospital paga o contrato do plano escolhido depois da garantia, como média no prazo. Taxa implícita da cotação por item (TC 15,5% a.a.; Aquila S 39%; Aquila D 33%, em 48 m sem manutenção).
+- Premissa "base do aluguel" (cotação VMI ou composição de custos em todos os itens); textos de Tese, Alternativas, Plano em números, Método, simulador, tornado e .xlsx refletem a fonte e a manutenção.
+- Botão "Sumário executivo": gera na hora, com os números do modelo carregado, recomendação, quadro B/C/D, compra, locação, crédito, pendências com efeito no VPL medido pelo modelo e próximos passos; copia como texto ou baixa .docx (OOXML gerado no navegador).
+- Banco: config/main com prazo de locação 48 e tabela VMI nos itens do pacote C.
+
 ## 2026-10-16 · base 2026-10-16 · FGTS-Saúde pelo Manual de Fomento v002
 - Premissas de André Matheus (S&S, e-mail "Premissas Projeto HDA - Financiamento", 16/10/2026) e anexos da pasta VMI no Drive (Res. CCFGTS 1.152/2026; Manual de Fomento FGTS Saúde v002, vigência 11/08/2026). A modalidade III (investimento, 20 anos, 12 de carência) ainda não foi regulamentada e sai do cálculo.
 - Linha FGTS-Saúde refeita como modalidade I (sem destinação específica): até 60 meses, sem carência, 100% do valor, juros 8,66% a.a. + taxa de risco do agente até 3% a.a. + TR, tarifa até 0,5%, agentes Caixa, BB ou BNDES. Modalidade II (reestruturação, até 15 anos) entra como linha informativa.

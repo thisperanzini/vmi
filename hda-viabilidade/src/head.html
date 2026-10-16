@@ -118,6 +118,12 @@ tbody tr:hover td { background: color-mix(in srgb, var(--accent-soft) 35%, trans
 @media (max-width: 640px) { .prem-row { grid-template-columns: 1fr; } .prem-row .vals { justify-content: flex-start; } }
 .notice { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 12px; border-radius: 0 6px 6px 0; font-size: 13px; }
 .notice.warn { border-left-color: var(--warn); background: var(--warn-soft); } .notice.bad { border-left-color: var(--bad); background: var(--bad-soft); } .notice.good { border-left-color: var(--good); background: var(--good-soft); }
+.ovl { position: fixed; inset: 0; background: rgba(15, 20, 30, .45); z-index: 40; display: flex; align-items: flex-start; justify-content: center; padding: 4vh 16px; overflow-y: auto; }
+.ovl[hidden] { display: none; }
+.dlg { background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); width: 100%; max-width: 860px; display: flex; flex-direction: column; max-height: 92vh; }
+.dlg-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line-2); }
+.dlg-b { padding: 18px 22px 22px; overflow-y: auto; }
+.sum-doc h2 { font-size: 20px; margin: 4px 0 4px; line-height: 1.25; } .sum-doc h3 { font-size: 14px; margin: 18px 0 8px; } .sum-doc p { margin: 0 0 8px; max-width: 85ch; } .sum-doc table { margin-bottom: 8px; }
 .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 14px; border-radius: 8px; font-size: 13px; box-shadow: var(--shadow); z-index: 50; max-width: calc(100vw - 32px); }
 details summary { cursor: pointer; font-weight: 500; color: var(--fg-2); font-size: 13px; } details[open] summary { margin-bottom: 10px; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; } .row.end { justify-content: flex-end; } .row.between { justify-content: space-between; }
@@ -160,6 +166,7 @@ footer { color: var(--fg-3); font-size: 12px; padding-top: 10px; border-top: 1px
       <div class="sync"><span class="dot" id="syncDot"></span><span id="syncTxt">Carregando…</span></div>
       <div class="actions">
         <button class="ghost sm" id="btnDesfazer" hidden>Descartar alterações</button>
+        <button class="sm" id="btnSumario" title="Sumário executivo com os números atuais do modelo (.docx ou texto)">Sumário executivo</button>
         <button class="sm" id="btnXlsx" title="Planilha com premissas, DRE, fluxo e cronograma">Exportar .xlsx</button>
         <button class="primary sm" id="btnSalvar">Salvar agora</button>
       </div>
@@ -192,4 +199,5 @@ footer { color: var(--fg-3); font-size: 12px; padding-top: 10px; border-top: 1px
   <footer id="foot">S&amp;S Partners · modelo construído sobre a planilha Viabilidade v2 da Controladoria do HDA, o Projeto Radiologia (Jaime) e a Reunião do Conselho de out/26 · motor de financiamento: ferramenta Financiamento VMI, base 2026-10-09.</footer>
 </div>
 <div id="toast" class="toast" hidden></div>
+<div id="sumOvl" class="ovl" hidden><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="sumTit"><div class="dlg-h"><b id="sumTit">Sumário executivo</b><div class="row"><button class="sm" id="sumCopiar">Copiar texto</button><button class="primary sm" id="sumDocx">Baixar .docx</button><button class="ghost sm" id="sumFechar" aria-label="Fechar">Fechar</button></div></div><div class="dlg-b" id="sumBody"></div></div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>

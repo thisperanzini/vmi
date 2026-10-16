@@ -104,29 +104,63 @@ var Engine = (function () {
   function opexManut(M) { return { tipo: 'manut', mes: M.mes, ano: M.ano }; }
   function opexAluguel(m, mes) { return { tipo: 'aluguel', mes: mes, ano: function (t) { return mes * mesesAno(m, t, 0) * reajAno(m, t); } }; }
 
-  /* ---------- Locação de longo prazo (alternativa D): aluguel por composição de custos ----------
-     parcela financeira = anuidade, à taxa do locador, sobre (valor − VP do valor residual no fim do prazo)
-     valor residual     = valor × (1 − queda anual do valor de mercado)^(prazo/12)
-     aluguel            = parcela financeira ÷ (1 − tributos do locador) + manutenção Ouro média no prazo
-     (a manutenção do 1º ano é garantia de fábrica: custo zero para o locador)                         */
+  /* ---------- Locação de longo prazo (alternativa D) ----------
+     Fonte por item:
+     · "vmi": cotação de locação da VMI por prazo (R$/mês por unidade, it.loc_vmi). Se a cotação não incluir
+       manutenção (altD.vmi_manut = "nao"), o hospital paga o contrato do plano escolhido depois da garantia,
+       lançado como média no prazo: contrato × (prazo − garantia) ÷ prazo.
+     · "composicao" (itens sem cotação, ou altD.fonte = "composicao"): aluguel montado pelos custos do locador
+       parcela financeira = anuidade, à taxa do locador, sobre (valor − VP do valor residual no fim do prazo)
+       valor residual     = valor × (1 − queda anual do valor de mercado)^(prazo/12)
+       aluguel            = parcela financeira ÷ (1 − tributos do locador) + manutenção Ouro média no prazo
+     Prazo fora da tabela da VMI: interpolação linear entre os prazos cotados (extremos: o prazo mais próximo). */
   var DEP_D = { tc: 'dep_tc', us: 'dep_us', rxp: 'dep_rx', rxdr: 'dep_rx', dr: 'dep_dr' };
   function depD(m, it) { var d = m.altD || {}, k = DEP_D[it.id]; return k && d[k] != null ? num(d[k]) : 0.25; }
+  function cotacaoVmi(it, n) {
+    var t = it && it.loc_vmi; if (!t || typeof t !== 'object') return null;
+    var ks = Object.keys(t).map(Number).filter(function (k) { return isFinite(k) && num(t[k]) > 0; }).sort(function (a, b) { return a - b; });
+    if (!ks.length) return null;
+    if (n <= ks[0]) return num(t[ks[0]]);
+    if (n >= ks[ks.length - 1]) return num(t[ks[ks.length - 1]]);
+    for (var i = 0; i < ks.length - 1; i++) if (n >= ks[i] && n <= ks[i + 1]) { var a = num(t[ks[i]]), b = num(t[ks[i + 1]]); return a + (b - a) * (n - ks[i]) / (ks[i + 1] - ks[i]); }
+    return null;
+  }
+  /* taxa a.a. que faz a anuidade sobre (valor − VP do residual) igualar a parcela informada (bisseção) */
+  function taxaLocImplicita(V, RV, n, parcela) {
+    if (!(parcela > 0) || !(V > 0)) return null;
+    var f = function (i) { var v = Math.pow(1 + i, -n); return (V - RV * v) * (i > 0 ? i / (1 - v) : 1 / n) - parcela; };
+    if (f(0) > 0) return null;
+    var lo = 0, hi = 0.2; if (f(hi) < 0) return null;
+    for (var k = 0; k < 80; k++) { var md = (lo + hi) / 2; if (f(md) > 0) hi = md; else lo = md; }
+    return Math.pow(1 + (lo + hi) / 2, 12) - 1;
+  }
   function locacao(m, itens, n) {
     var d = m.altD || {}, ra = num(d.taxa_base) + num(d.premio), rm = Math.pow(1 + ra, 1 / 12) - 1, tr = num(d.trib);
-    var G = num(m.manut && m.manut.garantia_meses), fat = fatorManut(m);
+    var G = num(m.manut && m.manut.garantia_meses), fat = fatorManut(m), usaVmi = (d.fonte || 'vmi') !== 'composicao', manInclusa = d.vmi_manut === 'sim';
+    var plano = (m.manut && m.manut.plano) === 'prata' ? 'prata' : 'ouro', tubo = num(m.propria.tubo);
     var v = Math.pow(1 + rm, -n), fa = rm > 0 ? rm / (1 - v) : 1 / n;
     var linhas = (itens || []).map(function (it) {
-      var V = num(it.qtd) * num(it.preco), dep = depD(m, it), rv = Math.pow(1 - dep, n / 12), RV = V * rv;
+      var q = num(it.qtd), V = q * num(it.preco), dep = depD(m, it), rv = Math.pow(1 - dep, n / 12), RV = V * rv;
+      var cot = usaVmi ? cotacaoVmi(it, n) : null;
+      if (cot != null) {
+        var base = cot * q, contrato = (plano === 'prata' ? num(it.m_prata) + (it.tubo ? tubo : 0) : num(it.m_ouro)) * q * fat;
+        var manSep = manInclusa ? 0 : contrato * Math.max(0, n - G) / n;
+        var finImpl = base * (1 - tr) - (manInclusa ? num(it.m_ouro) * q * fat * Math.max(0, n - G) / n : 0);
+        return { id: it.id, nome: it.nome, modelo: it.modelo, qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: 'vmi', cotUnit: cot, cotModelo: it.loc_vmi_modelo || it.modelo,
+          fin: base, trib: 0, man: manSep, manSep: manSep, manLoc: 0, aluguel: base + manSep, taxaImpl: taxaLocImplicita(V, RV, n, finImpl), pctMes: V ? (base + manSep) / V : null };
+      }
       var fin = (V - RV * v) * fa, finBruto = tr < 1 ? fin / (1 - tr) : fin;
-      var man = num(it.m_ouro) * num(it.qtd) * fat * Math.max(0, n - G) / n;
-      return { id: it.id, nome: it.nome, modelo: it.modelo, qtd: num(it.qtd), V: V, dep: dep, rvPct: rv, RV: RV, fin: fin, trib: finBruto - fin, man: man, aluguel: finBruto + man, pctMes: V ? (finBruto + man) / V : null };
+      var man = num(it.m_ouro) * q * fat * Math.max(0, n - G) / n;
+      return { id: it.id, nome: it.nome, modelo: it.modelo, qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: 'composicao', cotUnit: null, fin: finBruto, finLiq: fin, trib: finBruto - fin, man: man, manSep: 0, manLoc: man, aluguel: finBruto + man, taxaImpl: null, pctMes: V ? (finBruto + man) / V : null };
     });
-    var s = function (k) { return linhas.reduce(function (a, x) { return a + x[k]; }, 0); };
-    var V = s('V');
-    return { n: n, taxaAno: ra, taxaMes: rm, linhas: linhas, V: V, RV: s('RV'), fin: s('fin'), trib: s('trib'), man: s('man'), aluguel: s('aluguel'), pctMes: V ? s('aluguel') / V : null };
+    var s = function (k) { return linhas.reduce(function (a, x) { return a + (x[k] || 0); }, 0); };
+    var V = s('V'), vm = linhas.filter(function (x) { return x.fonte === 'vmi'; });
+    return { n: n, taxaAno: ra, taxaMes: rm, linhas: linhas, V: V, RV: s('RV'), fin: s('fin'), trib: s('trib'), man: s('man'), manSep: s('manSep'), manLoc: s('manLoc'), aluguel: s('aluguel'), pctMes: V ? s('aluguel') / V : null,
+      usaVmi: usaVmi, manInclusa: manInclusa, plano: plano, nVmi: vm.length, aluguelVmi: vm.reduce(function (a, x) { return a + x.fin; }, 0),
+      semCotacao: linhas.filter(function (x) { return x.fonte !== 'vmi'; }).map(function (x) { return x.nome + (x.modelo ? ' (' + x.modelo + ')' : ''); }) };
   }
   function altD(m) {
-    var n = Math.max(12, Math.round(num(m.altD && m.altD.prazo) || 60)), L = locacao(m, m.equip.C, n);
+    var n = Math.max(12, Math.round(num(m.altD && m.altD.prazo) || 48)), L = locacao(m, m.equip.C, n);
     return { id: 'D', capex: 0, capexFin: 0, custosIni: 0, servico: {}, jurosAno: {}, rows: [], n: n, loc: L, parcela: 0, aluguel: L.aluguel, pagosPrazo: L.aluguel * n, opex: opexAluguel(m, L.aluguel) };
   }
   /* Comprar o mesmo pacote (C) e usá-lo pelo mesmo prazo da locação, a valor presente pela taxa de desconto:
@@ -147,7 +181,7 @@ var Engine = (function () {
     }
     return { pv: fin == null ? vista : fin, pvVista: vista, financiado: fin != null, parcelas: parcelas, saldo: saldo, M: M, pvMan: pvMan, RV: RV };
   }
-  var PRAZOS_D = [36, 48, 60, 72, 84];
+  var PRAZOS_D = [24, 36, 48, 60, 72, 84];
   function prazosD(m, C) {
     var k = Math.pow(1 + num(m.fin.desconto), 1 / 12) - 1;
     return PRAZOS_D.map(function (n) {
@@ -341,6 +375,6 @@ var Engine = (function () {
   }
 
   return { num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
-    mesesAno: mesesAno, manutPacote: manutPacote, locacao: locacao, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
+    mesesAno: mesesAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
