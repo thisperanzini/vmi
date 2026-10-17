@@ -106,9 +106,9 @@ var Engine = (function () {
 
   /* ---------- Locação de longo prazo (alternativa D) ----------
      Fonte por item:
-     · "vmi": cotação de locação da VMI por prazo (R$/mês por unidade, it.loc_vmi). Se a cotação não incluir
-       manutenção (altD.vmi_manut = "nao"), o hospital paga o contrato do plano escolhido depois da garantia,
-       lançado como média no prazo: contrato × (prazo − garantia) ÷ prazo.
+     · "vmi": cotação de locação da VMI por prazo (R$/mês por unidade, it.loc_vmi), com manutenção inclusa
+       (confirmado em 17/10/2026). Cenário altD.vmi_manut = "nao": o hospital pagaria o contrato do plano escolhido
+       depois da garantia, lançado como média no prazo: contrato × (prazo − garantia) ÷ prazo.
      · "composicao" (itens sem cotação, ou altD.fonte = "composicao"): aluguel montado pelos custos do locador
        parcela financeira = anuidade, à taxa do locador, sobre (valor − VP do valor residual no fim do prazo)
        valor residual     = valor × (1 − queda anual do valor de mercado)^(prazo/12)
@@ -145,7 +145,7 @@ var Engine = (function () {
       if (cot != null) {
         var base = cot * q, contrato = (plano === 'prata' ? num(it.m_prata) + (it.tubo ? tubo : 0) : num(it.m_ouro)) * q * fat;
         var manSep = manInclusa ? 0 : contrato * Math.max(0, n - G) / n;
-        var finImpl = base * (1 - tr) - (manInclusa ? num(it.m_ouro) * q * fat * Math.max(0, n - G) / n : 0);
+        var finImpl = base * (1 - tr); /* teto: trata o aluguel inteiro como parcela financeira; com manutenção inclusa, a taxa efetiva é menor */
         return { id: it.id, nome: it.nome, modelo: it.modelo, qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: 'vmi', cotUnit: cot, cotModelo: it.loc_vmi_modelo || it.modelo,
           fin: base, trib: 0, man: manSep, manSep: manSep, manLoc: 0, aluguel: base + manSep, taxaImpl: taxaLocImplicita(V, RV, n, finImpl), pctMes: V ? (base + manSep) / V : null };
       }

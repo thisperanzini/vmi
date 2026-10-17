@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-17 · HDA: manutenção inclusa no aluguel VMI
+- Confirmado: o aluguel da VMI inclui a manutenção. Premissa "a cotação inclui manutenção?" passa a "Sim" (origem VMI); "Não" fica como cenário. Banco config/main atualizado.
+- Locação em 48 meses: R$ 73.465/mês (aluguel VMI R$ 59.516 + ultrassons e placa DR por composição R$ 13.949). VPL para o hospital em 10 anos: D R$ 8,58 mi, C R$ 8,38 mi, B R$ 8,18 mi.
+- Textos de locação, referências de mercado, leitura das alternativas, sumário executivo e pendências reescritos; taxa implícita passa a ser um teto (o aluguel também paga a manutenção).
+
 ## 2026-10-16 (noite) · HDA: locação com a tabela real da VMI e sumário executivo
 - Alternativa D usa a tabela de locação da VMI de 16/10/2026 (R$/mês por unidade, 12 a 84 meses) para TC, Aquila S e Aquila D (este na linha do RX digital; na compra é o Apolo D). Prazos intermediários por interpolação; ultrassons e placa DR seguem a composição de custos. Prazo padrão 48 meses (sugestão VMI); simulação de 24 a 84 meses.
 - Nova premissa "a cotação VMI inclui manutenção?" (padrão: não, a confirmar). Com "não", o hospital paga o contrato do plano escolhido depois da garantia, como média no prazo. Taxa implícita da cotação por item (TC 15,5% a.a.; Aquila S 39%; Aquila D 33%, em 48 m sem manutenção).
