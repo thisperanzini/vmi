@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-18 · HDA: inflação em todos os caminhos e sumário executivo
+- Nova premissa "Inflação nos fluxos" (padrão: IPCA projetado pelo Focus de 02/10/2026, o mesmo que corrige a TLP das parcelas do FINAME). Receita, custos, manutenção (B e C) e aluguel (D) são reajustados ano a ano; as parcelas seguem nominais; o ano 1 fica nos preços da base. "Taxa fixa" com 0 volta aos valores constantes da Controladoria.
+- Resultado (10 anos, 15% a.a. nominal): VPL para o hospital B R$ 9,65 mi, C R$ 9,86 mi, D R$ 9,77 mi; VPL do projeto R$ 9,81 mi, TIR 82%. Aluguel de equilíbrio D × C: R$ 72,0 mil/mês.
+- Rótulo do DSCR: 1,3x é prática dos agentes, não norma do BNDES.
+
 ## 2026-10-17 · HDA: manutenção inclusa no aluguel VMI
 - Confirmado: o aluguel da VMI inclui a manutenção. Premissa "a cotação inclui manutenção?" passa a "Sim" (origem VMI); "Não" fica como cenário. Banco config/main atualizado.
 - Locação em 48 meses: R$ 73.465/mês (aluguel VMI R$ 59.516 + ultrassons e placa DR por composição R$ 13.949). VPL para o hospital em 10 anos: D R$ 8,58 mi, C R$ 8,38 mi, B R$ 8,18 mi.

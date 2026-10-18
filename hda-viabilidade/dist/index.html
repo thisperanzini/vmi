@@ -1327,7 +1327,7 @@ var Engine = (function () {
      somando depois a manutenção ou o aluguel mês a mês (garantia, início da operação). */
   function dreMensal(m, fator, tipo, anoProj, opex) {
     var b = m.base, p = m.propria, c = m.cenario;
-    var reaj = Math.pow(1 + num(c.reajuste_aa), Math.max(0, anoProj - 1));
+    var reaj = reajAno(m, anoProj);
     var exames = num(b.exames) / num(b.meses) * fator;
     var rb = exames * num(b.ticket) * reaj;
     var glosa = rb * num(b.glosa_pct);
@@ -1374,7 +1374,21 @@ var Engine = (function () {
     var desde = (num(m.fin.inicio_op_mes) || 0) + num(livres);
     return Math.max(0, 12 * t - Math.max(12 * (t - 1), desde));
   }
-  function reajAno(m, t) { return Math.pow(1 + num(m.cenario.reajuste_aa), Math.max(0, t - 1)); }
+  /* Reajuste de preços e custos (receita, custos, manutenção, aluguel) no ano-projeto t, relativo ao ano 1.
+     "ipca" (padrão): IPCA projetado do Focus, ano a ano — o mesmo cenário que corrige a TLP das parcelas do FINAME;
+     depois do último ano projetado, mantém o último valor. "fixo": (1 + reajuste_aa)^(t − 1); 0 = valores constantes.
+     As parcelas dos financiamentos são nominais e não passam por aqui.                                              */
+  var IPCA_PATH = null;
+  function reajAno(m, t) {
+    var c = m.cenario || {};
+    if ((c.reajuste_modo || 'ipca') === 'ipca' && IPCA_PATH) {
+      var anos = Object.keys(IPCA_PATH).map(Number).sort(function (a, b) { return a - b; }), ult = anos[anos.length - 1], f = 1;
+      for (var k = 2; k <= t; k++) { var ano = num(m.fin.ano_inicio) + k - 1, v = IPCA_PATH[ano] != null ? IPCA_PATH[ano] : IPCA_PATH[ano > ult ? ult : anos[0]]; f *= 1 + num(v) / 100; }
+      return f;
+    }
+    return Math.pow(1 + num(c.reajuste_aa), Math.max(0, t - 1));
+  }
+  function ipcaAno(m, t) { return reajAno(m, t) / reajAno(m, Math.max(1, t - 1)) - 1; }
   function fatorManut(m) { return m.propria.manut_fator == null ? 1 : num(m.propria.manut_fator); }
 
   /* ---------- Manutenção pós-garantia de um pacote (B ou C) ----------
@@ -1633,6 +1647,7 @@ var Engine = (function () {
 
   /* ---------- Cálculo completo ---------- */
   function calcular(m, Motor, BASE, opts) {
+    IPCA_PATH = (BASE && BASE.macro && BASE.macro.focus && BASE.macro.focus.ipca) || null;
     var B = altB(m), C = altC(m, Motor, BASE);
     B.manut = manutPacote(m, m.equip.B); B.opex = opexManut(B.manut);
     C.manut = manutPacote(m, m.equip.C); C.opex = opexManut(C.manut);
@@ -1666,7 +1681,7 @@ var Engine = (function () {
   }
 
   return { num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
-    mesesAno: mesesAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
+    mesesAno: mesesAno, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
 </script>
@@ -1722,7 +1737,8 @@ var SCHEMA = [
   /* ---- Cenário ---- */
   { id: 'cenario.volume_var', bloco: 'Cenário de volume', label: 'Variação de volume vs. base', un: '%', fmt: 'pct', def: 0, origem: 'controladoria', fonte: 'Cenário 1 = volume atual; cenário 2 da Controladoria = +30%. Jaime projeta +27,3% para 2027.' },
   { id: 'cenario.cresc_aa', bloco: 'Cenário de volume', label: 'Crescimento anual do volume a partir do ano 2', un: '% a.a.', fmt: 'pct', def: 0, origem: 'controladoria', fonte: 'Viabilidade!C24: volume constante.' },
-  { id: 'cenario.reajuste_aa', bloco: 'Cenário de volume', label: 'Reajuste anual de preços e custos', un: '% a.a.', fmt: 'pct', def: 0, origem: 'ss', fonte: '0 = valores constantes, como na planilha. Aplica-se por igual a receita e custos.' },
+  { id: 'cenario.reajuste_modo', bloco: 'Cenário de volume', label: 'Inflação nos fluxos', un: '', fmt: 'txt', def: 'ipca', origem: 'fonte', fonte: 'IPCA projetado pelo Focus do Banco Central (02/10/2026): 3,80% em 2028 e 3,51% a partir de 2029, o mesmo cenário que corrige a TLP nas parcelas do FINAME. Aplica-se igual a todos os caminhos: receita, custos, manutenção (B e C) e aluguel (D). O ano 1 fica nos preços da base; as parcelas dos financiamentos são nominais. A taxa de desconto de 15% passa a ser nominal. Com "Taxa fixa" e reajuste 0, volta aos valores constantes da planilha da Controladoria.', ui: { choices: [['ipca', 'IPCA projetado (Focus), em todos os caminhos'], ['fixo', 'Taxa fixa (campo abaixo; 0 = valores constantes)']] } },
+  { id: 'cenario.reajuste_aa', bloco: 'Cenário de volume', label: 'Reajuste anual (só com taxa fixa)', un: '% a.a.', fmt: 'pct', def: 0, origem: 'ss', fonte: 'Usado só quando a inflação nos fluxos for "Taxa fixa". 0 = valores constantes, como na planilha. Aplica-se por igual a receita, custos, manutenção e aluguel.' },
 
   /* ---- Financeiro ---- */
   { id: 'fin.alternativa', bloco: 'Parâmetros financeiros', label: 'Alternativa levada ao plano em números', un: 'B/C/D', fmt: 'txt', def: 'C', origem: 'ss', fonte: 'B = pacote GE financiado pelo HFS em 60x; C = pacote VMI comprado e financiado pela melhor linha; D = pacote VMI em locação de longo prazo, com manutenção inclusa.', ui: { choices: [['C', 'C · VMI, compra financiada'], ['B', 'B · GE/HFS, compra financiada'], ['D', 'D · VMI, locação']] } },
@@ -2124,7 +2140,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     var cats = fl.anos.map(function (a) { return String(a.ano); });
     var rotOpex = isD ? (locTxt().sep ? '(−) Aluguel dos equipamentos e manutenção à parte' : '(−) Aluguel dos equipamentos (manutenção inclusa)') : '(−) Manutenção pós-garantia, plano ' + (sel.manut.plano === 'prata' ? 'Prata' : 'Ouro');
     var eyebrow = 'Alternativa ' + sel.id + ' · ' + (sel.id === 'C' ? 'VMI, compra · ' + (c.C.escolha ? esc(c.C.escolha.linha.nome) : '') : sel.id === 'B' ? 'GE/HFS 60x' : 'VMI, locação de ' + sel.n + ' meses a ' + R(sel.aluguel) + '/mês');
-    var h = '<div class="card hero"><span class="eyebrow">' + eyebrow + '</span><h2>Fluxo de caixa incremental: imagem própria menos manter a EMG, ' + m.fin.horizonte + ' anos a partir de ' + m.fin.ano_inicio + '</h2><p class="lead muted">Ano 1 com ' + m.fin.inicio_op_mes + ' meses de transição. ' + (isD ? 'O aluguel corre desde a instalação e é renovado ao mesmo valor, com equipamento novo, a cada ' + sel.n + ' meses.' : 'A manutenção começa depois de ' + m.manut.garantia_meses + ' meses de garantia, contados da instalação.') + ' Valores constantes (reajuste ' + P(m.cenario.reajuste_aa, 1) + ' a.a.), volume ' + (m.cenario.volume_var >= 0 ? '+' : '') + P(m.cenario.volume_var, 0) + ' sobre a base e crescimento de ' + P(m.cenario.cresc_aa, 1) + ' a.a. a partir do ano 2.</p></div>';
+    var h = '<div class="card hero"><span class="eyebrow">' + eyebrow + '</span><h2>Fluxo de caixa incremental: imagem própria menos manter a EMG, ' + m.fin.horizonte + ' anos a partir de ' + m.fin.ano_inicio + '</h2><p class="lead muted">Ano 1 com ' + m.fin.inicio_op_mes + ' meses de transição. ' + (isD ? 'O aluguel corre desde a instalação e é renovado ao mesmo valor, com equipamento novo, a cada ' + sel.n + ' meses.' : 'A manutenção começa depois de ' + m.manut.garantia_meses + ' meses de garantia, contados da instalação.') + ' ' + ((m.cenario.reajuste_modo || 'ipca') === 'ipca' ? 'Valores nominais: receita, custos, manutenção e aluguel corrigidos pelo IPCA projetado (Focus: ' + P(E.ipcaAno(m, 2), 2) + ' no ano 2, ' + P(E.ipcaAno(m, 3), 2) + ' a partir do ano 3), o mesmo que corrige as parcelas do FINAME' : +m.cenario.reajuste_aa ? 'Reajuste fixo de ' + P(m.cenario.reajuste_aa, 1) + ' a.a. em receita, custos, manutenção e aluguel' : 'Valores constantes, como na planilha da Controladoria') + '; volume ' + (m.cenario.volume_var >= 0 ? '+' : '') + P(m.cenario.volume_var, 0) + ' sobre a base e crescimento de ' + P(m.cenario.cresc_aa, 1) + ' a.a. a partir do ano 2.</p></div>';
     h += '<div class="grid kpis">' + kpi('VPL do projeto', '<span class="' + sinal(fl.vpl) + '">' + mi(fl.vpl) + '</span>', 'a ' + P(m.fin.desconto, 0) + ' a.a.' + (isD ? ' · na locação é igual ao do hospital' : ''), fl.vpl > 0 ? 'good' : 'bad') + kpi('TIR', isD || fl.tir == null ? '—' : P(fl.tir, 1), isD ? 'sem investimento relevante (só RIS/PACS)' : 'do projeto, sem dívida') + kpi('Payback', isD ? 'imediato' : anos(fl.pb), isD ? 'sem investimento em equipamentos' : 'descontado ' + anos(fl.pbDesc)) + kpi('Índice de retorno', isD ? '—' : X(fl.ir), isD ? 'não se aplica à locação' : 'VP das entradas ÷ investimento') + kpi('VPL para o hospital', mi(fl.vplEnt), isD ? 'após o aluguel' : 'após parcelas; TIR ' + (fl.tirEnt == null ? '—' : P(fl.tirEnt, 0))) + kpi('Caixa acumulado', mi(fl.acumEnt), (isD ? 'após o aluguel, ' : 'após parcelas, ') + m.fin.horizonte + ' anos') + '</div>';
     h += '<div class="card"><div class="card-h"><h2>Ganho operacional, ' + (isD ? 'aluguel' : 'manutenção, parcelas') + ' e caixa</h2><span class="muted small">R$ por ano</span></div><div class="chart">' + svgBars({ cats: cats, series: [{ nome: 'Ganho antes de ' + (isD ? 'aluguel' : 'manutenção'), vals: fl.anos.map(function (a) { return a.incBase; }), cor: 'var(--s-d)' }, { nome: isD ? 'Aluguel' : 'Manutenção', vals: fl.anos.map(function (a) { return -a.opex; }), cor: 'var(--s-a)' }, { nome: 'Parcelas', vals: fl.anos.map(function (a) { return -a.servico; }), cor: 'var(--s-b)' }, { nome: 'Caixa para o hospital', vals: fl.anos.map(function (a) { return a.fce; }), cor: 'var(--s-c)' }], fmt: function (v) { return mi(v); }, h: 260, aria: 'Fluxo anual' }) + '</div></div>';
     function tr(l, f, cls) { return '<tr class="' + (cls || '') + '"><td>' + l + '</td><td class="n"></td>' + fl.anos.map(function (a) { return '<td class="n">' + f(a) + '</td>'; }).join('') + '</tr>'; }
@@ -2353,6 +2369,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     { id: 'altC.prazo', nome: 'Prazo do financiamento C', min: 36, max: 120, step: 12, fmt: function (v) { return v + ' m'; }, hint: 'FINAME até 120; FGTS-Saúde até 60' },
     { id: 'altC.carencia', nome: 'Carência C', min: 0, max: 24, step: 3, fmt: function (v) { return v + ' m'; }, hint: 'FINAME até 24; FGTS-Saúde sem carência' },
     { id: 'fin.desconto', nome: 'Taxa de desconto', min: 0.08, max: 0.25, step: 0.01, fmt: function (v) { return P(v, 0); }, hint: '' },
+    { id: 'cenario.reajuste_modo', nome: 'Inflação nos fluxos', seg: [['ipca', 'IPCA (Focus)'], ['fixo', 'Taxa fixa / constante']], hint: 'IPCA em todos os caminhos, como nas parcelas do FINAME' },
     { id: 'fin.horizonte', nome: 'Horizonte', seg: [[5, '5 anos'], [10, '10 anos']], hint: '' },
     { id: 'fin.alternativa', nome: 'Alternativa', seg: [['C', 'C · VMI compra'], ['B', 'B · GE/HFS'], ['D', 'D · VMI locação']], hint: '' },
     { id: 'equip.precoC', nome: 'Preço do pacote VMI vs. GE', min: 0.7, max: 1.3, step: 0.05, fmt: function (v) { return (v >= 1 ? '+' : '−') + P(Math.abs(v - 1), 0); }, hint: 'escala todos os itens do pacote C', virtual: true }
@@ -2472,7 +2489,8 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       '<li>Planilha Viabilidade v2: a aba DRE mostra R$ 162 mil/mês para a imagem própria e a aba Viabilidade R$ 131 mil, porque a primeira omite manutenção e RIS/PACS no cenário de volume atual.</li>' +
       '<li>O ROI de 101,8% e o payback de 11,8 meses do Jaime usam o lucro operacional de ago/26 (perímetro diferente, R$ 490 mil de receita) sem descontar o resultado atual nem as parcelas; não são comparáveis aos indicadores incrementais desta página.</li></ul></div>';
     h += '<div class="card"><div class="card-h"><h2>Fórmulas</h2></div><dl class="defs">' +
-      '<dt>Receita líquida</dt><dd>exames/mês × ticket × (1 − glosa) × (1 + reajuste)^(ano − 1); exames = base/meses × (1 + variação) × (1 + crescimento)^(ano − 2)</dd>' +
+      '<dt>Reajuste</dt><dd>Índice do ano = produto de (1 + IPCA projetado pelo Focus) do ano 2 até o ano; o ano 1 fica nos preços da base. Vale igual para receita, custos, manutenção e aluguel em todos os caminhos. As parcelas são nominais (a TLP do FINAME já carrega o IPCA projetado). Com taxa fixa: (1 + reajuste)^(ano − 1).</dd>' +
+      '<dt>Receita líquida</dt><dd>exames/mês × ticket × (1 − glosa) × índice de reajuste do ano; exames = base/meses × (1 + variação) × (1 + crescimento)^(ano − 2)</dd>' +
       '<dt>EBITDA EMG</dt><dd>RL − Mat/Med − repasses (médicos, material, biópsias, sala) − fixos diretos − indiretos</dd>' +
       '<dt>EBITDA própria</dt><dd>RL − Mat/Med própria − repasse médico próprio − repasses mantidos − fixos diretos − RIS/PACS − indiretos (antes de manutenção e aluguel)</dd>' +
       '<dt>EBITDA incremental</dt><dd>(EBITDA própria − EBITDA EMG) × 12 × fração do ano em operação própria − manutenção do ano (B, C) ou aluguel do ano (D)</dd>' +

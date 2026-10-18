@@ -36,7 +36,7 @@ var Engine = (function () {
      somando depois a manutenção ou o aluguel mês a mês (garantia, início da operação). */
   function dreMensal(m, fator, tipo, anoProj, opex) {
     var b = m.base, p = m.propria, c = m.cenario;
-    var reaj = Math.pow(1 + num(c.reajuste_aa), Math.max(0, anoProj - 1));
+    var reaj = reajAno(m, anoProj);
     var exames = num(b.exames) / num(b.meses) * fator;
     var rb = exames * num(b.ticket) * reaj;
     var glosa = rb * num(b.glosa_pct);
@@ -83,7 +83,21 @@ var Engine = (function () {
     var desde = (num(m.fin.inicio_op_mes) || 0) + num(livres);
     return Math.max(0, 12 * t - Math.max(12 * (t - 1), desde));
   }
-  function reajAno(m, t) { return Math.pow(1 + num(m.cenario.reajuste_aa), Math.max(0, t - 1)); }
+  /* Reajuste de preços e custos (receita, custos, manutenção, aluguel) no ano-projeto t, relativo ao ano 1.
+     "ipca" (padrão): IPCA projetado do Focus, ano a ano — o mesmo cenário que corrige a TLP das parcelas do FINAME;
+     depois do último ano projetado, mantém o último valor. "fixo": (1 + reajuste_aa)^(t − 1); 0 = valores constantes.
+     As parcelas dos financiamentos são nominais e não passam por aqui.                                              */
+  var IPCA_PATH = null;
+  function reajAno(m, t) {
+    var c = m.cenario || {};
+    if ((c.reajuste_modo || 'ipca') === 'ipca' && IPCA_PATH) {
+      var anos = Object.keys(IPCA_PATH).map(Number).sort(function (a, b) { return a - b; }), ult = anos[anos.length - 1], f = 1;
+      for (var k = 2; k <= t; k++) { var ano = num(m.fin.ano_inicio) + k - 1, v = IPCA_PATH[ano] != null ? IPCA_PATH[ano] : IPCA_PATH[ano > ult ? ult : anos[0]]; f *= 1 + num(v) / 100; }
+      return f;
+    }
+    return Math.pow(1 + num(c.reajuste_aa), Math.max(0, t - 1));
+  }
+  function ipcaAno(m, t) { return reajAno(m, t) / reajAno(m, Math.max(1, t - 1)) - 1; }
   function fatorManut(m) { return m.propria.manut_fator == null ? 1 : num(m.propria.manut_fator); }
 
   /* ---------- Manutenção pós-garantia de um pacote (B ou C) ----------
@@ -342,6 +356,7 @@ var Engine = (function () {
 
   /* ---------- Cálculo completo ---------- */
   function calcular(m, Motor, BASE, opts) {
+    IPCA_PATH = (BASE && BASE.macro && BASE.macro.focus && BASE.macro.focus.ipca) || null;
     var B = altB(m), C = altC(m, Motor, BASE);
     B.manut = manutPacote(m, m.equip.B); B.opex = opexManut(B.manut);
     C.manut = manutPacote(m, m.equip.C); C.opex = opexManut(C.manut);
@@ -375,6 +390,6 @@ var Engine = (function () {
   }
 
   return { num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
-    mesesAno: mesesAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
+    mesesAno: mesesAno, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
