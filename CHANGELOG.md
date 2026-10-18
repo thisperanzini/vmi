@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-18 (tarde) · HDA: honorário da S&S na compra (C)
+- Honorário de intermediação da S&S pago pelo hospital: 2% do valor financiado na alternativa C (R$ 54,4 mil), lançado no ano 0 com IOF e tarifa e no custo total do ranking. B e D sem honorário do hospital. Corrigida a unidade da premissa (fração na tela, % no motor).
+- Resultado: VPL para o hospital C R$ 9,80 mi, D R$ 9,77 mi, B R$ 9,65 mi. Sumário executivo e Método mostram o honorário.
+
 ## 2026-10-18 · HDA: inflação em todos os caminhos e sumário executivo
 - Nova premissa "Inflação nos fluxos" (padrão: IPCA projetado pelo Focus de 02/10/2026, o mesmo que corrige a TLP das parcelas do FINAME). Receita, custos, manutenção (B e C) e aluguel (D) são reajustados ano a ano; as parcelas seguem nominais; o ano 1 fica nos preços da base. "Taxa fixa" com 0 volta aos valores constantes da Controladoria.
 - Resultado (10 anos, 15% a.a. nominal): VPL para o hospital B R$ 9,65 mi, C R$ 9,86 mi, D R$ 9,77 mi; VPL do projeto R$ 9,81 mi, TIR 82%. Aluguel de equilíbrio D × C: R$ 72,0 mil/mês.

@@ -283,7 +283,7 @@
       tr('(−) Parcelas', function (a) { return R(-a.servico); }) + (sel.id === 'C' ? tr('    das quais juros', function (a) { return R(-a.juros); }, 'sub') : '') +
       '<tr class="total hl"><td>Caixa para o hospital</td><td class="n">' + R(fl.ent[0]) + '</td>' + fl.anos.map(function (a) { return '<td class="n">' + R(a.fce) + '</td>'; }).join('') + '</tr>' +
       tr('Acumulado', function (a) { return R(a.acumE); }, 'sub') + tr('DSCR do projeto', function (a) { return X(a.dscr); }, 'sub') +
-      '</tbody></table></div><p class="small muted" style="margin-top:8px">' + (isD ? 'Ano 0: só a implantação do RIS/PACS.' : 'Ano 0 com financiamento: parte não financiada (RIS/PACS' + (sel.id === 'C' && sel.capexFin < sel.capex ? ' e ' + P(1 - sel.capexFin / (sel.capex || 1), 0) + ' do pacote' : '') + ') e custos iniciais (IOF, tarifa). A Controladoria zera o ano 0 porque considera 100% financiado.') + ' ' + (isD ? 'Aluguel por ano = aluguel mensal × meses de operação × reajuste.' : 'Manutenção por ano = contrato mensal × meses após a garantia × reajuste (ano 1: zero; ano 2: ' + E.mesesAno(m, 2, m.manut.garantia_meses) + ' meses).') + '</p></div>';
+      '</tbody></table></div><p class="small muted" style="margin-top:8px">' + (isD ? 'Ano 0: só a implantação do RIS/PACS.' : 'Ano 0 com financiamento: parte não financiada (RIS/PACS' + (sel.id === 'C' && sel.capexFin < sel.capex ? ' e ' + P(1 - sel.capexFin / (sel.capex || 1), 0) + ' do pacote' : '') + ') e custos iniciais (IOF, tarifa' + (sel.id === 'C' && sel.escolha && sel.escolha.sim.honor ? ', honorário da S&S de ' + R(sel.escolha.sim.honor) : '') + '). A Controladoria zera o ano 0 porque considera 100% financiado.') + ' ' + (isD ? 'Aluguel por ano = aluguel mensal × meses de operação × reajuste.' : 'Manutenção por ano = contrato mensal × meses após a garantia × reajuste (ano 1: zero; ano 2: ' + E.mesesAno(m, 2, m.manut.garantia_meses) + ' meses).') + '</p></div>';
     /* DRE anual em regime */
     var a2 = c.cen.prop;
     h += '<div class="card"><div class="card-h"><h2>DRE anual da imagem própria em regime</h2><span class="muted small">12 meses, ' + (isD ? 'com aluguel' : 'após a garantia') + ', volume do cenário</span></div><div class="tbl-wrap"><table><thead><tr><th></th><th class="n">R$/ano</th><th class="n">% RL</th></tr></thead><tbody>' +
@@ -643,7 +643,7 @@
       '<li>Portal Nacional de Contratações Públicas (PNCP), contratos de manutenção de TC e ultrassom e de locação de TC e RX móvel, 2023–2026: ' + BENCH_MANUT.concat(BENCH_LOC).map(function (b) { return '<a href="' + b.url + '" target="_blank" rel="noopener">' + esc(b.org) + ' (' + b.ano + ')</a>'; }).join('; ') + '.</li>' +
       '<li>Banco Central, taxa média PJ de arrendamento mercantil de outros bens, SGS 20732, ago/2026 (17,19% a.a.). <a href="https://api.bcb.gov.br/dados/serie/bcdata.sgs.20732/dados/ultimos/3?formato=json" target="_blank" rel="noopener">BCB</a></li>' +
       '<li>STF, Súmula Vinculante 31 (ISS não incide sobre locação de bens móveis); EC 132/2023 e LC 214/2025 (CBS em lugar de PIS/COFINS a partir de 2027).</li></ul>' +
-      '<p class="small muted" style="margin-top:10px">Preços dos itens VMI: a definir pelas propostas; por padrão iguais ao pacote GE. Honorário de intermediação não exibido nesta versão.</p></div>';
+      '<p class="small muted" style="margin-top:10px">Honorário de intermediação da S&S na compra financiada (C): ' + P(+model.altC.honorario_pct || 0, 1) + ' do valor financiado, pago pelo hospital na contratação (' + R(calc.C.escolha ? calc.C.escolha.sim.honor : 0) + '), lançado no ano 0. Não há honorário do hospital na locação (D) nem no pacote GE (B).</p></div>';
     $('#tab-metodo').innerHTML = h;
   }
 
@@ -760,7 +760,7 @@
     var cfiTxt = semCfi.length || prevCfi.length ? 'CFI: ' + (prevCfi.length ? prevCfi.join(', ') + ' ainda sem código' : '') + (prevCfi.length && semCfi.length ? '; ' : '') + (semCfi.length ? semCfi.join(' e ') + ' fora do catálogo (' + R(c.C.cfi ? c.C.cfi.sem : 0) + ')' : '') + '. O FINAME do pacote inteiro depende de todos os códigos publicados.' : '';
     S.secoes.push({ h: 'Compra do pacote VMI (C)', b: [
       sC ? 'Linha em uso: **' + sC.linha.nome + '**, CET de ' + Pp(c.C.cetAno) + ' a.a., ' + c.C.n + ' meses com ' + (c.C.c || 0) + ' de carência; parcela de ' + R(c.C.primeira) + ' na carência e ' + R(c.C.parcela) + ' depois. Pacote de ' + mi(c.C.capex) + ' (preços VMI de 15/10/2026).' : 'Nenhuma linha elegível com as premissas atuais.',
-      'Manutenção pós-garantia, plano ' + (c.C.manut.plano === 'prata' ? 'Prata' : 'Ouro') + ': ' + R(c.C.manut.mes) + '/mês a partir do mês ' + (m.manut.garantia_meses + 1) + ' de operação.',
+      'Manutenção pós-garantia, plano ' + (c.C.manut.plano === 'prata' ? 'Prata' : 'Ouro') + ': ' + R(c.C.manut.mes) + '/mês a partir do mês ' + (m.manut.garantia_meses + 1) + ' de operação.' + (sC && sC.sim.honor ? ' Honorário de intermediação da S&S: ' + R(sC.sim.honor) + ' (' + P(+m.altC.honorario_pct, 0) + ' do financiado), pago pelo hospital na contratação e já incluído no resultado.' : ''),
       fgTxt, cfiTxt
     ].filter(Boolean) });
     /* 5. locação D */
