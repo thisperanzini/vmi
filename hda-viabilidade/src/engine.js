@@ -79,9 +79,35 @@ var Engine = (function () {
   /* ---------- Meses cobrados num ano do projeto ----------
      A operação própria começa no mês (inicio_op_mes + 1) do ano 1. "livres" = meses de operação
      sem cobrança no início (garantia de fábrica para a manutenção; 0 para o aluguel). */
-  function mesesAno(m, t, livres) {
-    var desde = (num(m.fin.inicio_op_mes) || 0) + num(livres);
-    return Math.max(0, 12 * t - Math.max(12 * (t - 1), desde));
+  function mesesDesde(desde, t) { return Math.max(0, 12 * t - Math.max(12 * (t - 1), num(desde))); }
+  function mesesAno(m, t, livres) { return mesesDesde((num(m.fin.inicio_op_mes) || 0) + num(livres), t); }
+
+  /* ---------- Ressonância magnética (novo serviço, cenário "com RM") ----------
+     A EMG não faz RM: receita e custos da RM são inteiramente incrementais. O equipamento (item id "rm") fica nos
+     pacotes B e C e entra no cálculo só com rm.incluir = "sim"; a obra de pré-instalação sai no ano 0.          */
+  function rmOn(m) { return !(m.rm && m.rm.incluir === 'nao'); }
+  function isRM(it) { return !!it && (it.rm === true || it.id === 'rm'); }
+  function ativos(m, itens) { var on = rmOn(m); return (itens || []).filter(function (it) { return on || !isRM(it); }); }
+  function iniRM(m) { return m.rm && m.rm.inicio_mes != null && m.rm.inicio_mes !== '' ? num(m.rm.inicio_mes) : (num(m.fin.inicio_op_mes) || 0); }
+  function iniItem(m, it) { return isRM(it) ? iniRM(m) : (num(m.fin.inicio_op_mes) || 0); }
+  function rampaRM(m, t) { var r = m.rm || {}; return t <= 1 ? (r.rampa1 == null ? 1 : num(r.rampa1)) : t === 2 ? (r.rampa2 == null ? 1 : num(r.rampa2)) : 1; }
+  function obraRM(m) { return rmOn(m) ? num(m.rm && m.rm.obra) : 0; }
+  function capacidadeRM(m) { var r = m.rm || {}, cap = 2 * (num(r.horas_dia) || 12) * 26, ex = num(r.exames_mes) + num(r.exames_sus_mes); return { cap: cap, exames: ex, ocup: cap ? ex / cap : null }; }
+  /* DRE mensal da RM no ano-projeto t; rampa opcional (1 = regime) */
+  function rmMensal(m, t, rampa) {
+    var r = m.rm || {}, reaj = reajAno(m, t), k = rampa == null ? rampaRM(m, t) : rampa;
+    var exC = num(r.exames_mes) * k, exS = num(r.exames_sus_mes) * k;
+    var rb = (exC * num(r.ticket) + exS * num(r.ticket_sus)) * reaj, glosa = rb * num(m.base.glosa_pct), rl = rb - glosa;
+    var matmed = rl * num(r.matmed_pct), laudo = rl * num(r.rep_med_pct), mc = rl - matmed - laudo;
+    var equipe = num(r.equipe_mes) * reaj, energia = num(r.energia_mes) * reaj, outros = num(r.outros_mes) * reaj, fixos = equipe + energia + outros;
+    return { exames: exC + exS, exConv: exC, exSus: exS, rampa: k, rb: rb, glosa: glosa, rl: rl, matmed: matmed, laudo: laudo, mc: mc, equipe: equipe, energia: energia, outros: outros, fixos: fixos, ebitda: mc - fixos };
+  }
+  /* RM no ano-projeto t: valores mensais × meses de operação no ano */
+  function rmAno(m, t) {
+    if (!rmOn(m)) return null;
+    var d = rmMensal(m, t), meses = mesesDesde(iniRM(m), t), o = { meses: meses, rampa: d.rampa };
+    Object.keys(d).forEach(function (k) { if (k !== 'rampa') o[k] = d[k] * meses; });
+    return o;
   }
   /* Reajuste de preços e custos (receita, custos, manutenção, aluguel) no ano-projeto t, relativo ao ano 1.
      "ipca" (padrão): IPCA projetado do Focus, ano a ano — o mesmo cenário que corrige a TLP das parcelas do FINAME;
@@ -108,15 +134,16 @@ var Engine = (function () {
     var fat = fatorManut(m), tubo = num(m.propria.tubo);
     var porItem = (itens || []).map(function (it) {
       var q = num(it.qtd), prata = (num(it.m_prata) + (it.tubo ? tubo : 0)) * q, ouro = num(it.m_ouro) * q;
-      return { id: it.id, nome: it.nome, prata: prata * fat, ouro: ouro * fat, usado: (plano === 'prata' ? prata : ouro) * fat, tubo: it.tubo ? tubo * q * fat : 0 };
+      return { id: it.id, nome: it.nome, rm: isRM(it), ini: iniItem(m, it), prata: prata * fat, ouro: ouro * fat, usado: (plano === 'prata' ? prata : ouro) * fat, tubo: it.tubo ? tubo * q * fat : 0 };
     });
     var soma = function (k) { return porItem.reduce(function (s, x) { return s + x[k]; }, 0); };
     var mes = soma('usado');
     return { plano: plano, garantia: G, fator: fat, porItem: porItem, prata: soma('prata'), ouro: soma('ouro'), mes: mes,
-      ano: function (t) { return mes * mesesAno(m, t, G) * reajAno(m, t); } };
+      ano: function (t) { return porItem.reduce(function (s, x) { return s + x.usado * mesesDesde(x.ini + G, t); }, 0) * reajAno(m, t); } };
   }
   function opexManut(M) { return { tipo: 'manut', mes: M.mes, ano: M.ano }; }
-  function opexAluguel(m, mes) { return { tipo: 'aluguel', mes: mes, ano: function (t) { return mes * mesesAno(m, t, 0) * reajAno(m, t); } }; }
+  /* aluguel por linha, cada uma desde a sua instalação (a RM começa depois) */
+  function opexAluguel(m, L) { return { tipo: 'aluguel', mes: L.aluguel, ano: function (t) { return L.linhas.reduce(function (s, x) { return s + x.aluguel * mesesDesde(x.ini, t); }, 0) * reajAno(m, t); } }; }
 
   /* ---------- Locação de longo prazo (alternativa D) ----------
      Fonte por item:
@@ -128,7 +155,7 @@ var Engine = (function () {
        valor residual     = valor × (1 − queda anual do valor de mercado)^(prazo/12)
        aluguel            = parcela financeira ÷ (1 − tributos do locador) + manutenção Ouro média no prazo
      Prazo fora da tabela da VMI: interpolação linear entre os prazos cotados (extremos: o prazo mais próximo). */
-  var DEP_D = { tc: 'dep_tc', us: 'dep_us', rxp: 'dep_rx', rxdr: 'dep_rx', dr: 'dep_dr' };
+  var DEP_D = { tc: 'dep_tc', us: 'dep_us', rxp: 'dep_rx', rxdr: 'dep_rx', dr: 'dep_dr', rm: 'dep_rm' };
   function depD(m, it) { var d = m.altD || {}, k = DEP_D[it.id]; return k && d[k] != null ? num(d[k]) : 0.25; }
   function cotacaoVmi(it, n) {
     var t = it && it.loc_vmi; if (!t || typeof t !== 'object') return null;
@@ -155,34 +182,40 @@ var Engine = (function () {
     var v = Math.pow(1 + rm, -n), fa = rm > 0 ? rm / (1 - v) : 1 / n;
     var linhas = (itens || []).map(function (it) {
       var q = num(it.qtd), V = q * num(it.preco), dep = depD(m, it), rv = Math.pow(1 - dep, n / 12), RV = V * rv;
-      var cot = usaVmi ? cotacaoVmi(it, n) : null;
+      var cot = usaVmi ? cotacaoVmi(it, n) : null, proxy = false;
+      if (cot == null && usaVmi && it.loc_proxy) { /* sem cotação própria: mesma razão aluguel ÷ preço do item de referência (RM ← TC) */
+        var px = (m.equip.C || []).filter(function (x) { return x.id === it.loc_proxy; })[0], cp = px ? cotacaoVmi(px, n) : null;
+        if (cp != null && num(px.preco) > 0) { cot = cp / num(px.preco) * num(it.preco); proxy = true; }
+      }
       if (cot != null) {
         var base = cot * q, contrato = (plano === 'prata' ? num(it.m_prata) + (it.tubo ? tubo : 0) : num(it.m_ouro)) * q * fat;
         var manSep = manInclusa ? 0 : contrato * Math.max(0, n - G) / n;
         var finImpl = base * (1 - tr); /* teto: trata o aluguel inteiro como parcela financeira; com manutenção inclusa, a taxa efetiva é menor */
-        return { id: it.id, nome: it.nome, modelo: it.modelo, qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: 'vmi', cotUnit: cot, cotModelo: it.loc_vmi_modelo || it.modelo,
+        return { id: it.id, nome: it.nome, modelo: it.modelo, rm: isRM(it), ini: iniItem(m, it), qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: proxy ? 'proxy' : 'vmi', cotUnit: cot, cotModelo: it.loc_vmi_modelo || it.modelo,
           fin: base, trib: 0, man: manSep, manSep: manSep, manLoc: 0, aluguel: base + manSep, taxaImpl: taxaLocImplicita(V, RV, n, finImpl), pctMes: V ? (base + manSep) / V : null };
       }
       var fin = (V - RV * v) * fa, finBruto = tr < 1 ? fin / (1 - tr) : fin;
       var man = num(it.m_ouro) * q * fat * Math.max(0, n - G) / n;
-      return { id: it.id, nome: it.nome, modelo: it.modelo, qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: 'composicao', cotUnit: null, fin: finBruto, finLiq: fin, trib: finBruto - fin, man: man, manSep: 0, manLoc: man, aluguel: finBruto + man, taxaImpl: null, pctMes: V ? (finBruto + man) / V : null };
+      return { id: it.id, nome: it.nome, modelo: it.modelo, rm: isRM(it), ini: iniItem(m, it), qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: 'composicao', cotUnit: null, fin: finBruto, finLiq: fin, trib: finBruto - fin, man: man, manSep: 0, manLoc: man, aluguel: finBruto + man, taxaImpl: null, pctMes: V ? (finBruto + man) / V : null };
     });
     var s = function (k) { return linhas.reduce(function (a, x) { return a + (x[k] || 0); }, 0); };
-    var V = s('V'), vm = linhas.filter(function (x) { return x.fonte === 'vmi'; });
+    var V = s('V'), vm = linhas.filter(function (x) { return x.fonte === 'vmi'; }), pxs = linhas.filter(function (x) { return x.fonte === 'proxy'; }), cps = linhas.filter(function (x) { return x.fonte === 'composicao'; });
     return { n: n, taxaAno: ra, taxaMes: rm, linhas: linhas, V: V, RV: s('RV'), fin: s('fin'), trib: s('trib'), man: s('man'), manSep: s('manSep'), manLoc: s('manLoc'), aluguel: s('aluguel'), pctMes: V ? s('aluguel') / V : null,
       usaVmi: usaVmi, manInclusa: manInclusa, plano: plano, nVmi: vm.length, aluguelVmi: vm.reduce(function (a, x) { return a + x.fin; }, 0),
-      semCotacao: linhas.filter(function (x) { return x.fonte !== 'vmi'; }).map(function (x) { return x.nome + (x.modelo ? ' (' + x.modelo + ')' : ''); }) };
+      nProxy: pxs.length, aluguelProxy: pxs.reduce(function (a, x) { return a + x.fin; }, 0), proxyItens: pxs.map(function (x) { return x.nome + (x.modelo ? ' (' + x.modelo + ')' : ''); }),
+      aluguelComp: cps.reduce(function (a, x) { return a + x.aluguel; }, 0),
+      semCotacao: cps.map(function (x) { return x.nome + (x.modelo ? ' (' + x.modelo + ')' : ''); }) };
   }
   function altD(m) {
-    var n = Math.max(12, Math.round(num(m.altD && m.altD.prazo) || 48)), L = locacao(m, m.equip.C, n);
-    return { id: 'D', capex: 0, capexFin: 0, custosIni: 0, servico: {}, jurosAno: {}, rows: [], n: n, loc: L, parcela: 0, aluguel: L.aluguel, pagosPrazo: L.aluguel * n, opex: opexAluguel(m, L.aluguel) };
+    var n = Math.max(12, Math.round(num(m.altD && m.altD.prazo) || 48)), L = locacao(m, ativos(m, m.equip.C), n);
+    return { id: 'D', capex: 0, capexFin: 0, custosIni: 0, servico: {}, jurosAno: {}, rows: [], n: n, loc: L, parcela: 0, aluguel: L.aluguel, pagosPrazo: L.aluguel * n, opex: opexAluguel(m, L) };
   }
   /* Comprar o mesmo pacote (C) e usá-lo pelo mesmo prazo da locação, a valor presente pela taxa de desconto:
      entrada + parcelas até o mês n + saldo devedor no mês n + manutenção Ouro após a garantia − valor de mercado no mês n.
      A comparação é com a soma dos aluguéis no prazo, à mesma taxa (vantagem da locação = possuir − alugar).             */
   function custoPossuirC(m, C, n) {
     var k = Math.pow(1 + num(m.fin.desconto), 1 / 12) - 1, vp = function (x, j) { return x / Math.pow(1 + k, j); };
-    var G = num(m.manut && m.manut.garantia_meses), fat = fatorManut(m), itens = m.equip.C;
+    var G = num(m.manut && m.manut.garantia_meses), fat = fatorManut(m), itens = ativos(m, m.equip.C);
     var M = itens.reduce(function (s, it) { return s + num(it.m_ouro) * num(it.qtd); }, 0) * fat;
     var RV = itens.reduce(function (s, it) { return s + num(it.qtd) * num(it.preco) * Math.pow(1 - depD(m, it), n / 12); }, 0);
     var pvMan = 0, j; for (j = G + 1; j <= n; j++) pvMan += vp(M, j);
@@ -199,7 +232,7 @@ var Engine = (function () {
   function prazosD(m, C) {
     var k = Math.pow(1 + num(m.fin.desconto), 1 / 12) - 1;
     return PRAZOS_D.map(function (n) {
-      var L = locacao(m, m.equip.C, n), D = { id: 'D', capex: 0, capexFin: 0, custosIni: 0, servico: {}, n: n, loc: L, opex: opexAluguel(m, L.aluguel) };
+      var L = locacao(m, ativos(m, m.equip.C), n), D = { id: 'D', capex: 0, capexFin: 0, custosIni: 0, servico: {}, n: n, loc: L, opex: opexAluguel(m, L) };
       var fl = fluxo(m, D), pvAlug = 0; for (var j = 1; j <= n; j++) pvAlug += L.aluguel / Math.pow(1 + k, j);
       var cp = custoPossuirC(m, C, n), anu = pvAlug / (L.aluguel || 1);
       return { n: n, loc: L, aluguel: L.aluguel, pctMes: L.pctMes, totalPrazo: L.aluguel * n, pvAluguel: pvAlug, custoPossuir: cp.pv, custoVista: cp.pvVista, possuir: cp, vantagem: cp.pv - pvAlug, vantagemVista: cp.pvVista - pvAlug,
@@ -208,10 +241,12 @@ var Engine = (function () {
     });
   }
   /* Aluguel em que a locação empata com uma alternativa de compra no VPL para o hospital (horizonte inteiro).
-     O VPL da locação é linear no aluguel: VPL(a) = VPL(a0) − (a − a0) × F, F = Σ meses cobrados × reajuste ÷ (1+r)^t. */
+     Escalando todos os aluguéis pelo mesmo fator, o VPL da locação é linear no aluguel mensal:
+     VPL(a) = VPL(a0) − (a − a0) × F, F = Σ aluguel do ano ÷ a0 ÷ (1+r)^t (cada linha desde a sua instalação). */
   function equilibrioD(m, D, flD, flAlvo) {
     var r = num(m.fin.desconto), H = Math.max(1, Math.round(num(m.fin.horizonte))), F = 0;
-    for (var t = 1; t <= H; t++) F += mesesAno(m, t, 0) * reajAno(m, t) / Math.pow(1 + r, t);
+    if (!D.aluguel) return null;
+    for (var t = 1; t <= H; t++) F += D.opex.ano(t) / D.aluguel / Math.pow(1 + r, t);
     return F ? D.aluguel - (flAlvo.vplEnt - flD.vplEnt) / F : null;
   }
 
@@ -227,7 +262,7 @@ var Engine = (function () {
     var f = m.fin, H = Math.max(1, Math.round(num(f.horizonte))), c = m.cenario;
     var ini = num(f.inicio_op_mes) || 0; /* meses do ano 1 ainda com a EMG */
     var vida = num(f.vida_util) || 10;
-    var capex = alt.capex + num(m.propria.rispacs_impl);
+    var obra = obraRM(m), capex = alt.capex + num(m.propria.rispacs_impl) + obra;
     var dep = capex / vida;
     var anos = [], proj = [-capex], ent = [-(capex - (alt.capexFin || 0)) - (alt.custosIni || 0)];
     var acumP = -capex, acumE = ent[0];
@@ -238,7 +273,8 @@ var Engine = (function () {
       var ebitdaEmg = e.resultado * 12, ebitdaPropBase = p.resultado * 12;
       var incBase = (ebitdaPropBase - ebitdaEmg) * frac;
       var opexAno = alt.opex ? alt.opex.ano(t) : 0; /* manutenção pós-garantia (B, C) ou aluguel (D) */
-      var inc = incBase - opexAno;
+      var rmA = rmAno(m, t), rmE = rmA ? rmA.ebitda : 0; /* RM: serviço novo, todo incremental */
+      var inc = incBase + rmE - opexAno;
       var opReg = alt.opex ? (alt.opex.tipo === 'aluguel' ? { aluguel: alt.opex.mes } : { manut: alt.opex.mes }) : null;
       var depAno = t <= vida ? dep : 0;
       var ebit = inc - depAno;
@@ -248,7 +284,7 @@ var Engine = (function () {
       var serv = (alt.servico && alt.servico[t]) || 0;
       var fce = inc - trib - serv + residual;
       acumP += fcp; acumE += fce;
-      anos.push({ t: t, ano: num(f.ano_inicio) + t - 1, fator: fator, frac: frac, exames: p.exames * 12, rl: p.rl * 12, ebitdaEmg: ebitdaEmg, ebitdaPropBase: ebitdaPropBase, incBase: incBase, opex: opexAno, opexTipo: alt.opex ? alt.opex.tipo : null, inc: inc, dep: depAno, ebit: ebit, trib: trib, residual: residual, fcp: fcp, servico: serv, juros: (alt.jurosAno && alt.jurosAno[t]) || 0, fce: fce, acumP: acumP, acumE: acumE, dscr: serv > 0 ? inc / serv : null, desembolso: opexAno + serv, dre: { emg: e, prop: dreMensal(m, fator, 'propria', t, opReg) } });
+      anos.push({ t: t, ano: num(f.ano_inicio) + t - 1, fator: fator, frac: frac, exames: p.exames * 12, rl: p.rl * 12, ebitdaEmg: ebitdaEmg, ebitdaPropBase: ebitdaPropBase, incBase: incBase, rm: rmA, rmEbitda: rmE, opex: opexAno, opexTipo: alt.opex ? alt.opex.tipo : null, inc: inc, dep: depAno, ebit: ebit, trib: trib, residual: residual, fcp: fcp, servico: serv, juros: (alt.jurosAno && alt.jurosAno[t]) || 0, fce: fce, acumP: acumP, acumE: acumE, dscr: serv > 0 ? inc / serv : null, desembolso: opexAno + serv, dre: { emg: e, prop: dreMensal(m, fator, 'propria', t, opReg) } });
       proj.push(fcp); ent.push(fce);
     }
     var r = num(f.desconto);
@@ -256,7 +292,7 @@ var Engine = (function () {
     var pagos = 0; Object.keys(alt.servico || {}).forEach(function (k) { pagos += alt.servico[k]; });
     var opexTot = anos.reduce(function (s, a) { return s + a.opex; }, 0);
     return { opexTot: opexTot, desembolsoTot: opexTot + pagos + (capex - (alt.capexFin || 0)) + (alt.custosIni || 0),
-      anos: anos, capex: capex, proj: proj, ent: ent,
+      anos: anos, capex: capex, obra: obra, proj: proj, ent: ent,
       vpl: npv(proj, r), tir: irr(proj), pb: payback(proj, 0), pbDesc: payback(proj, r),
       vplEnt: npv(ent, r), tirEnt: irr(ent), pbEnt: payback(ent, 0), acumEnt: acumE, acumProj: acumP,
       ir: (function () { var vp = 0; for (var i = 1; i < proj.length; i++) vp += proj[i] / Math.pow(1 + r, i); return capex ? vp / capex : null; })(),
@@ -266,10 +302,17 @@ var Engine = (function () {
 
   /* ---------- Alternativa B: parcelas fixas informadas pelos fornecedores (HFS/GE) ---------- */
   function altB(m) {
-    var itens = m.equip.B, cx = capexDe(itens), rows = [], anoIni = num(m.fin.ano_inicio), mIni = num(m.fin.inicio_op_mes) || 0;
+    var todos = m.equip.B || [], rows = [], anoIni = num(m.fin.ano_inicio), mIni = num(m.fin.inicio_op_mes) || 0;
     var n = num(m.equip.B_n) || 60;
-    /* parcela constante por item; taxa implícita por item para exibição */
-    var implic = itens.map(function (it) { var P = num(it.preco), pm = num(it.parcela), nn = num(it.n) || n; var i = taxaImplicita(P, pm, nn); return { id: it.id, taxaMes: i, taxaAno: i == null ? null : (Math.pow(1 + i, 12) - 1) * 100, totalPago: pm * nn * num(it.qtd), alerta: pm * nn < P ? 'Parcelas somam menos que o valor à vista' : (i === 0 ? 'Sem juros declarados' : '') }; });
+    /* RM sem proposta GE: parcela calculada à taxa implícita dos demais itens financiados do pacote (HFS e fornecedores) */
+    var base0 = todos.filter(function (it) { return !isRM(it) && it.fin !== false; }), cx0 = capexDe(base0), iB = taxaImplicita(cx0.financiavel, cx0.parcelaMes, n);
+    var efetivos = todos.map(function (it) {
+      if (!isRM(it) || (it.parcela_auto === false && num(it.parcela) > 0)) return it;
+      var c = clone(it), nn = num(it.n) || n, P = num(it.preco); c.parcela = iB ? P * iB / (1 - Math.pow(1 + iB, -nn)) : P / nn; c.parcelaAuto = true; return c;
+    });
+    var itens = ativos(m, efetivos), cx = capexDe(itens);
+    /* parcela constante por item; taxa implícita por item para exibição (lista completa, na ordem da tabela) */
+    var implic = efetivos.map(function (it) { var P = num(it.preco), pm = num(it.parcela), nn = num(it.n) || n; var i = taxaImplicita(P, pm, nn); return { id: it.id, taxaMes: i, taxaAno: i == null ? null : (Math.pow(1 + i, 12) - 1) * 100, totalPago: pm * nn * num(it.qtd), parcelaAuto: it.parcelaAuto ? pm : null, fora: isRM(it) && !rmOn(m), alerta: pm * nn < P ? 'Parcelas somam menos que o valor à vista' : (i === 0 ? 'Sem juros declarados' : '') }; });
     for (var t = 1; t <= n; t++) { var mm = mIni + t; var y = anoIni + Math.floor((mm - 1) / 12); rows.push({ t: t, y: y, m: ((mm - 1) % 12) + 1, parcela: cx.parcelaMes, juros: 0, amort: 0, saldo: null }); }
     var juros = cx.parcelaMes * n - cx.financiavel;
     return { id: 'B', capex: cx.total, capexFin: cx.financiavel, custosIni: 0, servico: servicoPorAnoProj(rows, anoIni), rows: rows, parcela: cx.parcelaMes, n: n, pagos: cx.parcelaMes * n, juros: juros, implic: implic, cetAno: (function () { var i = taxaImplicita(cx.financiavel, cx.parcelaMes, n); return i == null ? null : (Math.pow(1 + i, 12) - 1) * 100; })() };
@@ -285,7 +328,7 @@ var Engine = (function () {
 
   /* ---------- Alternativa C: pacote VMI financiado pelo Motor (ferramenta Financiamento VMI) ---------- */
   function altC(m, Motor, BASE) {
-    var itens = m.equip.C, cx = capexDe(itens), ac = m.altC, cl = m.cliente;
+    var itens = ativos(m, m.equip.C), cx = capexDe(itens), ac = m.altC, cl = m.cliente;
     var cfiInfo = (function () { var com = 0, prev = 0, sem = 0, semItens = [], prevItens = []; itens.forEach(function (i) { if (i.fin === false) return; var v = num(i.qtd) * num(i.preco), c = String(i.cfi || '').trim(); if (/^\d+$/.test(c)) com += v; else if (c) { prev += v; prevItens.push(i.nome + ' (' + c + ')'); } else { sem += v; semItens.push(i.nome); } }); return { com: com, prev: prev, sem: sem, semItens: semItens, prevItens: prevItens, todos: sem === 0 && com + prev > 0 }; })();
     var caso = { cliente: { natureza: cl.natureza, uf: cl.uf, rob: num(cl.rob) || null, porte_decl: cl.porte_decl || null, sus_creditos_12m: num(cl.sus_creditos_12m) || null, sus_mac_outros: cl.sus_mac_outros || '', sus_mac_parcelas: num(cl.sus_mac_parcelas) },
       operacao: { valor_equip: cx.financiavel, valor_obra: num(ac.valor_obra), valor_financiar: ac.valor_financiar === '' || ac.valor_financiar == null ? null : num(ac.valor_financiar), prazo: num(ac.prazo) || 120, carencia: num(ac.carencia) || 0, inicio: ac.inicio || (num(m.fin.ano_inicio) + '-03'), sistema: ac.sistema || 'SAC', carModo: ac.carModo || 'pagos', equipamento: { cfi: cfiInfo.todos ? (cfiInfo.prev > 0 ? 'previsto' : 'informado') : (num(ac.cfi_presumido) ? 'presumido' : ''), cfi_previsao: cfiInfo.prev > 0 ? 'dez/2026' : null, origem: 'nacional' } },
@@ -358,24 +401,63 @@ var Engine = (function () {
   function calcular(m, Motor, BASE, opts) {
     IPCA_PATH = (BASE && BASE.macro && BASE.macro.focus && BASE.macro.focus.ipca) || null;
     var B = altB(m), C = altC(m, Motor, BASE);
-    B.manut = manutPacote(m, m.equip.B); B.opex = opexManut(B.manut);
-    C.manut = manutPacote(m, m.equip.C); C.opex = opexManut(C.manut);
+    B.manut = manutPacote(m, ativos(m, m.equip.B)); B.opex = opexManut(B.manut);
+    C.manut = manutPacote(m, ativos(m, m.equip.C)); C.opex = opexManut(C.manut);
     var D = altD(m);
     var flB = fluxo(m, B), flC = fluxo(m, C), flD = fluxo(m, D);
     var a = m.fin.alternativa, sel = a === 'B' ? B : a === 'D' ? D : C, flSel = a === 'B' ? flB : a === 'D' ? flD : flC;
-    var opReg = sel.opex.tipo === 'aluguel' ? { aluguel: sel.opex.mes } : { manut: sel.opex.mes };
+    /* DRE da imagem (base e cenário) sem a parte da RM no aluguel ou na manutenção: a RM tem DRE própria (out.rm) */
+    var opRM = function (alt) { return alt.opex.tipo === 'aluguel' ? alt.loc.linhas.reduce(function (s, x) { return s + (x.rm ? x.aluguel : 0); }, 0) : alt.manut.porItem.reduce(function (s, x) { return s + (x.rm ? x.usado : 0); }, 0); };
+    var opRMsel = opRM(sel), opReg = sel.opex.tipo === 'aluguel' ? { aluguel: sel.opex.mes - opRMsel } : { manut: sel.opex.mes - opRMsel };
     var base = { emg: dreMensal(m, 1, 'emg', 2), prop: dreMensal(m, 1, 'propria', 2, opReg) };
     var fator = 1 + num(m.cenario.volume_var);
     var cen = { emg: dreMensal(m, fator, 'emg', 2), prop: dreMensal(m, fator, 'propria', 2, opReg), propBase: dreMensal(m, fator, 'propria', 2) };
     var ent = entidade(m, sel, flSel);
+    var rmReg = rmOn(m) ? rmMensal(m, 2, 1) : null; /* RM em regime, preços do ano 2 (mesma base de cen) */
     var out = { B: B, C: C, D: D, flB: flB, flC: flC, flD: flD, base: base, cen: cen, sel: sel, flSel: flSel, ent: ent, tc: capacidadeTC(m),
-      ganhoMes: cen.prop.resultado - cen.emg.resultado, ganhoMesComParcela: cen.prop.resultado - cen.emg.resultado - (sel.parcela || 0) };
+      rm: { on: rmOn(m), reg: rmReg, cap: capacidadeRM(m), obra: obraRM(m), ini: iniRM(m), opex: { B: opRM(B), C: opRM(C), D: opRM(D) }, opexSel: opRMsel },
+      ganhoMes: cen.prop.resultado - cen.emg.resultado, ganhoMesComParcela: cen.prop.resultado - cen.emg.resultado + (rmReg ? rmReg.ebitda - opRMsel : 0) - (sel.parcela || 0) };
     if (!(opts && opts.leve)) {
       out.entAlt = { B: entidade(m, B, flB), C: entidade(m, C, flC), D: entidade(m, D, flD) };
       out.prazosD = prazosD(m, C);
       D.equilibrioC = equilibrioD(m, D, flD, flC); D.equilibrioB = equilibrioD(m, D, flD, flB);
+      out.rm.isolada = rmIsolada(m, C);
+      out.cenRM = cenariosRM(m, Motor, BASE, out);
     }
     return out;
+  }
+
+  /* ---------- RM isolada: só o equipamento, a obra, a operação e a manutenção da RM, sem financiamento (preço do pacote C) ---------- */
+  function rmIsolada(m, C) {
+    if (!rmOn(m)) return null;
+    var it = ativos(m, m.equip.C).filter(isRM)[0]; if (!it) return null;
+    var H = Math.max(1, Math.round(num(m.fin.horizonte))), r = num(m.fin.desconto), mp = manutPacote(m, [it]), inv = num(it.qtd) * num(it.preco) + obraRM(m), fl = [-inv], anos = [];
+    for (var t = 1; t <= H; t++) { var a = rmAno(m, t), man = mp.ano(t); anos.push({ t: t, ano: num(m.fin.ano_inicio) + t - 1, rm: a, manut: man, fc: a.ebitda - man }); fl.push(a.ebitda - man); }
+    return { inv: inv, equip: num(it.qtd) * num(it.preco), manutMes: mp.mes, anos: anos, fl: fl, vpl: npv(fl, r), tir: irr(fl), pb: payback(fl, 0) };
+  }
+  /* ---------- Cenários com e sem RM, lado a lado, e o volume e o preço em que a RM empata ---------- */
+  function resumoAlt(m, alt, fl) {
+    var en = entidade(m, alt, fl), a3 = fl.anos[Math.min(2, fl.anos.length - 1)];
+    return { capex: fl.capex, fin: alt.capexFin || 0, ano0: -fl.ent[0], vpl: fl.vpl, vplEnt: fl.vplEnt, acumEnt: fl.acumEnt, comp1: (fl.anos[0].servico + fl.anos[0].opex) / 12, comp3: (a3.servico + a3.opex) / 12,
+      dscr: en.linhas.slice(0, 3).map(function (l) { return { ano: l.ano, v: l.dscrSem, tdc: l.dscrCom }; }), dlEbitda: en.dlEbitdaProj, inc3: a3.inc };
+  }
+  function cenariosRM(m, Motor, BASE, out) {
+    var on = rmOn(m), m2 = clone(m); m2.rm = m2.rm || {}; m2.rm.incluir = on ? 'nao' : 'sim';
+    var r2 = calcular(m2, Motor, BASE, { leve: true }), mc = on ? m : m2;
+    var cur = { B: resumoAlt(m, out.B, out.flB), C: resumoAlt(m, out.C, out.flC), D: resumoAlt(m, out.D, out.flD) };
+    var alt = { B: resumoAlt(m2, r2.B, r2.flB), C: resumoAlt(m2, r2.C, r2.flC), D: resumoAlt(m2, r2.D, r2.flD) };
+    var com = on ? cur : alt, sem = on ? alt : cur, ids = ['B', 'C', 'D'];
+    var vpls = function (mm) { var r = calcular(mm, Motor, BASE, { leve: true }); return { B: r.flB.vplEnt, C: r.flC.vplEnt, D: r.flD.vplEnt }; };
+    /* VPL para o hospital é linear no volume e no preço da RM (sem tributos): dois pontos bastam */
+    var v0 = num(mc.rm.exames_mes), dv = 100, mv = clone(mc); mv.rm.exames_mes = v0 + dv; var a0 = { B: com.B.vplEnt, C: com.C.vplEnt, D: com.D.vplEnt }, av = vpls(mv);
+    var itC = (mc.equip.C || []).filter(isRM)[0], p0 = itC ? num(itC.preco) : 0, f = 0.9, mp = clone(mc);
+    ['B', 'C'].forEach(function (k) { (mp.equip[k] || []).forEach(function (it) { if (isRM(it)) it.preco = num(it.preco) * f; }); });
+    var ap = p0 ? vpls(mp) : null, t0 = num(mc.rm.ticket), dt = 100, mt = clone(mc); mt.rm.ticket = t0 + dt; var at = vpls(mt), eq = {};
+    ids.forEach(function (k) {
+      var sv = (av[k] - a0[k]) / dv, sp = ap ? (ap[k] - a0[k]) / (p0 * (f - 1)) : 0, st = (at[k] - a0[k]) / dt, alvo = sem[k].vplEnt;
+      eq[k] = { delta: com[k].vplEnt - sem[k].vplEnt, porExame: sv, porReal: sp, porTicket: st, volume: sv > 0 ? v0 + (alvo - a0[k]) / sv : null, preco: sp < 0 ? p0 + (alvo - a0[k]) / sp : null, ticket: st > 0 ? t0 + (alvo - a0[k]) / st : null };
+    });
+    return { on: on, com: com, sem: sem, eq: eq, v0: v0, p0: p0, t0: t0, cap: capacidadeRM(mc) };
   }
 
   /* ---------- Sensibilidade (tornado sobre o VPL do projeto, alternativa selecionada) ---------- */
@@ -390,6 +472,6 @@ var Engine = (function () {
   }
 
   return { num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
-    mesesAno: mesesAno, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
+    mesesAno: mesesAno, mesesDesde: mesesDesde, rmOn: rmOn, isRM: isRM, ativos: ativos, rmMensal: rmMensal, rmAno: rmAno, capacidadeRM: capacidadeRM, iniRM: iniRM, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;

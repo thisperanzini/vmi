@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-19 · HDA: ressonância magnética (Cignus 600) com cenário com e sem
+- Novo item nos pacotes B e C: VMI Cignus 600 sem hélio, 24 canais, R$ 5,2 mi (informado em 19/10/2026), CFI 04252454 (confirmar se cobre a versão sem hélio). Chave "Cenário da ressonância" (com RM / sem RM) em Premissas, Tese, Alternativas e Simulador; o motor calcula sempre os dois cenários.
+- RM como serviço novo e todo incremental (a EMG não faz RM): volume em regime (400 exames/mês de convênio e particular, a validar), rampa de 50% e 80% nos anos 1 e 2, ticket R$ 500, SUS opcional a R$ 499,88 (Agora Tem Especialistas), laudo 22,2%, contraste 8%, equipe R$ 38 mil, energia R$ 12 mil e outros R$ 5 mil por mês, obra de pré-instalação de R$ 1,0 mi no ano 0 com recurso próprio, operação a partir do mês 7 do ano 1. Manutenção Ouro a 8% a.a. do preço (R$ 34.667/mês), desde a instalação da RM.
+- Formas de pagar: C financia a RM no FINAME com o pacote (R$ 7,92 mi); B usa o mesmo preço em 60 parcelas à taxa implícita do HFS (R$ 130,3 mil/mês); D aluga a RM pelo proxy da tabela VMI da TC (aluguel ÷ preço; R$ 120,8 mil/mês em 48 m). Manutenção e aluguel por item, cada um desde a sua instalação; aluguel de equilíbrio generalizado.
+- Resultado (premissas salvas): VPL para o hospital sem RM B 9,65 / C 9,80 / D 9,77 mi; com RM B 6,38 / C 6,39 / D 5,80 mi. A RM sozinha, sem financiamento: VPL −R$ 3,40 mi, TIR 0,2%. Empata em C com 568 exames/mês, ou ticket de R$ 711, ou preço de R$ 1,80 mi. DSCR 2027/2028 em C: 1,15/1,45 sem RM, 1,09/1,37 com RM.
+- Alternativas: seção "Ressonância magnética" com quadro com × sem por forma de pagar, DRE mensal da RM, equilíbrio (volume, ticket, preço), grade volume × preço e RM ano a ano. Plano em números com a linha da RM; Crédito com o efeito na cobertura; sumário executivo e .xlsx (aba Ressonância) com os dois cenários; Simulador e tornado com alavancas da RM.
+- Modelos salvos antes da RM recebem o item uma única vez (marca equip.rm_v).
+
 ## 2026-10-18 (tarde) · HDA: honorário da S&S na compra (C)
 - Honorário de intermediação da S&S pago pelo hospital: 2% do valor financiado na alternativa C (R$ 54,4 mil), lançado no ano 0 com IOF e tarifa e no custo total do ranking. B e D sem honorário do hospital. Corrigida a unidade da premissa (fração na tela, % no motor).
 - Resultado: VPL para o hospital C R$ 9,80 mi, D R$ 9,77 mi, B R$ 9,65 mi. Sumário executivo e Método mostram o honorário.

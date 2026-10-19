@@ -1370,9 +1370,35 @@ var Engine = (function () {
   /* ---------- Meses cobrados num ano do projeto ----------
      A operação própria começa no mês (inicio_op_mes + 1) do ano 1. "livres" = meses de operação
      sem cobrança no início (garantia de fábrica para a manutenção; 0 para o aluguel). */
-  function mesesAno(m, t, livres) {
-    var desde = (num(m.fin.inicio_op_mes) || 0) + num(livres);
-    return Math.max(0, 12 * t - Math.max(12 * (t - 1), desde));
+  function mesesDesde(desde, t) { return Math.max(0, 12 * t - Math.max(12 * (t - 1), num(desde))); }
+  function mesesAno(m, t, livres) { return mesesDesde((num(m.fin.inicio_op_mes) || 0) + num(livres), t); }
+
+  /* ---------- Ressonância magnética (novo serviço, cenário "com RM") ----------
+     A EMG não faz RM: receita e custos da RM são inteiramente incrementais. O equipamento (item id "rm") fica nos
+     pacotes B e C e entra no cálculo só com rm.incluir = "sim"; a obra de pré-instalação sai no ano 0.          */
+  function rmOn(m) { return !(m.rm && m.rm.incluir === 'nao'); }
+  function isRM(it) { return !!it && (it.rm === true || it.id === 'rm'); }
+  function ativos(m, itens) { var on = rmOn(m); return (itens || []).filter(function (it) { return on || !isRM(it); }); }
+  function iniRM(m) { return m.rm && m.rm.inicio_mes != null && m.rm.inicio_mes !== '' ? num(m.rm.inicio_mes) : (num(m.fin.inicio_op_mes) || 0); }
+  function iniItem(m, it) { return isRM(it) ? iniRM(m) : (num(m.fin.inicio_op_mes) || 0); }
+  function rampaRM(m, t) { var r = m.rm || {}; return t <= 1 ? (r.rampa1 == null ? 1 : num(r.rampa1)) : t === 2 ? (r.rampa2 == null ? 1 : num(r.rampa2)) : 1; }
+  function obraRM(m) { return rmOn(m) ? num(m.rm && m.rm.obra) : 0; }
+  function capacidadeRM(m) { var r = m.rm || {}, cap = 2 * (num(r.horas_dia) || 12) * 26, ex = num(r.exames_mes) + num(r.exames_sus_mes); return { cap: cap, exames: ex, ocup: cap ? ex / cap : null }; }
+  /* DRE mensal da RM no ano-projeto t; rampa opcional (1 = regime) */
+  function rmMensal(m, t, rampa) {
+    var r = m.rm || {}, reaj = reajAno(m, t), k = rampa == null ? rampaRM(m, t) : rampa;
+    var exC = num(r.exames_mes) * k, exS = num(r.exames_sus_mes) * k;
+    var rb = (exC * num(r.ticket) + exS * num(r.ticket_sus)) * reaj, glosa = rb * num(m.base.glosa_pct), rl = rb - glosa;
+    var matmed = rl * num(r.matmed_pct), laudo = rl * num(r.rep_med_pct), mc = rl - matmed - laudo;
+    var equipe = num(r.equipe_mes) * reaj, energia = num(r.energia_mes) * reaj, outros = num(r.outros_mes) * reaj, fixos = equipe + energia + outros;
+    return { exames: exC + exS, exConv: exC, exSus: exS, rampa: k, rb: rb, glosa: glosa, rl: rl, matmed: matmed, laudo: laudo, mc: mc, equipe: equipe, energia: energia, outros: outros, fixos: fixos, ebitda: mc - fixos };
+  }
+  /* RM no ano-projeto t: valores mensais × meses de operação no ano */
+  function rmAno(m, t) {
+    if (!rmOn(m)) return null;
+    var d = rmMensal(m, t), meses = mesesDesde(iniRM(m), t), o = { meses: meses, rampa: d.rampa };
+    Object.keys(d).forEach(function (k) { if (k !== 'rampa') o[k] = d[k] * meses; });
+    return o;
   }
   /* Reajuste de preços e custos (receita, custos, manutenção, aluguel) no ano-projeto t, relativo ao ano 1.
      "ipca" (padrão): IPCA projetado do Focus, ano a ano — o mesmo cenário que corrige a TLP das parcelas do FINAME;
@@ -1399,15 +1425,16 @@ var Engine = (function () {
     var fat = fatorManut(m), tubo = num(m.propria.tubo);
     var porItem = (itens || []).map(function (it) {
       var q = num(it.qtd), prata = (num(it.m_prata) + (it.tubo ? tubo : 0)) * q, ouro = num(it.m_ouro) * q;
-      return { id: it.id, nome: it.nome, prata: prata * fat, ouro: ouro * fat, usado: (plano === 'prata' ? prata : ouro) * fat, tubo: it.tubo ? tubo * q * fat : 0 };
+      return { id: it.id, nome: it.nome, rm: isRM(it), ini: iniItem(m, it), prata: prata * fat, ouro: ouro * fat, usado: (plano === 'prata' ? prata : ouro) * fat, tubo: it.tubo ? tubo * q * fat : 0 };
     });
     var soma = function (k) { return porItem.reduce(function (s, x) { return s + x[k]; }, 0); };
     var mes = soma('usado');
     return { plano: plano, garantia: G, fator: fat, porItem: porItem, prata: soma('prata'), ouro: soma('ouro'), mes: mes,
-      ano: function (t) { return mes * mesesAno(m, t, G) * reajAno(m, t); } };
+      ano: function (t) { return porItem.reduce(function (s, x) { return s + x.usado * mesesDesde(x.ini + G, t); }, 0) * reajAno(m, t); } };
   }
   function opexManut(M) { return { tipo: 'manut', mes: M.mes, ano: M.ano }; }
-  function opexAluguel(m, mes) { return { tipo: 'aluguel', mes: mes, ano: function (t) { return mes * mesesAno(m, t, 0) * reajAno(m, t); } }; }
+  /* aluguel por linha, cada uma desde a sua instalação (a RM começa depois) */
+  function opexAluguel(m, L) { return { tipo: 'aluguel', mes: L.aluguel, ano: function (t) { return L.linhas.reduce(function (s, x) { return s + x.aluguel * mesesDesde(x.ini, t); }, 0) * reajAno(m, t); } }; }
 
   /* ---------- Locação de longo prazo (alternativa D) ----------
      Fonte por item:
@@ -1419,7 +1446,7 @@ var Engine = (function () {
        valor residual     = valor × (1 − queda anual do valor de mercado)^(prazo/12)
        aluguel            = parcela financeira ÷ (1 − tributos do locador) + manutenção Ouro média no prazo
      Prazo fora da tabela da VMI: interpolação linear entre os prazos cotados (extremos: o prazo mais próximo). */
-  var DEP_D = { tc: 'dep_tc', us: 'dep_us', rxp: 'dep_rx', rxdr: 'dep_rx', dr: 'dep_dr' };
+  var DEP_D = { tc: 'dep_tc', us: 'dep_us', rxp: 'dep_rx', rxdr: 'dep_rx', dr: 'dep_dr', rm: 'dep_rm' };
   function depD(m, it) { var d = m.altD || {}, k = DEP_D[it.id]; return k && d[k] != null ? num(d[k]) : 0.25; }
   function cotacaoVmi(it, n) {
     var t = it && it.loc_vmi; if (!t || typeof t !== 'object') return null;
@@ -1446,34 +1473,40 @@ var Engine = (function () {
     var v = Math.pow(1 + rm, -n), fa = rm > 0 ? rm / (1 - v) : 1 / n;
     var linhas = (itens || []).map(function (it) {
       var q = num(it.qtd), V = q * num(it.preco), dep = depD(m, it), rv = Math.pow(1 - dep, n / 12), RV = V * rv;
-      var cot = usaVmi ? cotacaoVmi(it, n) : null;
+      var cot = usaVmi ? cotacaoVmi(it, n) : null, proxy = false;
+      if (cot == null && usaVmi && it.loc_proxy) { /* sem cotação própria: mesma razão aluguel ÷ preço do item de referência (RM ← TC) */
+        var px = (m.equip.C || []).filter(function (x) { return x.id === it.loc_proxy; })[0], cp = px ? cotacaoVmi(px, n) : null;
+        if (cp != null && num(px.preco) > 0) { cot = cp / num(px.preco) * num(it.preco); proxy = true; }
+      }
       if (cot != null) {
         var base = cot * q, contrato = (plano === 'prata' ? num(it.m_prata) + (it.tubo ? tubo : 0) : num(it.m_ouro)) * q * fat;
         var manSep = manInclusa ? 0 : contrato * Math.max(0, n - G) / n;
         var finImpl = base * (1 - tr); /* teto: trata o aluguel inteiro como parcela financeira; com manutenção inclusa, a taxa efetiva é menor */
-        return { id: it.id, nome: it.nome, modelo: it.modelo, qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: 'vmi', cotUnit: cot, cotModelo: it.loc_vmi_modelo || it.modelo,
+        return { id: it.id, nome: it.nome, modelo: it.modelo, rm: isRM(it), ini: iniItem(m, it), qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: proxy ? 'proxy' : 'vmi', cotUnit: cot, cotModelo: it.loc_vmi_modelo || it.modelo,
           fin: base, trib: 0, man: manSep, manSep: manSep, manLoc: 0, aluguel: base + manSep, taxaImpl: taxaLocImplicita(V, RV, n, finImpl), pctMes: V ? (base + manSep) / V : null };
       }
       var fin = (V - RV * v) * fa, finBruto = tr < 1 ? fin / (1 - tr) : fin;
       var man = num(it.m_ouro) * q * fat * Math.max(0, n - G) / n;
-      return { id: it.id, nome: it.nome, modelo: it.modelo, qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: 'composicao', cotUnit: null, fin: finBruto, finLiq: fin, trib: finBruto - fin, man: man, manSep: 0, manLoc: man, aluguel: finBruto + man, taxaImpl: null, pctMes: V ? (finBruto + man) / V : null };
+      return { id: it.id, nome: it.nome, modelo: it.modelo, rm: isRM(it), ini: iniItem(m, it), qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: 'composicao', cotUnit: null, fin: finBruto, finLiq: fin, trib: finBruto - fin, man: man, manSep: 0, manLoc: man, aluguel: finBruto + man, taxaImpl: null, pctMes: V ? (finBruto + man) / V : null };
     });
     var s = function (k) { return linhas.reduce(function (a, x) { return a + (x[k] || 0); }, 0); };
-    var V = s('V'), vm = linhas.filter(function (x) { return x.fonte === 'vmi'; });
+    var V = s('V'), vm = linhas.filter(function (x) { return x.fonte === 'vmi'; }), pxs = linhas.filter(function (x) { return x.fonte === 'proxy'; }), cps = linhas.filter(function (x) { return x.fonte === 'composicao'; });
     return { n: n, taxaAno: ra, taxaMes: rm, linhas: linhas, V: V, RV: s('RV'), fin: s('fin'), trib: s('trib'), man: s('man'), manSep: s('manSep'), manLoc: s('manLoc'), aluguel: s('aluguel'), pctMes: V ? s('aluguel') / V : null,
       usaVmi: usaVmi, manInclusa: manInclusa, plano: plano, nVmi: vm.length, aluguelVmi: vm.reduce(function (a, x) { return a + x.fin; }, 0),
-      semCotacao: linhas.filter(function (x) { return x.fonte !== 'vmi'; }).map(function (x) { return x.nome + (x.modelo ? ' (' + x.modelo + ')' : ''); }) };
+      nProxy: pxs.length, aluguelProxy: pxs.reduce(function (a, x) { return a + x.fin; }, 0), proxyItens: pxs.map(function (x) { return x.nome + (x.modelo ? ' (' + x.modelo + ')' : ''); }),
+      aluguelComp: cps.reduce(function (a, x) { return a + x.aluguel; }, 0),
+      semCotacao: cps.map(function (x) { return x.nome + (x.modelo ? ' (' + x.modelo + ')' : ''); }) };
   }
   function altD(m) {
-    var n = Math.max(12, Math.round(num(m.altD && m.altD.prazo) || 48)), L = locacao(m, m.equip.C, n);
-    return { id: 'D', capex: 0, capexFin: 0, custosIni: 0, servico: {}, jurosAno: {}, rows: [], n: n, loc: L, parcela: 0, aluguel: L.aluguel, pagosPrazo: L.aluguel * n, opex: opexAluguel(m, L.aluguel) };
+    var n = Math.max(12, Math.round(num(m.altD && m.altD.prazo) || 48)), L = locacao(m, ativos(m, m.equip.C), n);
+    return { id: 'D', capex: 0, capexFin: 0, custosIni: 0, servico: {}, jurosAno: {}, rows: [], n: n, loc: L, parcela: 0, aluguel: L.aluguel, pagosPrazo: L.aluguel * n, opex: opexAluguel(m, L) };
   }
   /* Comprar o mesmo pacote (C) e usá-lo pelo mesmo prazo da locação, a valor presente pela taxa de desconto:
      entrada + parcelas até o mês n + saldo devedor no mês n + manutenção Ouro após a garantia − valor de mercado no mês n.
      A comparação é com a soma dos aluguéis no prazo, à mesma taxa (vantagem da locação = possuir − alugar).             */
   function custoPossuirC(m, C, n) {
     var k = Math.pow(1 + num(m.fin.desconto), 1 / 12) - 1, vp = function (x, j) { return x / Math.pow(1 + k, j); };
-    var G = num(m.manut && m.manut.garantia_meses), fat = fatorManut(m), itens = m.equip.C;
+    var G = num(m.manut && m.manut.garantia_meses), fat = fatorManut(m), itens = ativos(m, m.equip.C);
     var M = itens.reduce(function (s, it) { return s + num(it.m_ouro) * num(it.qtd); }, 0) * fat;
     var RV = itens.reduce(function (s, it) { return s + num(it.qtd) * num(it.preco) * Math.pow(1 - depD(m, it), n / 12); }, 0);
     var pvMan = 0, j; for (j = G + 1; j <= n; j++) pvMan += vp(M, j);
@@ -1490,7 +1523,7 @@ var Engine = (function () {
   function prazosD(m, C) {
     var k = Math.pow(1 + num(m.fin.desconto), 1 / 12) - 1;
     return PRAZOS_D.map(function (n) {
-      var L = locacao(m, m.equip.C, n), D = { id: 'D', capex: 0, capexFin: 0, custosIni: 0, servico: {}, n: n, loc: L, opex: opexAluguel(m, L.aluguel) };
+      var L = locacao(m, ativos(m, m.equip.C), n), D = { id: 'D', capex: 0, capexFin: 0, custosIni: 0, servico: {}, n: n, loc: L, opex: opexAluguel(m, L) };
       var fl = fluxo(m, D), pvAlug = 0; for (var j = 1; j <= n; j++) pvAlug += L.aluguel / Math.pow(1 + k, j);
       var cp = custoPossuirC(m, C, n), anu = pvAlug / (L.aluguel || 1);
       return { n: n, loc: L, aluguel: L.aluguel, pctMes: L.pctMes, totalPrazo: L.aluguel * n, pvAluguel: pvAlug, custoPossuir: cp.pv, custoVista: cp.pvVista, possuir: cp, vantagem: cp.pv - pvAlug, vantagemVista: cp.pvVista - pvAlug,
@@ -1499,10 +1532,12 @@ var Engine = (function () {
     });
   }
   /* Aluguel em que a locação empata com uma alternativa de compra no VPL para o hospital (horizonte inteiro).
-     O VPL da locação é linear no aluguel: VPL(a) = VPL(a0) − (a − a0) × F, F = Σ meses cobrados × reajuste ÷ (1+r)^t. */
+     Escalando todos os aluguéis pelo mesmo fator, o VPL da locação é linear no aluguel mensal:
+     VPL(a) = VPL(a0) − (a − a0) × F, F = Σ aluguel do ano ÷ a0 ÷ (1+r)^t (cada linha desde a sua instalação). */
   function equilibrioD(m, D, flD, flAlvo) {
     var r = num(m.fin.desconto), H = Math.max(1, Math.round(num(m.fin.horizonte))), F = 0;
-    for (var t = 1; t <= H; t++) F += mesesAno(m, t, 0) * reajAno(m, t) / Math.pow(1 + r, t);
+    if (!D.aluguel) return null;
+    for (var t = 1; t <= H; t++) F += D.opex.ano(t) / D.aluguel / Math.pow(1 + r, t);
     return F ? D.aluguel - (flAlvo.vplEnt - flD.vplEnt) / F : null;
   }
 
@@ -1518,7 +1553,7 @@ var Engine = (function () {
     var f = m.fin, H = Math.max(1, Math.round(num(f.horizonte))), c = m.cenario;
     var ini = num(f.inicio_op_mes) || 0; /* meses do ano 1 ainda com a EMG */
     var vida = num(f.vida_util) || 10;
-    var capex = alt.capex + num(m.propria.rispacs_impl);
+    var obra = obraRM(m), capex = alt.capex + num(m.propria.rispacs_impl) + obra;
     var dep = capex / vida;
     var anos = [], proj = [-capex], ent = [-(capex - (alt.capexFin || 0)) - (alt.custosIni || 0)];
     var acumP = -capex, acumE = ent[0];
@@ -1529,7 +1564,8 @@ var Engine = (function () {
       var ebitdaEmg = e.resultado * 12, ebitdaPropBase = p.resultado * 12;
       var incBase = (ebitdaPropBase - ebitdaEmg) * frac;
       var opexAno = alt.opex ? alt.opex.ano(t) : 0; /* manutenção pós-garantia (B, C) ou aluguel (D) */
-      var inc = incBase - opexAno;
+      var rmA = rmAno(m, t), rmE = rmA ? rmA.ebitda : 0; /* RM: serviço novo, todo incremental */
+      var inc = incBase + rmE - opexAno;
       var opReg = alt.opex ? (alt.opex.tipo === 'aluguel' ? { aluguel: alt.opex.mes } : { manut: alt.opex.mes }) : null;
       var depAno = t <= vida ? dep : 0;
       var ebit = inc - depAno;
@@ -1539,7 +1575,7 @@ var Engine = (function () {
       var serv = (alt.servico && alt.servico[t]) || 0;
       var fce = inc - trib - serv + residual;
       acumP += fcp; acumE += fce;
-      anos.push({ t: t, ano: num(f.ano_inicio) + t - 1, fator: fator, frac: frac, exames: p.exames * 12, rl: p.rl * 12, ebitdaEmg: ebitdaEmg, ebitdaPropBase: ebitdaPropBase, incBase: incBase, opex: opexAno, opexTipo: alt.opex ? alt.opex.tipo : null, inc: inc, dep: depAno, ebit: ebit, trib: trib, residual: residual, fcp: fcp, servico: serv, juros: (alt.jurosAno && alt.jurosAno[t]) || 0, fce: fce, acumP: acumP, acumE: acumE, dscr: serv > 0 ? inc / serv : null, desembolso: opexAno + serv, dre: { emg: e, prop: dreMensal(m, fator, 'propria', t, opReg) } });
+      anos.push({ t: t, ano: num(f.ano_inicio) + t - 1, fator: fator, frac: frac, exames: p.exames * 12, rl: p.rl * 12, ebitdaEmg: ebitdaEmg, ebitdaPropBase: ebitdaPropBase, incBase: incBase, rm: rmA, rmEbitda: rmE, opex: opexAno, opexTipo: alt.opex ? alt.opex.tipo : null, inc: inc, dep: depAno, ebit: ebit, trib: trib, residual: residual, fcp: fcp, servico: serv, juros: (alt.jurosAno && alt.jurosAno[t]) || 0, fce: fce, acumP: acumP, acumE: acumE, dscr: serv > 0 ? inc / serv : null, desembolso: opexAno + serv, dre: { emg: e, prop: dreMensal(m, fator, 'propria', t, opReg) } });
       proj.push(fcp); ent.push(fce);
     }
     var r = num(f.desconto);
@@ -1547,7 +1583,7 @@ var Engine = (function () {
     var pagos = 0; Object.keys(alt.servico || {}).forEach(function (k) { pagos += alt.servico[k]; });
     var opexTot = anos.reduce(function (s, a) { return s + a.opex; }, 0);
     return { opexTot: opexTot, desembolsoTot: opexTot + pagos + (capex - (alt.capexFin || 0)) + (alt.custosIni || 0),
-      anos: anos, capex: capex, proj: proj, ent: ent,
+      anos: anos, capex: capex, obra: obra, proj: proj, ent: ent,
       vpl: npv(proj, r), tir: irr(proj), pb: payback(proj, 0), pbDesc: payback(proj, r),
       vplEnt: npv(ent, r), tirEnt: irr(ent), pbEnt: payback(ent, 0), acumEnt: acumE, acumProj: acumP,
       ir: (function () { var vp = 0; for (var i = 1; i < proj.length; i++) vp += proj[i] / Math.pow(1 + r, i); return capex ? vp / capex : null; })(),
@@ -1557,10 +1593,17 @@ var Engine = (function () {
 
   /* ---------- Alternativa B: parcelas fixas informadas pelos fornecedores (HFS/GE) ---------- */
   function altB(m) {
-    var itens = m.equip.B, cx = capexDe(itens), rows = [], anoIni = num(m.fin.ano_inicio), mIni = num(m.fin.inicio_op_mes) || 0;
+    var todos = m.equip.B || [], rows = [], anoIni = num(m.fin.ano_inicio), mIni = num(m.fin.inicio_op_mes) || 0;
     var n = num(m.equip.B_n) || 60;
-    /* parcela constante por item; taxa implícita por item para exibição */
-    var implic = itens.map(function (it) { var P = num(it.preco), pm = num(it.parcela), nn = num(it.n) || n; var i = taxaImplicita(P, pm, nn); return { id: it.id, taxaMes: i, taxaAno: i == null ? null : (Math.pow(1 + i, 12) - 1) * 100, totalPago: pm * nn * num(it.qtd), alerta: pm * nn < P ? 'Parcelas somam menos que o valor à vista' : (i === 0 ? 'Sem juros declarados' : '') }; });
+    /* RM sem proposta GE: parcela calculada à taxa implícita dos demais itens financiados do pacote (HFS e fornecedores) */
+    var base0 = todos.filter(function (it) { return !isRM(it) && it.fin !== false; }), cx0 = capexDe(base0), iB = taxaImplicita(cx0.financiavel, cx0.parcelaMes, n);
+    var efetivos = todos.map(function (it) {
+      if (!isRM(it) || (it.parcela_auto === false && num(it.parcela) > 0)) return it;
+      var c = clone(it), nn = num(it.n) || n, P = num(it.preco); c.parcela = iB ? P * iB / (1 - Math.pow(1 + iB, -nn)) : P / nn; c.parcelaAuto = true; return c;
+    });
+    var itens = ativos(m, efetivos), cx = capexDe(itens);
+    /* parcela constante por item; taxa implícita por item para exibição (lista completa, na ordem da tabela) */
+    var implic = efetivos.map(function (it) { var P = num(it.preco), pm = num(it.parcela), nn = num(it.n) || n; var i = taxaImplicita(P, pm, nn); return { id: it.id, taxaMes: i, taxaAno: i == null ? null : (Math.pow(1 + i, 12) - 1) * 100, totalPago: pm * nn * num(it.qtd), parcelaAuto: it.parcelaAuto ? pm : null, fora: isRM(it) && !rmOn(m), alerta: pm * nn < P ? 'Parcelas somam menos que o valor à vista' : (i === 0 ? 'Sem juros declarados' : '') }; });
     for (var t = 1; t <= n; t++) { var mm = mIni + t; var y = anoIni + Math.floor((mm - 1) / 12); rows.push({ t: t, y: y, m: ((mm - 1) % 12) + 1, parcela: cx.parcelaMes, juros: 0, amort: 0, saldo: null }); }
     var juros = cx.parcelaMes * n - cx.financiavel;
     return { id: 'B', capex: cx.total, capexFin: cx.financiavel, custosIni: 0, servico: servicoPorAnoProj(rows, anoIni), rows: rows, parcela: cx.parcelaMes, n: n, pagos: cx.parcelaMes * n, juros: juros, implic: implic, cetAno: (function () { var i = taxaImplicita(cx.financiavel, cx.parcelaMes, n); return i == null ? null : (Math.pow(1 + i, 12) - 1) * 100; })() };
@@ -1576,7 +1619,7 @@ var Engine = (function () {
 
   /* ---------- Alternativa C: pacote VMI financiado pelo Motor (ferramenta Financiamento VMI) ---------- */
   function altC(m, Motor, BASE) {
-    var itens = m.equip.C, cx = capexDe(itens), ac = m.altC, cl = m.cliente;
+    var itens = ativos(m, m.equip.C), cx = capexDe(itens), ac = m.altC, cl = m.cliente;
     var cfiInfo = (function () { var com = 0, prev = 0, sem = 0, semItens = [], prevItens = []; itens.forEach(function (i) { if (i.fin === false) return; var v = num(i.qtd) * num(i.preco), c = String(i.cfi || '').trim(); if (/^\d+$/.test(c)) com += v; else if (c) { prev += v; prevItens.push(i.nome + ' (' + c + ')'); } else { sem += v; semItens.push(i.nome); } }); return { com: com, prev: prev, sem: sem, semItens: semItens, prevItens: prevItens, todos: sem === 0 && com + prev > 0 }; })();
     var caso = { cliente: { natureza: cl.natureza, uf: cl.uf, rob: num(cl.rob) || null, porte_decl: cl.porte_decl || null, sus_creditos_12m: num(cl.sus_creditos_12m) || null, sus_mac_outros: cl.sus_mac_outros || '', sus_mac_parcelas: num(cl.sus_mac_parcelas) },
       operacao: { valor_equip: cx.financiavel, valor_obra: num(ac.valor_obra), valor_financiar: ac.valor_financiar === '' || ac.valor_financiar == null ? null : num(ac.valor_financiar), prazo: num(ac.prazo) || 120, carencia: num(ac.carencia) || 0, inicio: ac.inicio || (num(m.fin.ano_inicio) + '-03'), sistema: ac.sistema || 'SAC', carModo: ac.carModo || 'pagos', equipamento: { cfi: cfiInfo.todos ? (cfiInfo.prev > 0 ? 'previsto' : 'informado') : (num(ac.cfi_presumido) ? 'presumido' : ''), cfi_previsao: cfiInfo.prev > 0 ? 'dez/2026' : null, origem: 'nacional' } },
@@ -1649,24 +1692,63 @@ var Engine = (function () {
   function calcular(m, Motor, BASE, opts) {
     IPCA_PATH = (BASE && BASE.macro && BASE.macro.focus && BASE.macro.focus.ipca) || null;
     var B = altB(m), C = altC(m, Motor, BASE);
-    B.manut = manutPacote(m, m.equip.B); B.opex = opexManut(B.manut);
-    C.manut = manutPacote(m, m.equip.C); C.opex = opexManut(C.manut);
+    B.manut = manutPacote(m, ativos(m, m.equip.B)); B.opex = opexManut(B.manut);
+    C.manut = manutPacote(m, ativos(m, m.equip.C)); C.opex = opexManut(C.manut);
     var D = altD(m);
     var flB = fluxo(m, B), flC = fluxo(m, C), flD = fluxo(m, D);
     var a = m.fin.alternativa, sel = a === 'B' ? B : a === 'D' ? D : C, flSel = a === 'B' ? flB : a === 'D' ? flD : flC;
-    var opReg = sel.opex.tipo === 'aluguel' ? { aluguel: sel.opex.mes } : { manut: sel.opex.mes };
+    /* DRE da imagem (base e cenário) sem a parte da RM no aluguel ou na manutenção: a RM tem DRE própria (out.rm) */
+    var opRM = function (alt) { return alt.opex.tipo === 'aluguel' ? alt.loc.linhas.reduce(function (s, x) { return s + (x.rm ? x.aluguel : 0); }, 0) : alt.manut.porItem.reduce(function (s, x) { return s + (x.rm ? x.usado : 0); }, 0); };
+    var opRMsel = opRM(sel), opReg = sel.opex.tipo === 'aluguel' ? { aluguel: sel.opex.mes - opRMsel } : { manut: sel.opex.mes - opRMsel };
     var base = { emg: dreMensal(m, 1, 'emg', 2), prop: dreMensal(m, 1, 'propria', 2, opReg) };
     var fator = 1 + num(m.cenario.volume_var);
     var cen = { emg: dreMensal(m, fator, 'emg', 2), prop: dreMensal(m, fator, 'propria', 2, opReg), propBase: dreMensal(m, fator, 'propria', 2) };
     var ent = entidade(m, sel, flSel);
+    var rmReg = rmOn(m) ? rmMensal(m, 2, 1) : null; /* RM em regime, preços do ano 2 (mesma base de cen) */
     var out = { B: B, C: C, D: D, flB: flB, flC: flC, flD: flD, base: base, cen: cen, sel: sel, flSel: flSel, ent: ent, tc: capacidadeTC(m),
-      ganhoMes: cen.prop.resultado - cen.emg.resultado, ganhoMesComParcela: cen.prop.resultado - cen.emg.resultado - (sel.parcela || 0) };
+      rm: { on: rmOn(m), reg: rmReg, cap: capacidadeRM(m), obra: obraRM(m), ini: iniRM(m), opex: { B: opRM(B), C: opRM(C), D: opRM(D) }, opexSel: opRMsel },
+      ganhoMes: cen.prop.resultado - cen.emg.resultado, ganhoMesComParcela: cen.prop.resultado - cen.emg.resultado + (rmReg ? rmReg.ebitda - opRMsel : 0) - (sel.parcela || 0) };
     if (!(opts && opts.leve)) {
       out.entAlt = { B: entidade(m, B, flB), C: entidade(m, C, flC), D: entidade(m, D, flD) };
       out.prazosD = prazosD(m, C);
       D.equilibrioC = equilibrioD(m, D, flD, flC); D.equilibrioB = equilibrioD(m, D, flD, flB);
+      out.rm.isolada = rmIsolada(m, C);
+      out.cenRM = cenariosRM(m, Motor, BASE, out);
     }
     return out;
+  }
+
+  /* ---------- RM isolada: só o equipamento, a obra, a operação e a manutenção da RM, sem financiamento (preço do pacote C) ---------- */
+  function rmIsolada(m, C) {
+    if (!rmOn(m)) return null;
+    var it = ativos(m, m.equip.C).filter(isRM)[0]; if (!it) return null;
+    var H = Math.max(1, Math.round(num(m.fin.horizonte))), r = num(m.fin.desconto), mp = manutPacote(m, [it]), inv = num(it.qtd) * num(it.preco) + obraRM(m), fl = [-inv], anos = [];
+    for (var t = 1; t <= H; t++) { var a = rmAno(m, t), man = mp.ano(t); anos.push({ t: t, ano: num(m.fin.ano_inicio) + t - 1, rm: a, manut: man, fc: a.ebitda - man }); fl.push(a.ebitda - man); }
+    return { inv: inv, equip: num(it.qtd) * num(it.preco), manutMes: mp.mes, anos: anos, fl: fl, vpl: npv(fl, r), tir: irr(fl), pb: payback(fl, 0) };
+  }
+  /* ---------- Cenários com e sem RM, lado a lado, e o volume e o preço em que a RM empata ---------- */
+  function resumoAlt(m, alt, fl) {
+    var en = entidade(m, alt, fl), a3 = fl.anos[Math.min(2, fl.anos.length - 1)];
+    return { capex: fl.capex, fin: alt.capexFin || 0, ano0: -fl.ent[0], vpl: fl.vpl, vplEnt: fl.vplEnt, acumEnt: fl.acumEnt, comp1: (fl.anos[0].servico + fl.anos[0].opex) / 12, comp3: (a3.servico + a3.opex) / 12,
+      dscr: en.linhas.slice(0, 3).map(function (l) { return { ano: l.ano, v: l.dscrSem, tdc: l.dscrCom }; }), dlEbitda: en.dlEbitdaProj, inc3: a3.inc };
+  }
+  function cenariosRM(m, Motor, BASE, out) {
+    var on = rmOn(m), m2 = clone(m); m2.rm = m2.rm || {}; m2.rm.incluir = on ? 'nao' : 'sim';
+    var r2 = calcular(m2, Motor, BASE, { leve: true }), mc = on ? m : m2;
+    var cur = { B: resumoAlt(m, out.B, out.flB), C: resumoAlt(m, out.C, out.flC), D: resumoAlt(m, out.D, out.flD) };
+    var alt = { B: resumoAlt(m2, r2.B, r2.flB), C: resumoAlt(m2, r2.C, r2.flC), D: resumoAlt(m2, r2.D, r2.flD) };
+    var com = on ? cur : alt, sem = on ? alt : cur, ids = ['B', 'C', 'D'];
+    var vpls = function (mm) { var r = calcular(mm, Motor, BASE, { leve: true }); return { B: r.flB.vplEnt, C: r.flC.vplEnt, D: r.flD.vplEnt }; };
+    /* VPL para o hospital é linear no volume e no preço da RM (sem tributos): dois pontos bastam */
+    var v0 = num(mc.rm.exames_mes), dv = 100, mv = clone(mc); mv.rm.exames_mes = v0 + dv; var a0 = { B: com.B.vplEnt, C: com.C.vplEnt, D: com.D.vplEnt }, av = vpls(mv);
+    var itC = (mc.equip.C || []).filter(isRM)[0], p0 = itC ? num(itC.preco) : 0, f = 0.9, mp = clone(mc);
+    ['B', 'C'].forEach(function (k) { (mp.equip[k] || []).forEach(function (it) { if (isRM(it)) it.preco = num(it.preco) * f; }); });
+    var ap = p0 ? vpls(mp) : null, t0 = num(mc.rm.ticket), dt = 100, mt = clone(mc); mt.rm.ticket = t0 + dt; var at = vpls(mt), eq = {};
+    ids.forEach(function (k) {
+      var sv = (av[k] - a0[k]) / dv, sp = ap ? (ap[k] - a0[k]) / (p0 * (f - 1)) : 0, st = (at[k] - a0[k]) / dt, alvo = sem[k].vplEnt;
+      eq[k] = { delta: com[k].vplEnt - sem[k].vplEnt, porExame: sv, porReal: sp, porTicket: st, volume: sv > 0 ? v0 + (alvo - a0[k]) / sv : null, preco: sp < 0 ? p0 + (alvo - a0[k]) / sp : null, ticket: st > 0 ? t0 + (alvo - a0[k]) / st : null };
+    });
+    return { on: on, com: com, sem: sem, eq: eq, v0: v0, p0: p0, t0: t0, cap: capacidadeRM(mc) };
   }
 
   /* ---------- Sensibilidade (tornado sobre o VPL do projeto, alternativa selecionada) ---------- */
@@ -1681,7 +1763,7 @@ var Engine = (function () {
   }
 
   return { num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
-    mesesAno: mesesAno, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
+    mesesAno: mesesAno, mesesDesde: mesesDesde, rmOn: rmOn, isRM: isRM, ativos: ativos, rmMensal: rmMensal, rmAno: rmAno, capacidadeRM: capacidadeRM, iniRM: iniRM, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
 </script>
@@ -1734,6 +1816,23 @@ var SCHEMA = [
   { id: 'propria.tubo', bloco: 'Manutenção pós-garantia (B e C)', label: 'Provisão do tubo da TC (só no plano Prata)', un: 'R$/mês', fmt: 'num', def: 7270.83, origem: 'controladoria', fonte: 'Tubo de R$ 209 mil a cada 2–3 anos (Santa Casa de Birigui, 2020; Informações - Validar). No Ouro o tubo está coberto.' },
   { id: 'propria.manut_fator', bloco: 'Manutenção pós-garantia (B e C)', label: 'Fator sobre todos os contratos (sensibilidade)', un: '×', fmt: 'num', def: 1, origem: 'ss', fonte: '1,0 = valores por item. Aplica-se também à manutenção embutida no aluguel da locação (D).' },
 
+  /* ---- Ressonância magnética (novo serviço) ---- */
+  { id: 'rm.incluir', bloco: 'Ressonância magnética (novo serviço)', label: 'Cenário da ressonância', un: '', fmt: 'txt', def: 'sim', origem: 'ss', fonte: 'Pedido de 19/10/2026: incluir a VMI Cignus 600 sem hélio, 24 canais, por R$ 5,2 mi, e manter os dois cenários. Com RM, o equipamento entra nas três formas de pagar: compra financiada pela linha de fomento (C), compra nas condições do HFS (B, sem cotação GE de RM: mesmo preço) e locação (D, pelo proxy da tabela VMI da TC). A RM é um serviço novo: a EMG não faz RM, então toda a receita e todo o custo da RM são incrementais. A aba Alternativas compara com e sem RM.', ui: { choices: [['sim', 'Com RM (Cignus 600)'], ['nao', 'Sem RM (só a internalização)']] } },
+  { id: 'rm.inicio_mes', bloco: 'Ressonância magnética (novo serviço)', label: 'Meses do ano 1 sem a RM (obra e instalação)', un: 'meses', fmt: 'int', def: 6, origem: 'ss', fonte: 'A RM pede obra de pré-instalação (gaiola de RF, climatização de precisão, elétrica dedicada), de 75 a 90 dias no edital da FAS Niterói (2026), mais entrega e comissionamento: operação a partir de julho do ano 1. Garantia, manutenção e aluguel da RM contam a partir da instalação.' },
+  { id: 'rm.exames_mes', bloco: 'Ressonância magnética (novo serviço)', label: 'Exames de RM por mês em regime (convênio e particular)', un: 'exames/mês', fmt: 'int', def: 400, origem: 'pendente', fonte: 'Hipótese S&S, a validar com o Jaime: quantas RMs o HDA pede hoje para fora (PS, internação, ambulatório) e quantas os médicos do corpo clínico trariam. Capacidade de uma 1,5T a 2 exames/h, 12 h, 26 dias: 624/mês (SMS Joinville: 30 min por exame). Na saúde suplementar o uso de RM é parecido com o de TC (207 e 190 exames por mil beneficiários/ano, ANS 2024); o HDA faz 1.400 TC/mês.' },
+  { id: 'rm.exames_sus_mes', bloco: 'Ressonância magnética (novo serviço)', label: 'Exames de RM por mês pelo SUS', un: 'exames/mês', fmt: 'int', def: 0, origem: 'pendente', fonte: 'Fora do caso base, como o restante do SUS. Com adesão ao Agora Tem Especialistas, a RM pelo SUS paga R$ 499,88 (Portaria SAES/MS 4.282/2026), perto do convênio: é o caminho para ocupar a capacidade ociosa. Exige contratualização com o gestor do SUS.' },
+  { id: 'rm.rampa1', bloco: 'Ressonância magnética (novo serviço)', label: 'Volume da RM no ano 1 (% do regime)', un: '%', fmt: 'pct', def: 0.5, origem: 'ss', fonte: 'Serviço novo: os pedidos migram aos poucos (corpo clínico, convênios credenciando a RM, agenda). 50% do regime no ano 1 (nos meses de operação), 80% no ano 2, regime a partir do ano 3.' },
+  { id: 'rm.rampa2', bloco: 'Ressonância magnética (novo serviço)', label: 'Volume da RM no ano 2 (% do regime)', un: '%', fmt: 'pct', def: 0.8, origem: 'ss', fonte: 'Ver acima.' },
+  { id: 'rm.ticket', bloco: 'Ressonância magnética (novo serviço)', label: 'Ticket médio da RM (convênio e particular)', un: 'R$/exame', fmt: 'num', def: 500, origem: 'pendente', fonte: 'Hipótese S&S, a validar com o faturamento (tabela dos três maiores convênios do HDA para RM com e sem contraste). Referências: SUS R$ 268,75 (SIGTAP) e R$ 499,88 com o Agora Tem Especialistas; tabela particular de exames publicada no portal da Unimed (sem data) entre R$ 550 e R$ 1.000 por exame.' },
+  { id: 'rm.ticket_sus', bloco: 'Ressonância magnética (novo serviço)', label: 'Valor SUS por exame de RM', un: 'R$/exame', fmt: 'num', def: 499.88, origem: 'fonte', fonte: 'Portaria SAES/MS 4.282/2026 (Agora Tem Especialistas), para quem adere. Sem adesão, SIGTAP R$ 268,75 (o mesmo valor pago pela SESA-ES no credenciamento de RM).' },
+  { id: 'rm.rep_med_pct', bloco: 'Ressonância magnética (novo serviço)', label: 'Laudo médico da RM', un: '% da receita líquida', fmt: 'pct', def: 820718.2868 / 3697445.49, origem: 'ss', fonte: 'Mesmo percentual da equipe médica atual (22,2%). A validar: radiologistas com subespecialidade (neuro, musculoesquelético) podem cobrar mais; telerradiologia, menos.' },
+  { id: 'rm.matmed_pct', bloco: 'Ressonância magnética (novo serviço)', label: 'Contraste e material da RM', un: '% da receita líquida', fmt: 'pct', def: 0.08, origem: 'ss', fonte: 'Gadolínio em parte dos exames e material descartável; acima dos 5,2% da imagem atual. A validar com a farmácia e o faturamento (parte do contraste é cobrada do convênio).' },
+  { id: 'rm.equipe_mes', bloco: 'Ressonância magnética (novo serviço)', label: 'Equipe técnica e de enfermagem da RM', un: 'R$/mês', fmt: 'num', def: 38000, origem: 'pendente', fonte: 'Hipótese: 4 tecnólogos ou técnicos em escala para 12 h × 6 dias, 1 técnico de enfermagem para o contraste e apoio de agenda, com encargos. Hoje a equipe da imagem custa R$ 184,6 mil/mês ao hospital; confirmar com o Jaime se a escala atual absorve parte.' },
+  { id: 'rm.energia_mes', bloco: 'Ressonância magnética (novo serviço)', label: 'Energia e climatização da RM', un: 'R$/mês', fmt: 'num', def: 12000, origem: 'ss', fonte: 'Uma RM consome cerca de 134 MWh por ano (Heye et al., Radiology 2020), 11,2 MWh/mês: a R$ 0,85/kWh, R$ 9,5 mil/mês, mais a climatização da sala técnica. "Sem hélio" elimina as recargas de hélio, mas o compressor do magneto fica ligado 24 h.' },
+  { id: 'rm.outros_mes', bloco: 'Ressonância magnética (novo serviço)', label: 'Outros custos fixos da RM', un: 'R$/mês', fmt: 'num', def: 5000, origem: 'ss', fonte: 'Bobinas e acessórios fora do contrato, seguro do equipamento, lavanderia, agendamento.' },
+  { id: 'rm.obra', bloco: 'Ressonância magnética (novo serviço)', label: 'Obra de pré-instalação da RM (ano 0, recurso próprio)', un: 'R$', fmt: 'num', def: 1000000, origem: 'pendente', fonte: 'Gaiola de RF, piso, climatização de precisão e chiller, elétrica dedicada e nobreak. Referência: obra de pré-instalação de RM e TC da FAS Niterói (2026, ~200 m²), com blindagem de R$ 434 mil e instalações elétricas de R$ 1,28 mi. Pedir à VMI o projeto de pré-instalação e confirmar o que entra no preço. O FINAME não financia obra: no modelo ela sai do caixa no ano 0 nas três formas de pagar; pode ir a uma linha de obras (BNDES Automático, até 240 meses).' },
+  { id: 'rm.horas_dia', bloco: 'Ressonância magnética (novo serviço)', label: 'Horas de operação da RM por dia', un: 'h', fmt: 'num', def: 12, origem: 'ss', fonte: 'Define só a capacidade mostrada (2 exames/h × horas × 26 dias). Com PS 24 h, a agenda pode ser estendida se a demanda passar de 624/mês.' },
+
   /* ---- Cenário ---- */
   { id: 'cenario.volume_var', bloco: 'Cenário de volume', label: 'Variação de volume vs. base', un: '%', fmt: 'pct', def: 0, origem: 'controladoria', fonte: 'Cenário 1 = volume atual; cenário 2 da Controladoria = +30%. Jaime projeta +27,3% para 2027.' },
   { id: 'cenario.cresc_aa', bloco: 'Cenário de volume', label: 'Crescimento anual do volume a partir do ano 2', un: '% a.a.', fmt: 'pct', def: 0, origem: 'controladoria', fonte: 'Viabilidade!C24: volume constante.' },
@@ -1770,6 +1869,7 @@ var SCHEMA = [
   { id: 'altD.dep_us', bloco: 'Locação do pacote VMI (D)', label: 'Queda anual do valor de mercado: ultrassom', un: '% a.a.', fmt: 'pct', def: 0.30, origem: 'ss', fonte: 'Obsolescência mais rápida: 17% do valor em 5 anos.' },
   { id: 'altD.dep_rx', bloco: 'Locação do pacote VMI (D)', label: 'Queda anual do valor de mercado: RX móvel', un: '% a.a.', fmt: 'pct', def: 0.20, origem: 'ss', fonte: 'Tecnologia mais estável: 33% do valor em 5 anos.' },
   { id: 'altD.dep_dr', bloco: 'Locação do pacote VMI (D)', label: 'Queda anual do valor de mercado: placa DR', un: '% a.a.', fmt: 'pct', def: 0.30, origem: 'ss', fonte: 'Detector portátil: desgaste e risco de queda; 17% do valor em 5 anos.' },
+  { id: 'altD.dep_rm', bloco: 'Locação do pacote VMI (D)', label: 'Queda anual do valor de mercado: RM', un: '% a.a.', fmt: 'pct', def: 0.15, origem: 'ss', fonte: 'RM envelhece mais devagar que TC: 44% do valor em 5 anos. Entra no residual da compra no prazo e na composição de custos, se a cotação proxy for desligada.' },
 
   /* ---- Cliente (crédito) ---- */
   { id: 'cliente.natureza', bloco: 'Tomador (ABENSENA)', label: 'Natureza jurídica', un: '', fmt: 'txt', def: 'filantropica', origem: 'deck', fonte: 'Associação Beneficente Nossa Senhora de Nazaré (filantrópica).', ui: { choices: [['filantropica', 'Filantrópica'], ['privada', 'Privada com fins lucrativos']] } },
@@ -1811,19 +1911,31 @@ var EMPRESTIMOS_PADRAO = [
 
 /* Equipamentos: pacote B (proposta do Jaime, GE/CDK, HFS 60x) e pacote C (preços VMI de 15/10/2026).
    m_prata / m_ouro: contrato de manutenção pós-garantia por unidade, R$/mês; tubo: soma a provisão de tubo no Prata. */
+/* Ressonância (pedido de 19/10/2026): mesmo equipamento e preço nas três formas de pagar; entra só no cenário "com RM" (rm.incluir).
+   Manutenção sem cotação: Ouro a 8% a.a. do preço; Prata a 59,3% do Ouro (razão média das cotações VMI). */
+var RM_PRECO = 5200000, RM_OURO = Math.round(RM_PRECO * 0.08 / 12), RM_PRATA = Math.round(RM_OURO * 0.593);
+var RM_C = { id: 'rm', rm: true, nome: 'Ressonância magnética 1,5T sem hélio, 24 canais', modelo: 'VMI Cignus 600', qtd: 1, preco: RM_PRECO, cfi: '04252454', fin: true,
+  loc_proxy: 'tc', loc_vmi_modelo: 'Proxy: % do preço da TC Pulsar', loc_vmi_fonte: 'Sem cotação de locação da RM: aluguel = preço da RM × (aluguel VMI da TC Pulsar ÷ preço da TC) no mesmo prazo (48 meses: 2,32% do preço ao mês, manutenção inclusa). Tende a superestimar, porque a RM perde valor mais devagar e a manutenção pesa menos em proporção ao preço. Pedir a cotação à VMI.',
+  obs: 'Preço informado em 19/10/2026: R$ 5,2 mi. CFI 04252454 (Cignus 600 1,5T, 24 canais, válido até 27/06/2029): confirmar se o código cobre a versão sem hélio (600F). Referências de preço: R$ 4,33 mi no contrato FINAME da CEMAN; R$ 4,89 a 4,93 mi nos pregões de Goiás (2024–25); ~R$ 5,59 mi com instalação no contrato GE do Ministério da Saúde (2026).',
+  m_prata: RM_PRATA, m_ouro: RM_OURO, m_fonte: 'Sem cotação VMI. Ouro: 8% a.a. do preço (premissa S&S: cobertura total, com bobinas e cabeça fria; sem hélio, não há recarga). Prata: 59,3% do Ouro (razão média das cotações VMI). Pedir a cotação à VMI.' };
+var RM_B = { id: 'rm', rm: true, nome: 'Ressonância magnética 1,5T', modelo: 'Sem cotação GE: mesmo preço da Cignus 600', qtd: 1, preco: RM_PRECO, parcela: null, parcela_auto: true, n: 60, fin: true,
+  obs: 'Sem proposta GE de RM: mesmo preço da VMI, em 60 parcelas à taxa implícita dos demais itens do HFS (parcela calculada). Numa proposta GE real, o preço viria em dólar.',
+  m_prata: RM_PRATA, m_ouro: RM_OURO, m_fonte: 'Mesma referência do pacote C (Ouro a 8% a.a. do preço).' };
 var EQUIP_B_PADRAO = [
   { id: 'tc', nome: 'Tomografia computadorizada 64/128 canais, Dual Energy', modelo: 'GE (modelo não informado)', qtd: 1, preco: 1964024.80, parcela: 50524.32, n: 60, fin: true, obs: 'Preço em USD convertido a 5,1604; financiamento direto Banco GEHC (HFS)', m_prata: 11456.81, m_ouro: 17000, tubo: true, m_fonte: 'Prata: 7% a.a. do valor (Controladoria) + provisão de tubo. Ouro: plano GE citado pelo Jaime, R$ 17 mil/mês com peças (contratos públicos de TC com tubo: mediana R$ 16.775/mês).' },
   { id: 'us', nome: 'Ultrassom', modelo: 'GE LOGIQ e (c/ cardio)', qtd: 2, preco: 110000, parcela: 2867.03, n: 60, fin: true, obs: 'R$ 220 mil o par; parcela R$ 5.734,06', m_prata: 1588.62, m_ouro: 2677, m_fonte: 'Ouro: manutenção de ultrassom GE com peças, EBSERH/UFBA, R$ 32.124/ano (PNCP, 2025). Prata: 59,3% do Ouro (razão média das cotações VMI).' },
   { id: 'rxp', nome: 'Raio X portátil', modelo: 'CDK Mascote Dynamic', qtd: 1, preco: 150000, parcela: 2500, n: 60, fin: true, obs: '"Sem juros" em 60x: validar', m_prata: 3900, m_ouro: 6800, m_fonte: 'Proxy: cotação VMI do Aquila S (média SP, 15/10/2026), mesma classe; sem cotação CDK.' },
   { id: 'rxdr', nome: 'Raio X portátil com placa DR', modelo: 'Não informado', qtd: 1, preco: 490000, parcela: 13079, n: 60, fin: true, obs: 'Proposta estratégica cita R$ 500 mil', m_prata: 4600, m_ouro: 7500, m_fonte: 'Proxy: cotação VMI do Aquila D (média SP, 15/10/2026), mesma classe; modelo não informado.' },
-  { id: 'dr', nome: 'Placa DR avulsa', modelo: 'Não informado', qtd: 1, preco: 110000, parcela: 1700, n: 60, fin: true, obs: '60 × R$ 1.700 = R$ 102 mil < R$ 110 mil à vista: erro na proposta', m_prata: 0, m_ouro: 700, m_fonte: 'Ouro: diferença entre os contratos VMI do Aquila D e do Aquila S (o detector digital). O Prata não cobre sistemas de imagem.' }
+  { id: 'dr', nome: 'Placa DR avulsa', modelo: 'Não informado', qtd: 1, preco: 110000, parcela: 1700, n: 60, fin: true, obs: '60 × R$ 1.700 = R$ 102 mil < R$ 110 mil à vista: erro na proposta', m_prata: 0, m_ouro: 700, m_fonte: 'Ouro: diferença entre os contratos VMI do Aquila D e do Aquila S (o detector digital). O Prata não cobre sistemas de imagem.' },
+  RM_B
 ];
 var EQUIP_C_PADRAO = [
   { id: 'tc', loc_vmi: { 12: 111245, 24: 67236, 36: 52597, 48: 45299, 60: 42362, 72: 42216, 84: 42112 }, loc_vmi_modelo: 'Tomografia (Pulsar)', loc_vmi_fonte: 'Cotação de locação VMI, 16/10/2026 (R$/mês por unidade)', nome: 'Tomografia computadorizada 64 canais / 128 cortes', modelo: 'VMI Pulsar 128/64', qtd: 1, preco: 1950000, cfi: 'previsto dez/2026', fin: true, obs: 'Preço VMI de 15/10/2026. CFI PREVISTO: não consta no Catálogo CFI em 14/10/2026; premissa VMI (15/10/2026) de credenciamento até dez/2026, antes da contratação (Gate 2, 2T27). O FINAME só contrata com o código emitido. Dual Energy e protocolo cardíaco a confirmar', m_prata: 11375, m_ouro: 16775.26, tubo: true, m_fonte: 'Sem cotação VMI. Prata: 7% a.a. do valor de referência + provisão de tubo. Ouro: mediana de 5 contratos públicos de TC com peças e tubo (PNCP 2025–26), R$ 16.775/mês.' },
   { id: 'us', nome: 'Ultrassom portátil, uso geral', modelo: 'Invictus', qtd: 2, preco: 117000, cfi: '', fin: true, obs: 'Preço VMI de 15/10/2026. Não aparece no Catálogo CFI do BNDES (busca por nome e pelos CNPJs da VMI e da Alfa Med em 15/10/2026): fora do FINAME até o credenciamento; o FGTS-Saúde não exige CFI. Alternativa credenciada: Alfa Med Dominus L1 (CFI 04313989)', m_prata: 1565.82, m_ouro: 2638.59, m_fonte: 'Sem cotação para o Invictus. Ouro: mediana de 4 contratos públicos de ultrassom com peças (R$ 2.405 a R$ 2.878/mês; PNCP 2023–26). Prata: 59,3% do Ouro.' },
   { id: 'rxp', loc_vmi: { 12: 9857, 24: 6551, 36: 5449, 48: 4898, 60: 4568, 72: 4347, 84: 4190 }, loc_vmi_modelo: 'Aquila S', loc_vmi_fonte: 'Cotação de locação VMI, 16/10/2026 (R$/mês por unidade)', nome: 'Raio X móvel analógico', modelo: 'VMI Aquila 320 S', qtd: 1, preco: 139000, cfi: '03538400', fin: true, obs: 'Preço VMI de 15/10/2026. CFI 03538400, válido até 13/03/2030 (tabela FINAME VMI)', m_prata: 3900, m_ouro: 6800, m_fonte: 'Cotação VMI do Aquila S (média SP, 15/10/2026).' },
   { id: 'rxdr', loc_vmi: { 12: 18499, 24: 12379, 36: 10339, 48: 9319, 60: 8706, 72: 8298, 84: 8007 }, loc_vmi_modelo: 'Aquila D', loc_vmi_fonte: 'Cotação de locação VMI, 16/10/2026 (R$/mês por unidade). A VMI cotou a locação do RX digital como Aquila D; na compra o RX digital é o Apolo D (fixo, R$ 290 mil). Confirmar se é o mesmo equipamento.', nome: 'Raio X digital (DR)', modelo: 'VMI Apolo D (fixo)', qtd: 1, preco: 290000, cfi: '03538246', fin: true, obs: 'Preço VMI de 15/10/2026. Apolo é RX fixo (sala), não portátil: o pacote GE prevê RX portátil com placa DR; confirmar o perímetro com o Jaime (alternativa portátil: Aquila 500 D, CFI 04279825). CFI 03538246, válido até 11/03/2030', m_prata: 4600, m_ouro: 7500, m_fonte: 'Sem cotação para o Apolo; proxy: cotação VMI do Aquila D (RX digital, média SP, 15/10/2026).' },
-  { id: 'dr', nome: 'Placa DR avulsa', modelo: 'VMI', qtd: 1, preco: 107000, cfi: '', fin: true, obs: 'Preço VMI de 15/10/2026. Detector avulso não aparece no Catálogo CFI do BNDES em 15/10/2026', m_prata: 0, m_ouro: 700, m_fonte: 'Ouro: diferença entre os contratos VMI do Aquila D e do Aquila S (o detector digital). O Prata não cobre sistemas de imagem.' }
+  { id: 'dr', nome: 'Placa DR avulsa', modelo: 'VMI', qtd: 1, preco: 107000, cfi: '', fin: true, obs: 'Preço VMI de 15/10/2026. Detector avulso não aparece no Catálogo CFI do BNDES em 15/10/2026', m_prata: 0, m_ouro: 700, m_fonte: 'Ouro: diferença entre os contratos VMI do Aquila D e do Aquila S (o detector digital). O Prata não cobre sistemas de imagem.' },
+  RM_C
 ];
 
 /* Referências de mercado usadas nas premissas de manutenção e locação (Portal Nacional de Contratações Públicas, contratos 2023–2026).
@@ -1844,13 +1956,14 @@ var BENCH_LOC = [
   { mod: 'TC', obj: 'Locação de TC 128 canais com manutenção, calibração e treinamento (1 unidade)', org: 'SMS São Paulo, Hosp. Fernando Mauro Pires da Rocha', ano: 2026, total: 3744000, meses: 60, url: PNCP + '13864377000130/2026/303' },
   { mod: 'TC', obj: 'Locação emergencial de TC 64 canais', org: 'Município de São Luís/MA', ano: 2026, total: 660000, meses: 11, url: PNCP + '06307102000130/2026/355' },
   { mod: 'RX', obj: 'Locação de RX móvel para leitos, UTI e PA', org: 'FMS Campina Grande/PB', ano: 2025, total: 114000, meses: 12, url: PNCP + '24513574000121/2025/217' },
-  { mod: 'RX', obj: 'Locação de RX móvel com manutenção e treinamento', org: 'FMS Paraúna/GO', ano: 2025, total: 14000, meses: 4, url: PNCP + '11171868000170/2025/43' }
+  { mod: 'RX', obj: 'Locação de RX móvel com manutenção e treinamento', org: 'FMS Paraúna/GO', ano: 2025, total: 14000, meses: 4, url: PNCP + '11171868000170/2025/43' },
+  { mod: 'RM', obj: 'Locação emergencial de RM 1,5T, com adequação da sala (gaiola de RF, chiller) e manutenção na garantia', org: 'SMS São Paulo, Hosp. Fernando Mauro Pires da Rocha (contrato 090/2024)', ano: 2024, total: 2280000, meses: 12, url: 'https://prefeitura.sp.gov.br/documents/d/saude/termo_contrato_emergencial_090_24_tr_samir_p-pdf' }
 ];
 
 function modeloPadrao() {
   var m = {};
   SCHEMA.forEach(function (s) { setPath(m, s.id, s.def); });
-  m.equip = { B: JSON.parse(JSON.stringify(EQUIP_B_PADRAO)), C: JSON.parse(JSON.stringify(EQUIP_C_PADRAO)), B_n: 60 };
+  m.equip = { B: JSON.parse(JSON.stringify(EQUIP_B_PADRAO)), C: JSON.parse(JSON.stringify(EQUIP_C_PADRAO)), B_n: 60, rm_v: 1 };
   m.entidade.emprestimos = JSON.parse(JSON.stringify(EMPRESTIMOS_PADRAO));
   m.altC.custo = 'auto'; m.altC.valor_obra = 0; m.altC.valor_financiar = null;
   return m;
@@ -1866,9 +1979,16 @@ function completarManut(itens, padrao) {
   });
   return itens;
 }
+/* Modelos salvos antes da RM (19/10/2026): acrescenta a Cignus 600 aos pacotes B e C uma única vez (marca equip.rm_v),
+   para que a remoção manual do item depois disso seja respeitada. */
+function garantirRM(equip) {
+  if (!equip || equip.rm_v) return equip;
+  ['B', 'C'].forEach(function (k) { var l = equip[k]; if (Array.isArray(l) && !l.some(function (x) { return x && (x.rm || x.id === 'rm'); })) l.push(JSON.parse(JSON.stringify(k === 'B' ? RM_B : RM_C))); });
+  equip.rm_v = 1; return equip;
+}
 function setPath(o, path, v) { var p = path.split('.'); for (var i = 0; i < p.length - 1; i++) { if (o[p[i]] == null || typeof o[p[i]] !== 'object') o[p[i]] = {}; o = o[p[i]]; } o[p[p.length - 1]] = v; }
 function getPath(o, path) { var p = path.split('.'); for (var i = 0; i < p.length; i++) { if (o == null) return undefined; o = o[p[i]]; } return o; }
-if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, BENCH_LOC: BENCH_LOC, SCHEMA: SCHEMA, modeloPadrao: modeloPadrao, completarManut: completarManut, setPath: setPath, getPath: getPath, EQUIP_B_PADRAO: EQUIP_B_PADRAO, EQUIP_C_PADRAO: EQUIP_C_PADRAO, EMPRESTIMOS_PADRAO: EMPRESTIMOS_PADRAO };
+if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, BENCH_LOC: BENCH_LOC, SCHEMA: SCHEMA, modeloPadrao: modeloPadrao, completarManut: completarManut, garantirRM: garantirRM, RM_B: RM_B, RM_C: RM_C, setPath: setPath, getPath: getPath, EQUIP_B_PADRAO: EQUIP_B_PADRAO, EQUIP_C_PADRAO: EQUIP_C_PADRAO, EMPRESTIMOS_PADRAO: EMPRESTIMOS_PADRAO };
 </script>
 <script>
 /* ===== Aplicação (hda-viabilidade/src/app.js) ===== */
@@ -1918,7 +2038,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     var d = modeloPadrao(), out = clone(d);
     if (!m || typeof m !== 'object') return out;
     SCHEMA.forEach(function (s) { var v = getPath(m, s.id); if (v !== undefined && v !== null) setPath(out, s.id, v); });
-    if (m.equip) { if (Array.isArray(m.equip.B)) out.equip.B = completarManut(clone(m.equip.B), EQUIP_B_PADRAO); if (Array.isArray(m.equip.C)) out.equip.C = completarManut(clone(m.equip.C), EQUIP_C_PADRAO); if (m.equip.B_n) out.equip.B_n = m.equip.B_n; }
+    if (m.equip) { if (Array.isArray(m.equip.B)) out.equip.B = completarManut(clone(m.equip.B), EQUIP_B_PADRAO); if (Array.isArray(m.equip.C)) out.equip.C = completarManut(clone(m.equip.C), EQUIP_C_PADRAO); if (m.equip.B_n) out.equip.B_n = m.equip.B_n; out.equip.rm_v = m.equip.rm_v; garantirRM(out.equip); }
     if (m.entidade && Array.isArray(m.entidade.emprestimos)) out.entidade.emprestimos = clone(m.entidade.emprestimos);
     if (m.altC) { if (m.altC.custo) out.altC.custo = m.altC.custo; if (m.altC.valor_obra != null) out.altC.valor_obra = m.altC.valor_obra; if (m.altC.valor_financiar !== undefined) out.altC.valor_financiar = m.altC.valor_financiar; }
     return out;
@@ -2002,11 +2122,17 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       (isD ? kpi('Investimento', R(0), 'só a implantação do RIS/PACS (' + R(model.propria.rispacs_impl) + '); retorno desde o 1º mês', 'good', true) : kpi('TIR · payback', (fl.tir == null ? '—' : P(fl.tir, 0)) + ' · ' + (fl.pb == null ? '—' : N(fl.pb, 1) + ' a'), 'payback descontado ' + (fl.pbDesc == null ? '—' : N(fl.pbDesc, 1) + ' anos'), 'good', true)) +
       kpi('DSCR do hospital em ' + e27.ano, X(e27.dscrSemProj) + ' → ' + X(e27.dscrSem), 'sem o projeto → com o projeto, sem TDC · com TDC ' + X(e27.dscrCom), e27.dscrSem != null && e27.dscrSem < 1.3 ? 'warn' : 'good', true) +
       '</div>';
+    /* cenário da ressonância */
+    var q = c.cenRM, rr = model.rm, eqS = q ? q.eq[sel.id] : null;
+    if (q) h += '<div class="card"><div class="card-h"><h2>Ressonância magnética: cenário com e sem</h2>' + rmSegHtml('segRmTese') + '</div>' +
+      '<p class="small">Cignus 600 sem hélio, 24 canais, por ' + mi(+((rmItem('C') || {}).preco) || 0) + ', mais ' + mi(+rr.obra || 0) + ' de obra de pré-instalação. Serviço novo (a EMG não faz RM): ' + N(rr.exames_mes) + ' exames/mês em regime a ' + R(rr.ticket) + ', ' + P(rr.rampa1, 0) + ' no ano 1 e ' + P(rr.rampa2, 0) + ' no ano 2, operando a partir do mês ' + (E.iniRM(model) + 1) + ' do ano 1. Volume, ticket, equipe e obra são hipóteses a validar. A página está no cenário <b>' + (rmOn() ? 'com RM' : 'sem RM') + '</b>.</p>' +
+      '<div class="grid two" style="margin-top:10px"><div>' + rmTabela([sel.id], true) + '</div><div><table><thead><tr><th>VPL para o hospital</th><th class="n">Sem RM</th><th class="n">Com RM</th></tr></thead><tbody>' + ['B', 'C', 'D'].map(function (k) { return '<tr' + (k === sel.id ? ' class="hl"' : '') + '><td>' + k + ' · ' + altNome_(k) + '</td><td class="n">' + mi(q.sem[k].vplEnt) + '</td><td class="n">' + mi(q.com[k].vplEnt) + '</td></tr>'; }).join('') + '</tbody></table><p class="small" style="margin-top:10px">' + rmEquilibrioTxt(sel.id) + '</p></div></div></div>';
     var ach = [];
     ach.push('<b>Hoje o serviço dá prejuízo.</b> Receita líquida de ' + R(emg.rl) + '/mês; a EMG fica com ' + R(emg.repasse) + ' (' + P(emg.repasse / emg.rl, 0) + '), o hospital arca com ' + R(emg.cf_dir + emg.cf_ind) + ' de custos fixos e indiretos e fecha em ' + R(emg.resultado) + '/mês (' + mi(emg.resultado * 12) + '/ano).');
     ach.push('<b>Internalizar inverte o sinal com a mesma receita.</b> Mantida a equipe médica a ' + P(model.propria.rep_med_pct, 1) + ' da receita e assumidos material, ' + (isD ? (locTxt().sep ? 'aluguel dos equipamentos e manutenção (' : 'aluguel dos equipamentos com manutenção (') + R(prop.aluguel) + '/mês)' : 'manutenção pós-garantia (' + R(prop.manut) + '/mês, plano ' + (sel.manut.plano === 'prata' ? 'Prata' : 'Ouro') + ')') + ' e RIS/PACS, o resultado vai a ' + R(prop.resultado) + '/mês. Ganho de ' + mi(c.ganhoMes * 12) + ' por ano, dos quais ' + mi(-emg.resultado * 12) + ' são a eliminação do prejuízo.');
-    ach.push(isD ? '<b>Sem investimento em equipamentos.</b> TC 64/128, dois ultrassons, RX móvel, RX digital e placa DR alugados por ' + sel.n + ' meses a ' + R(sel.aluguel) + '/mês (' + Pp(sel.loc.pctMes * 100) + ' do valor ao mês; base: ' + locTxt().base + '; ' + locTxt().manut + '), com troca do equipamento na renovação. Para empatar com a compra financiada (C) o aluguel teria de ser ' + R(sel.equilibrioC) + '/mês.' : '<b>Investimento de ' + mi(sel.capex) + '</b> em TC 64/128, dois ultrassons, RX móvel, RX digital e placa DR' + (sel.id === 'C' ? ', com ' + mi(sel.capexFin) + ' financiados pela linha <b>' + esc(linha) + '</b> (CET ' + Pp(sel.cetAno) + ' a.a., parcela de ' + R(sel.parcela) + ' após a carência; ' + R(sel.primeira) + ' na carência)' : ', financiado pelo HFS e fornecedores em 60x (' + R(sel.parcela) + '/mês, custo implícito ' + Pp(sel.cetAno) + ' a.a.)') + '. O pacote GE/HFS custa ' + Pp(c.B.cetAno) + ' a.a. implícitos em 60 meses, com preço indexado ao dólar.');
+    ach.push(isD ? '<b>Sem investimento em equipamentos.</b> ' + pacoteTxt() + ' alugados por ' + sel.n + ' meses a ' + R(sel.aluguel) + '/mês (' + Pp(sel.loc.pctMes * 100) + ' do valor ao mês; base: ' + locTxt().base + '; ' + locTxt().manut + '), com troca do equipamento na renovação. Para empatar com a compra financiada (C) o aluguel teria de ser ' + R(sel.equilibrioC) + '/mês.' : '<b>Investimento de ' + mi(sel.capex) + '</b> em ' + pacoteTxt() + (c.rm.on && c.rm.obra ? ' (a obra da RM, de ' + mi(c.rm.obra) + ', sai do caixa)' : '') + (sel.id === 'C' ? ', com ' + mi(sel.capexFin) + ' financiados pela linha <b>' + esc(linha) + '</b> (CET ' + Pp(sel.cetAno) + ' a.a., parcela de ' + R(sel.parcela) + ' após a carência; ' + R(sel.primeira) + ' na carência)' : ', financiado pelo HFS e fornecedores em 60x (' + R(sel.parcela) + '/mês, custo implícito ' + Pp(sel.cetAno) + ' a.a.)') + '. O pacote GE/HFS custa ' + Pp(c.B.cetAno) + ' a.a. implícitos em 60 meses, com preço indexado ao dólar.');
     ach.push('<b>Compra ou locação.</b> VPL para o hospital em ' + model.fin.horizonte + ' anos: ' + mi(c.flC.vplEnt) + ' comprando o pacote VMI com fomento (C), ' + mi(c.flB.vplEnt) + ' comprando o pacote GE (B) e ' + mi(c.flD.vplEnt) + ' alugando o pacote VMI (D). A locação dispensa investimento e dívida nova e transfere a obsolescência ao locador' + (locTxt().sep ? '; pela cotação da VMI, a manutenção continua com o hospital (premissa a confirmar)' : ' junto com a manutenção') + '; a comparação completa está em Alternativas.');
+    if (c.rm.on && c.rm.reg && c.rm.isolada && q) { var ri = c.rm.isolada; ach.push('<b>Ressonância, serviço novo.</b> Com ' + N(rr.exames_mes) + ' exames/mês a ' + R(rr.ticket) + ', a RM gera ' + R(c.rm.reg.ebitda) + '/mês de EBITDA em regime antes da manutenção (' + R(c.rm.reg.ebitda - ri.manutMes) + ' depois da garantia, contrato Ouro estimado em ' + R(ri.manutMes) + '). Sozinha e sem financiamento, a RM rende VPL de ' + mi(ri.vpl) + (ri.tir != null ? ' e TIR de ' + P(ri.tir, 1) : '') + ' sobre ' + mi(ri.inv) + ' de equipamento e obra: ela reduz o VPL do plano em ' + mi(-q.eq[sel.id].delta) + '. ' + rmEquilibrioTxt(sel.id) + ' A internalização se paga sem a RM; a RM é uma decisão à parte, que depende de demanda comprovada.'); }
     ach.push(isD ? '<b>Retorno.</b> VPL para o hospital de ' + mi(fl.vplEnt) + ' a ' + P(model.fin.desconto, 0) + ' a.a. em ' + model.fin.horizonte + ' anos, já descontado o aluguel; caixa acumulado de ' + mi(fl.acumEnt) + ' no horizonte.' : '<b>Retorno.</b> VPL de ' + mi(fl.vpl) + ' a ' + P(model.fin.desconto, 0) + ' a.a. em ' + model.fin.horizonte + ' anos, TIR de ' + (fl.tir == null ? '—' : P(fl.tir, 0)) + ', payback de ' + anos(fl.pb) + '. Caixa acumulado para o hospital após as parcelas: ' + mi(fl.acumEnt) + ' no horizonte; DSCR mínimo do projeto ' + X(fl.dscrMin) + '.');
     ach.push('<b>A restrição é o crédito do hospital, não o projeto.</b> Dívida líquida de ' + mi(c.ent.dl) + ' (' + X(c.ent.dlEbitda, 1) + ' o EBITDA anualizado de ' + mi(c.ent.ebitdaBase) + '); o serviço da dívida de ' + e27.ano + ' (' + mi(e27.servAtual) + ') consome todo o EBITDA (DSCR ' + X(e27.dscrSemProj) + '). O projeto melhora a cobertura (' + X(e27.dscrSem) + ') e o TDC a resolve (' + X(e27.dscrCom) + '). Por isso a contratação deve vir depois da emissão do TDC, com carência longa.');
     var tcap = c.tc; ach.push('<b>Capacidade.</b> Uma TC a ' + model.propria.tc_exh + ' exames/h, ' + model.propria.tc_h + ' h/dia, faz ' + N(tcap.cap) + ' exames/mês; o volume de ' + N(tcap.tc) + ' TC/mês ocupa ' + P(tcap.ocup, 0) + '. Equipamento único: a transição com a EMG precisa de sobreposição.');
@@ -2023,16 +2149,18 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       '<div class="tile"><h3>Material pode custar o triplo</h3><p>A planilha mantém 5,2% da receita; a própria nota diz que, com o material da EMG (R$ 60 mil/mês), vai a ~15%. Validar com o Jaime.</p></div>' +
       '<div class="tile"><h3>Contrato com a EMG e janela sem TC</h3><p>Prazo, aviso prévio e multa não constam dos documentos. A EMG é dona dos equipamentos: a saída precisa coincidir com a instalação da TC nova (sobreposição de ' + model.fin.inicio_op_mes + ' meses no modelo).</p></div>' +
       '<div class="tile"><h3>O CFI da Pulsar ainda não saiu</h3><p>O modelo assume o credenciamento até dez/2026 (premissa VMI). Se atrasar além do Gate 2, a TC fica fora do FINAME e vai para o FGTS-Saúde (se o hospital cumprir os requisitos) ou recurso próprio, enquanto a TC GE (Ascend, Aspire) entra. Para testar esse caso, coloque "Não" em "Tratar o pacote como credenciado" em Premissas.</p></div>' +
+      (c.rm.on && q ? '<div class="tile"><h3>A RM depende de volume</h3><p>Com as hipóteses atuais a RM tira ' + mi(-q.eq[sel.id].delta) + ' do VPL e leva a cobertura de ' + q.sem[sel.id].dscr[0].ano + ' de ' + X(q.sem[sel.id].dscr[0].v) + ' para ' + X(q.com[sel.id].dscr[0].v) + '. Empata com ' + N(q.eq[sel.id].volume) + ' exames/mês. Validar a demanda antes de comprar e negociar o preço (R$ 4,33 mi no contrato FINAME da CEMAN; R$ 4,9 mi nos pregões de Goiás).</p></div>' : '') +
       '<div class="tile"><h3>Crédito antes do TDC</h3><p>Sem o TDC, o hospital rola capital de giro a 48 meses e a cobertura fica em ' + X(e27.dscrSem) + '. Um banco pode pedir garantia real ou recusar até a desalavancagem.</p></div>' +
       '</div></div></div>';
     /* gates */
     h += '<div class="card"><div class="card-h"><h2>Sequência de decisão</h2><span class="muted small">cada etapa libera a seguinte</span></div><div class="gates">' +
-      '<div class="gate now"><div class="gh"><b>Gate 0</b><span>agora</span></div><ul><li>Aprovar a tese e o perímetro (TC, 2 US, RX móvel, RX digital, placa DR); decidir se o RX digital é fixo (Apolo, proposta VMI) ou portátil (pacote GE)</li><li>Formalizar a proposta VMI (preços de 15/10/2026), cotação de manutenção da Pulsar, do Apolo e do Invictus, CFI do Invictus e da placa DR; na locação (tabela de 16/10/2026, manutenção inclusa), confirmar se o RX digital é o Aquila D ou o Apolo D e cotar ultrassons e placa DR; acompanhar o credenciamento CFI da Pulsar (previsto até dez/2026)</li><li>Fechar as 4 premissas a validar: linha da sala, material, contrato EMG, RIS/PACS</li></ul></div>' +
+      '<div class="gate now"><div class="gh"><b>Gate 0</b><span>agora</span></div><ul><li>Aprovar a tese e o perímetro (TC, 2 US, RX móvel, RX digital, placa DR); decidir se o RX digital é fixo (Apolo, proposta VMI) ou portátil (pacote GE)</li><li>Formalizar a proposta VMI (preços de 15/10/2026), cotação de manutenção da Pulsar, do Apolo e do Invictus, CFI do Invictus e da placa DR; na locação (tabela de 16/10/2026, manutenção inclusa), confirmar se o RX digital é o Aquila D ou o Apolo D e cotar ultrassons e placa DR; acompanhar o credenciamento CFI da Pulsar (previsto até dez/2026)</li><li>Fechar as 4 premissas a validar: linha da sala, material, contrato EMG, RIS/PACS</li><li>Ressonância, decisão à parte: demanda (RMs pedidas hoje para fora), ticket dos convênios, preço da Cignus 600 (referências de R$ 4,33 a 4,9 mi), cotação de manutenção e de locação, projeto de pré-instalação e CFI da versão sem hélio</li></ul></div>' +
       '<div class="gate"><div class="gh"><b>Gate 1</b><span>dez/26 – 1T27</span></div><ul><li>TDC emitido e negociação iniciada</li><li>CFI da Pulsar publicado no Catálogo (previsto dez/2026): condição para o FINAME do pacote</li><li>Protocolar o FINAME (agente) com o kit de documentos</li><li>Responder as perguntas do FGTS-Saúde (CEBAS 60% SUS, créditos SUS de 12 meses, contratos no Teto MAC) e confirmar o Agora Tem Especialistas; se couber, protocolar também na Caixa ou no BB</li></ul></div>' +
       '<div class="gate"><div class="gh"><b>Gate 2</b><span>2T27</span></div><ul><li>Contratação do financiamento e pedido de compra, ou assinatura da locação</li><li>Notificação à EMG; instalação com ' + model.fin.inicio_op_mes + ' meses de sobreposição</li><li>Contratar manutenção (início após a garantia) e RIS/PACS</li></ul></div>' +
       '<div class="gate"><div class="gh"><b>Gate 3</b><span>operação</span></div><ul><li>Imagem própria em regime</li><li>Indicadores do Jaime: exames, tempo de espera, repetição, disponibilidade, custo por exame</li><li>Revisar premissas e esta página a cada trimestre</li></ul></div>' +
       '</div></div>';
     $('#tab-tese').innerHTML = h;
+    bindRmSeg('segRmTese');
   }
 
   /* ================= DIAGNÓSTICO ================= */
@@ -2066,20 +2194,48 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
   var MANUT_CTRL = 11456.81 + 7037.5 + 7270.83; /* planilha da Controladoria: TC 7% a.a. + US e RX + provisão de tubo */
   var ALT_NOME = { A: 'Manter a EMG', B: 'GE/HFS', C: 'VMI, compra', D: 'VMI, locação' };
   function altNome_(id) { return ALT_NOME[id] || id; }
+  /* ressonância: cenário com/sem e textos do perímetro */
+  function rmOn(mm) { return E.rmOn(mm || model); }
+  function rmItem(k, mm) { return ((mm || model).equip[k || 'C'] || []).filter(E.isRM)[0]; }
+  function pacoteTxt(mm) { return 'TC 64/128, dois ultrassons, RX móvel, RX digital e placa DR' + (rmOn(mm) ? ', mais a RM Cignus 600' : ''); }
+  function rmSegHtml(id) { var on = rmOn(); return '<span class="seg" id="' + id + '"><button data-rm="sim" class="' + (on ? 'on' : '') + '">Com RM</button><button data-rm="nao" class="' + (!on ? 'on' : '') + '">Sem RM</button></span>'; }
+  function bindRmSeg(id) { var el = document.getElementById(id); if (!el) return; $$('button[data-rm]', el).forEach(function (b) { b.addEventListener('click', function () { if (model.rm.incluir === this.dataset.rm) return; model.rm.incluir = this.dataset.rm; afterEdit(); }); }); }
+  /* quadro com × sem RM: linhas por alternativa a partir de calc.cenRM */
+  function rmTabela(ids, compacto) {
+    var q = calc.cenRM; if (!q) return '';
+    var A = { B: 'B · GE/HFS', C: 'C · VMI compra', D: 'D · VMI locação' }, dl = function (v, fmt, inv) { var c = v == null ? '' : (inv ? -v : v) >= 0 ? 'pos' : 'neg'; return '<span class="' + c + '">' + (v == null ? '—' : (v >= 0 ? '+' : '−') + fmt(Math.abs(v)).replace('−', '')) + '</span>'; };
+    var h = '<div class="tbl-wrap"><table><thead><tr><th></th><th class="n">Sem RM</th><th class="n">Com RM</th><th class="n">Diferença</th></tr></thead><tbody>';
+    ids.forEach(function (k) {
+      var a = q.sem[k], b = q.com[k];
+      h += '<tr class="sec"><td colspan="4">' + A[k] + (model.fin.alternativa === k ? ' · no plano' : '') + '</td></tr>' +
+        (compacto ? '' : '<tr><td>Investimento (equipamentos, obra e RIS/PACS)</td><td class="n">' + mi(a.capex) + '</td><td class="n">' + mi(b.capex) + '</td><td class="n">' + dl(b.capex - a.capex, mi, true) + '</td></tr>') +
+        (k === 'D' ? '' : '<tr><td>Dívida nova</td><td class="n">' + mi(a.fin) + '</td><td class="n">' + mi(b.fin) + '</td><td class="n">' + dl(b.fin - a.fin, mi, true) + '</td></tr>') +
+        '<tr><td>Desembolso no ano 0</td><td class="n">' + mi(a.ano0) + '</td><td class="n">' + mi(b.ano0) + '</td><td class="n">' + dl(b.ano0 - a.ano0, mi, true) + '</td></tr>' +
+        (compacto ? '' : '<tr><td>' + (k === 'D' ? 'Aluguel' : 'Parcelas e manutenção') + ', média mensal no ano 3</td><td class="n">' + R(a.comp3) + '</td><td class="n">' + R(b.comp3) + '</td><td class="n">' + dl(b.comp3 - a.comp3, R, true) + '</td></tr>') +
+        '<tr class="hl"><td>VPL para o hospital</td><td class="n">' + mi(a.vplEnt) + '</td><td class="n">' + mi(b.vplEnt) + '</td><td class="n">' + dl(b.vplEnt - a.vplEnt, mi) + '</td></tr>' +
+        a.dscr.slice(0, compacto ? 2 : 3).map(function (d, i) { var e = b.dscr[i] || {}; return '<tr><td>DSCR do hospital em ' + d.ano + ', sem TDC</td><td class="n">' + X(d.v) + '</td><td class="n ' + (e.v != null && e.v < 1.3 ? 'neg' : '') + '">' + X(e.v) + '</td><td class="n">' + (d.v != null && e.v != null ? dl(e.v - d.v, function (x) { return N(x, 2); }) : '—') + '</td></tr>'; }).join('');
+    });
+    return h + '</tbody></table></div>';
+  }
+  function rmEquilibrioTxt(k) {
+    var q = calc.cenRM; if (!q) return ''; var e = q.eq[k || 'C'], r = model.rm, cap = q.cap;
+    return 'Na alternativa ' + (k || 'C') + ', a RM empata com o cenário sem RM com <b>' + (e.volume == null ? '—' : N(e.volume)) + ' exames/mês</b> de convênio e particular a ' + R(q.t0) + ' (' + (e.volume == null ? '—' : P(e.volume / cap.cap, 0)) + ' da capacidade de ' + N(cap.cap) + '/mês em ' + N(+r.horas_dia || 12) + ' h), ou com ticket de <b>' + R(e.ticket) + '</b> no volume de ' + N(q.v0) + '/mês. Só pelo preço, a RM teria de custar ' + mi(e.preco) + '. Cada exame/mês a mais vale ' + mi(e.porExame) + ' de VPL; cada R$ 100 mil a menos no preço, ' + mi(-e.porReal * 1e5) + '.';
+  }
   function mediaMes(fl, t) { var a = fl.anos[t - 1]; return a ? a.desembolso / 12 : null; }
   function renderAlternativas() {
     var c = calc, m = model, B = c.B, C = c.C, D = c.D, fB = c.flB, fC = c.flC, fD = c.flD, e = c.cen.emg, pb = c.cen.propBase;
     var H = +m.fin.horizonte, EA = c.entAlt, sel = m.fin.alternativa;
     var lc = C.escolha ? C.escolha.linha : null, linhaC = lc ? lc.nome.split(' – ')[0].split(' / ')[0] : 'sem linha';
     var planoTxt = B.manut.plano === 'prata' ? 'Prata' : 'Ouro';
-    var h = '<div class="card hero"><span class="eyebrow">Quatro caminhos, mesma receita</span><h2>Manter a EMG, comprar o pacote GE com o financiamento do fornecedor, comprar o pacote VMI com linha de fomento, ou alugar o pacote VMI</h2><p class="lead muted">B, C e D cobrem o mesmo perímetro; C e D usam os preços VMI de 15/10/2026 (' + mi(C.capex) + ', ' + Psig(C.capex / B.capex - 1, 1) + ' frente ao pacote GE de ' + mi(B.capex) + '), com o RX digital fixo (Apolo) no lugar do portátil com DR. Nas compras (B e C) entram as parcelas e o contrato de manutenção ' + planoTxt + ' depois de ' + m.manut.garantia_meses + ' meses de garantia; na locação (D) entra o aluguel ' + (locTxt().vmi ? 'da cotação VMI de 16/10/2026' : 'estimado por composição de custos') + (locTxt().sep ? ' mais o contrato de manutenção depois da garantia' : ', que já cobre a manutenção') + '. A alternativa levada ao Plano em números é a <b>' + sel + '</b>.</p></div>';
+    var h = '<div class="card hero"><span class="eyebrow">Quatro caminhos, mesma receita</span><h2>Manter a EMG, comprar o pacote GE com o financiamento do fornecedor, comprar o pacote VMI com linha de fomento, ou alugar o pacote VMI</h2><p class="lead muted">B, C e D cobrem o mesmo perímetro (' + pacoteTxt() + '); C e D usam os preços VMI de 15/10/2026' + (rmOn() ? ' e, na RM, o preço de 19/10/2026' : '') + ' (' + mi(C.capex) + ', ' + Psig(C.capex / B.capex - 1, 1) + ' frente ao pacote GE de ' + mi(B.capex) + '), com o RX digital fixo (Apolo) no lugar do portátil com DR. Nas compras (B e C) entram as parcelas e o contrato de manutenção ' + planoTxt + ' depois de ' + m.manut.garantia_meses + ' meses de garantia; na locação (D) entra o aluguel ' + (locTxt().vmi ? 'da cotação VMI de 16/10/2026' : 'estimado por composição de custos') + (locTxt().sep ? ' mais o contrato de manutenção depois da garantia' : ', que já cobre a manutenção') + '. A alternativa levada ao Plano em números é a <b>' + sel + '</b>.</p></div>';
     function card(id, tit, cor, kv) { return '<div class="cmp' + (sel === id ? ' sel' : '') + '" style="--tc:' + cor + '"><b class="t">' + tit + '</b><div class="kv">' + kv.map(function (r) { return '<span>' + r[0] + '</span><b class="' + (r[2] || '') + '">' + r[1] + '</b>'; }).join('') + '</div></div>'; }
-    var resB = pb.resultado - B.manut.mes - B.parcela, resC = pb.resultado - C.manut.mes - (C.parcela || 0), resD = pb.resultado - D.aluguel;
+    var rmR = c.rm.reg ? c.rm.reg.ebitda : 0; /* RM em regime, antes da manutenção (cenário com RM) */
+    var resB = pb.resultado + rmR - B.manut.mes - B.parcela, resC = pb.resultado + rmR - C.manut.mes - (C.parcela || 0), resD = pb.resultado + rmR - D.aluguel;
     h += '<div class="cmp3">' +
       card('A', 'A · Manter a EMG', 'var(--s-a)', [['Investimento', R(0)], ['Resultado mensal', R(e.resultado), 'neg'], ['Resultado anual', R(e.resultado * 12), 'neg'], ['Equipamentos', 'da EMG, ultrapassados'], ['Câmbio', 'nenhum'], ['Caixa em ' + H + ' anos', 'referência (zero)']]) +
       card('B', 'B · GE/CDK, compra, HFS 60x', 'var(--s-b)', [['Investimento', R(B.capex)], ['Financiado', R(B.capexFin) + ' (fornecedores)'], ['Prazo · carência', B.n + ' m · 0'], ['Custo implícito', Pp(B.cetAno) + ' a.a.'], ['Parcela', R(B.parcela) + '/mês'], ['Manutenção ' + planoTxt, R(B.manut.mes) + '/mês após a garantia'], ['Resultado mensal após parcela e manutenção', R(resB), sinal(resB)], ['Câmbio', 'TC em USD a 5,1604'], ['VPL para o hospital', mi(fB.vplEnt)], ['Caixa acumulado em ' + H + ' anos', mi(fB.acumEnt)]]) +
       card('C', 'C · VMI, compra, ' + esc(linhaC), 'var(--s-c)', [['Investimento', R(C.capex)], ['Financiado', R(C.capexFin) + (lc ? ' (' + esc(lc.operador.split(/[ ,(]/)[0]) + ')' : '')], ['Prazo · carência', (C.n || '—') + ' m · ' + (C.c || 0)], ['CET', Pp(C.cetAno) + ' a.a.'], ['Parcela', R(C.primeira) + ' na carência · ' + R(C.parcela) + ' depois'], ['Manutenção ' + planoTxt, R(C.manut.mes) + '/mês após a garantia'], ['Resultado mensal após parcela e manutenção', R(resC), sinal(resC)], ['Câmbio', 'nenhum (preço em R$)'], ['VPL para o hospital', mi(fC.vplEnt)], ['Caixa acumulado em ' + H + ' anos', mi(fC.acumEnt)]]) +
-      card('D', 'D · VMI, locação ' + D.n + ' meses', 'var(--s-d)', [['Investimento', R(0) + ' (só RIS/PACS)'], ['Dívida nova', 'nenhuma'], [locTxt().sep ? 'Aluguel + manutenção' : 'Aluguel', R(D.aluguel) + '/mês desde a instalação'], ['Inclui', (locTxt().sep ? 'troca do equipamento a cada ' + D.n + ' meses; manutenção à parte (' + R(D.loc.manSep) + '/mês em média)' : 'manutenção total e troca do equipamento a cada ' + D.n + ' meses')], ['Custo ÷ valor do pacote', Pp(D.loc.pctMes * 100) + ' ao mês'], ['Base do aluguel', locTxt().vmi ? 'cotação VMI ' + R(D.loc.aluguelVmi) + ' + composição ' + R(D.aluguel - D.loc.aluguelVmi - D.loc.manSep) : 'composição, taxa ' + Pp(D.loc.taxaAno * 100) + ' a.a.'], ['Resultado mensal após aluguel', R(resD), sinal(resD)], ['Câmbio', 'nenhum'], ['VPL para o hospital', mi(fD.vplEnt)], ['Caixa acumulado em ' + H + ' anos', mi(fD.acumEnt)]]) +
+      card('D', 'D · VMI, locação ' + D.n + ' meses', 'var(--s-d)', [['Investimento', R(0) + ' (só RIS/PACS)'], ['Dívida nova', 'nenhuma'], [locTxt().sep ? 'Aluguel + manutenção' : 'Aluguel', R(D.aluguel) + '/mês desde a instalação'], ['Inclui', (locTxt().sep ? 'troca do equipamento a cada ' + D.n + ' meses; manutenção à parte (' + R(D.loc.manSep) + '/mês em média)' : 'manutenção total e troca do equipamento a cada ' + D.n + ' meses')], ['Custo ÷ valor do pacote', Pp(D.loc.pctMes * 100) + ' ao mês'], ['Base do aluguel', locTxt().vmi ? 'cotação VMI ' + R(D.loc.aluguelVmi) + (D.loc.nProxy ? ' + RM pelo proxy da TC ' + R(D.loc.aluguelProxy) : '') + ' + composição ' + R(D.loc.aluguelComp) : 'composição, taxa ' + Pp(D.loc.taxaAno * 100) + ' a.a.'], ['Resultado mensal após aluguel', R(resD), sinal(resD)], ['Câmbio', 'nenhum'], ['VPL para o hospital', mi(fD.vplEnt)], ['Caixa acumulado em ' + H + ' anos', mi(fD.acumEnt)]]) +
       '</div>';
     /* tabela comparativa */
     var cols = [['A', null, null], ['B', fB, EA.B], ['C', fC, EA.C], ['D', fD, EA.D]];
@@ -2110,6 +2266,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       (EA.C.linhas[1] ? linha('DSCR do hospital em ' + EA.C.linhas[1].ano + ', sem TDC', [EA.C.linhas[1].dscrSemProj, EA.B.linhas[1].dscrSem, EA.C.linhas[1].dscrSem, EA.D.linhas[1].dscrSem], function (v) { return X(v); }, 1) : '') +
       linha('Dívida líquida ÷ EBITDA com o projeto', [EA.C.dlEbitda, EA.B.dlEbitdaProj, EA.C.dlEbitdaProj, EA.D.dlEbitdaProj], function (v) { return X(v, 1); }, -1) +
       '<tr class="sec"><td colspan="5">Riscos e o que sobra no fim</td></tr>' +
+      (c.rm.on ? linha('EBITDA da RM em regime, antes da manutenção (R$/mês)', ['—', rmR, rmR, rmR], R, 0) : '') +
       linha('Equipamento no fim do horizonte', ['da EMG', 'próprio, com ' + H + ' anos (residual 0)', 'próprio, com ' + H + ' anos (residual 0)', 'do locador; trocado a cada ' + D.n + ' meses'], null) +
       linha('Risco de quebra e de tubo', ['EMG', planoTxt === 'Ouro' ? 'contrato Ouro' : 'hospital (Prata)', planoTxt === 'Ouro' ? 'contrato Ouro' : 'hospital (Prata)', locTxt().sep ? (planoTxt === 'Ouro' ? 'contrato Ouro (a confirmar com a VMI)' : 'hospital (Prata; a confirmar)') : 'locador'], null) +
       linha('Câmbio', ['—', 'TC em USD; peças importadas', 'não', 'não'], null) +
@@ -2117,12 +2274,14 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     var cats = fB.anos.map(function (a) { return String(a.ano); });
     h += '<div class="grid two"><div class="card"><div class="card-h"><h2>Caixa acumulado para o hospital</h2><span class="muted small">ganho operacional menos parcelas, manutenção ou aluguel, vs. manter a EMG</span></div><div class="chart">' + svgLines({ cats: cats, series: [{ nome: 'B · GE/HFS', vals: fB.anos.map(function (a) { return a.acumE; }), cor: 'var(--s-b)' }, { nome: 'C · VMI compra', vals: fC.anos.map(function (a) { return a.acumE; }), cor: 'var(--s-c)' }, { nome: 'D · VMI locação', vals: fD.anos.map(function (a) { return a.acumE; }), cor: 'var(--s-d)' }], fmt: function (v) { return mi(v); }, h: 250, aria: 'Caixa acumulado por alternativa' }) + '</div></div>' +
       '<div class="card"><div class="card-h"><h2>Desembolso anual com os equipamentos</h2><span class="muted small">parcelas + manutenção (B, C) ou aluguel (D)</span></div><div class="chart">' + svgBars({ cats: cats, series: [{ nome: 'B · GE/HFS', vals: fB.anos.map(function (a) { return a.desembolso; }), cor: 'var(--s-b)' }, { nome: 'C · VMI compra', vals: fC.anos.map(function (a) { return a.desembolso; }), cor: 'var(--s-c)' }, { nome: 'D · VMI locação', vals: fD.anos.map(function (a) { return a.desembolso; }), cor: 'var(--s-d)' }], fmt: function (v) { return mi(v); }, h: 250, aria: 'Desembolso anual' }) + '</div></div></div>';
+    h += cardRM();
     /* leitura */
     var difCD = fC.vplEnt - fD.vplEnt, p60 = (c.prazosD || []).filter(function (x) { return x.n === D.n; })[0];
     var ctrl = MANUT_CTRL, rxOuro = C.manut.porItem.filter(function (x) { return x.id === 'rxp' || x.id === 'rxdr'; }).reduce(function (a, x) { return a + x.ouro; }, 0);
     h += '<div class="card"><div class="card-h"><h2>Leitura</h2></div><ul class="bullets">' +
+      (c.cenRM ? '<li><b>Ressonância</b>: com as hipóteses atuais, a RM reduz o VPL para o hospital em ' + mi(-c.cenRM.eq.B.delta) + ' (B), ' + mi(-c.cenRM.eq.C.delta) + ' (C) e ' + mi(-c.cenRM.eq.D.delta) + ' (D). ' + (rmOn() ? 'Com a RM, a compra financiada (C) fica com a melhor cobertura da dívida nos primeiros anos, porque a carência de 24 meses e o prazo de 120 absorvem a parcela da RM; na locação, o aluguel da RM corre desde a instalação.' : '') + '</li>' : '') +
       '<li>Qualquer forma de internalizar supera manter a EMG: VPL para o hospital de ' + mi(fB.vplEnt) + ' (B), ' + mi(fC.vplEnt) + ' (C) e ' + mi(fD.vplEnt) + ' (D), porque o hospital já paga a estrutura.</li>' +
-      (difCD >= 0 ? '<li><b>Comprar com linha de fomento (C) rende mais que alugar (D)</b>: ' + mi(difCD) + ' de VPL em ' + H + ' anos. O custo da locação' : '<li><b>Alugar (D) rende mais que comprar com linha de fomento (C)</b>: ' + mi(-difCD) + ' de VPL em ' + H + ' anos. O custo da locação') + ' de ' + R(D.aluguel) + '/mês (' + Pp(D.loc.pctMes * 100) + ' do valor ao mês' + (locTxt().vmi ? ', cotação VMI' + (locTxt().sep ? ' + manutenção à parte' : '') : '') + ') começa a correr na instalação, sem a carência de que a compra se beneficia' + (locTxt().vmi ? locTxt().taxas : ', e embute a taxa do locador de ' + Pp(D.loc.taxaAno * 100) + ' a.a., acima do custo da linha de fomento (' + Pp(C.cetAno) + ' a.a.)') + (D.equilibrioC >= D.aluguel ? '. A locação tem folga de <b>' + R(D.equilibrioC - D.aluguel) + '/mês</b> até o aluguel de equilíbrio com C (' + R(D.equilibrioC) + '/mês): é a margem para a cotação dos itens ainda estimados' + (D.loc.semCotacao.length ? ' (' + R(D.aluguel - D.loc.aluguelVmi - D.loc.manSep) + '/mês hoje)' : '') + '.</li>' : '. Para empatar com C, o aluguel precisa ficar em <b>' + R(D.equilibrioC) + '/mês</b> (' + Psig(D.equilibrioC / D.aluguel - 1, 0) + ')' + (p60 ? '; no prazo de ' + D.n + ' meses, sem contar renovações, o empate é em ' + R(p60.equilibrio) + '/mês' : '') + '. É o número para negociar com a VMI.</li>') +
+      (difCD >= 0 ? '<li><b>Comprar com linha de fomento (C) rende mais que alugar (D)</b>: ' + mi(difCD) + ' de VPL em ' + H + ' anos. O custo da locação' : '<li><b>Alugar (D) rende mais que comprar com linha de fomento (C)</b>: ' + mi(-difCD) + ' de VPL em ' + H + ' anos. O custo da locação') + ' de ' + R(D.aluguel) + '/mês (' + Pp(D.loc.pctMes * 100) + ' do valor ao mês' + (locTxt().vmi ? ', cotação VMI' + (locTxt().sep ? ' + manutenção à parte' : '') : '') + ') começa a correr na instalação, sem a carência de que a compra se beneficia' + (locTxt().vmi ? locTxt().taxas : ', e embute a taxa do locador de ' + Pp(D.loc.taxaAno * 100) + ' a.a., acima do custo da linha de fomento (' + Pp(C.cetAno) + ' a.a.)') + (D.equilibrioC >= D.aluguel ? '. A locação tem folga de <b>' + R(D.equilibrioC - D.aluguel) + '/mês</b> até o aluguel de equilíbrio com C (' + R(D.equilibrioC) + '/mês): é a margem para a cotação dos itens ainda estimados' + (D.loc.semCotacao.length ? ' (' + R(D.loc.aluguelComp) + '/mês hoje)' : '') + '.</li>' : '. Para empatar com C, o aluguel precisa ficar em <b>' + R(D.equilibrioC) + '/mês</b> (' + Psig(D.equilibrioC / D.aluguel - 1, 0) + ')' + (p60 ? '; no prazo de ' + D.n + ' meses, sem contar renovações, o empate é em ' + R(p60.equilibrio) + '/mês' : '') + '. É o número para negociar com a VMI.</li>') +
       '<li><b>O que a locação compra</b>: nenhum desembolso inicial nem dívida bancária nova antes do TDC, ' + (locTxt().sep ? 'risco de obsolescência com o locador (a manutenção, pela cotação, segue com o hospital: confirmar com a VMI)' : 'manutenção e risco do equipamento com o locador') + ', troca por equipamento novo a cada ' + D.n + ' meses (B e C chegam ao ano ' + H + ' com o equipamento original). Se o banco não aprovar a compra antes da desalavancagem, D não depende de linha bancária: o locador também analisa o crédito do hospital, mas fica com o equipamento como garantia.</li>' +
       '<li><b>Manutenção</b>: no plano ' + planoTxt + ', ' + R(C.manut.mes) + '/mês (C) e ' + R(B.manut.mes) + '/mês (B) a partir do ' + (+m.manut.garantia_meses + 1) + 'º mês de operação, contra ' + R(ctrl) + '/mês na planilha da Controladoria. A diferença vem dos dois RX: a cotação VMI (' + R(rxOuro) + '/mês no Ouro) é ' + N(rxOuro / 7037.5, 1) + ' vezes o que a planilha previa para ultrassom e RX juntos (R$ 7.038/mês). B e C ficam quase iguais porque, sem cotação da CDK, o RX do pacote GE usa a mesma referência.</li>' +
       (function () {
@@ -2132,6 +2291,38 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       })() +
       '<li>Entre B e C a diferença segue no financiamento: ' + Pp(B.cetAno) + ' a.a. em 60 meses com câmbio, contra ' + Pp(C.cetAno) + ' a.a. em ' + (C.n || '—') + ' meses em reais' + (lc && lc.iof === 'zero' ? ', sem IOF' : '') + '. A Pulsar entra no FINAME com o CFI previsto para dez/2026 (premissa VMI); até a publicação, é condição suspensiva da contratação.</li></ul></div>';
     $('#tab-alternativas').innerHTML = h;
+    bindRmSeg('segRmAlt');
+  }
+
+  /* ---------- Ressonância: com × sem, DRE e equilíbrio ---------- */
+  function cardRM() {
+    var c = calc, m = model, q = c.cenRM, r = m.rm; if (!q) return '';
+    var on = rmOn(), reg = E.rmMensal(m, 2, 1), cap = q.cap, e = q.eq, it = rmItem('C') || {}, man = (+it.m_ouro || 0) * (+it.qtd || 1) * (m.propria.manut_fator == null ? 1 : +m.propria.manut_fator);
+    var h = '<div class="card hero"><span class="eyebrow">Ressonância magnética · Cignus 600 sem hélio, 24 canais</span><h2>' + (e.C.delta >= 0 ? 'Com as hipóteses atuais, a RM soma ' + mi(e.C.delta) + ' ao VPL da compra C' : 'Com as hipóteses atuais, a RM tira ' + mi(-e.C.delta) + ' do VPL da compra C: ela se paga com ' + N(e.C.volume) + ' exames/mês') + '</h2><p class="lead muted">Serviço novo: a EMG não faz RM, então receita e custo da RM são inteiramente incrementais. Equipamento de ' + mi(+it.preco || 0) + ' (informado em 19/10/2026) e obra de ' + mi(+r.obra || 0) + ' nas três formas de pagar; ' + N(r.exames_mes) + ' exames/mês em regime a ' + R(r.ticket) + (+r.exames_sus_mes ? ' e ' + N(r.exames_sus_mes) + ' pelo SUS a ' + R(r.ticket_sus) : '') + '. A página está no cenário <b>' + (on ? 'com RM' : 'sem RM') + '</b>; o quadro mostra os dois.</p><div class="row" style="margin-top:8px">' + rmSegHtml('segRmAlt') + '</div></div>';
+    h += '<div class="grid two"><div class="card"><div class="card-h"><h2>Com e sem RM, por forma de pagar</h2><span class="muted small">' + m.fin.horizonte + ' anos a ' + P(m.fin.desconto, 0) + ' a.a.</span></div>' + rmTabela(['B', 'C', 'D'], false) + '<p class="small muted" style="margin-top:8px">B: sem proposta GE de RM, mesmo preço em 60 parcelas à taxa implícita do HFS (' + R(((c.B.implic || []).filter(function (x) { return x.id === 'rm'; })[0] || {}).parcelaAuto) + '/mês). C: RM no FINAME com o restante do pacote. D: aluguel da RM pela razão aluguel ÷ preço da TC Pulsar na tabela VMI (sem cotação da RM). Nas três, a obra sai do caixa no ano 0 e a RM opera a partir do mês ' + (E.iniRM(m) + 1) + ' do ano 1.</p></div>';
+    h += '<div class="card"><div class="card-h"><h2>DRE mensal da RM em regime</h2><span class="muted small">preços do ano 2, volume de regime</span></div><div class="tbl-wrap"><table><thead><tr><th>R$/mês</th><th class="n">Valor</th><th class="n">% RL</th></tr></thead><tbody>' +
+      [['Exames (convênio e particular' + (reg.exSus ? ' + SUS' : '') + ')', null, '', N(reg.exames)], ['Receita bruta', reg.rb], ['(−) Glosas', -reg.glosa, 'sub'], ['Receita líquida', reg.rl, 'total'], ['(−) Contraste e material', -reg.matmed], ['(−) Laudo médico', -reg.laudo], ['Margem de contribuição', reg.mc, 'total'], ['(−) Equipe técnica e enfermagem', -reg.equipe], ['(−) Energia e climatização', -reg.energia], ['(−) Outros fixos', -reg.outros], ['EBITDA antes da manutenção', reg.ebitda, 'total'], ['(−) Manutenção Ouro após a garantia (B e C)', -man], ['EBITDA após a manutenção', reg.ebitda - man, 'total hl']].map(function (x) { return '<tr class="' + (x[2] || '') + '"><td>' + x[0] + '</td><td class="n">' + (x[3] != null ? x[3] : R(x[1])) + '</td><td class="n">' + (x[1] != null && reg.rl ? P(x[1] / reg.rl, 1) : '') + '</td></tr>'; }).join('') +
+      '</tbody></table></div><p class="small muted" style="margin-top:8px">Capacidade: 2 exames/h × ' + N(+r.horas_dia || 12) + ' h × 26 dias = ' + N(cap.cap) + '/mês; o volume de regime ocupa ' + P(cap.ocup, 0) + '.' + (cap.ocup > 0.9 ? ' <b class="neg">Acima de 90%: estender o horário.</b>' : '') + ' Na locação (D), a manutenção está no aluguel.</p></div></div>';
+    /* equilíbrio */
+    var vs = [Math.round(q.v0 * 0.75), q.v0, Math.round(q.v0 * 1.25), Math.round(cap.cap)], ps = [4329000, 4900000, q.p0];
+    var grid = function (k) { return '<table><thead><tr><th>Exames/mês ↓ · preço →</th>' + ps.map(function (p) { return '<th class="n">' + mi(p) + '</th>'; }).join('') + '</tr></thead><tbody>' + vs.map(function (v) { return '<tr><td>' + N(v) + (v === q.v0 ? ' (premissa)' : v === Math.round(cap.cap) ? ' (capacidade)' : '') + '</td>' + ps.map(function (p) { var d = e[k].delta + e[k].porExame * (v - q.v0) + e[k].porReal * (p - q.p0); return '<td class="n ' + sinal(d) + '">' + (d >= 0 ? '+' : '−') + mi(Math.abs(d)).replace('−', '') + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table>'; };
+    h += '<div class="grid two"><div class="card"><div class="card-h"><h2>Quando a RM se paga</h2><span class="muted small">VPL para o hospital, com RM menos sem RM</span></div><div class="grid kpis">' +
+      kpi('Volume de equilíbrio (C)', N(e.C.volume) + '/mês', P(e.C.volume / cap.cap, 0) + ' da capacidade · B ' + N(e.B.volume) + ' · D ' + N(e.D.volume), e.C.volume > cap.cap ? 'bad' : 'warn', true) +
+      kpi('Ticket de equilíbrio (C)', R(e.C.ticket), 'com ' + N(q.v0) + ' exames/mês · B ' + R(e.B.ticket) + ' · D ' + R(e.D.ticket), '', true) +
+      kpi('Preço de equilíbrio (C)', mi(e.C.preco), 'mantidos volume e ticket', '', true) +
+      kpi('RM isolada, sem financiamento', mi(c.rm.isolada ? c.rm.isolada.vpl : null), c.rm.isolada ? 'TIR ' + (c.rm.isolada.tir == null ? '—' : P(c.rm.isolada.tir, 1)) + ' · payback ' + anos(c.rm.isolada.pb) : 'cenário sem RM', '', true) + '</div>' +
+      '<div class="tbl-wrap" style="margin-top:12px">' + grid(m.fin.alternativa) + '</div><p class="small muted" style="margin-top:8px">Diferença de VPL para o hospital na alternativa ' + m.fin.alternativa + ' (com RM − sem RM) por volume em regime e preço da RM, mantidos ticket, custos e manutenção. Preços de referência: R$ 4,33 mi (contrato FINAME da CEMAN), R$ 4,9 mi (pregões de Goiás, 2024–25) e o preço informado.</p></div>';
+    h += '<div class="card"><div class="card-h"><h2>Leitura</h2></div><ul class="bullets">' +
+      '<li><b>A RM é um negócio de volume.</b> Os custos fixos (equipe, energia, manutenção, ' + R(reg.fixos + man) + '/mês) e o investimento (' + mi((+it.preco || 0) + (+r.obra || 0)) + ') não mudam com o número de exames; cada exame a mais deixa ' + R(reg.mc / (reg.exames || 1)) + ' de margem. ' + rmEquilibrioTxt('C') + '</li>' +
+      '<li><b>Forma de pagar.</b> Com a RM, ' + (function () { var o = ['B', 'C', 'D'].sort(function (a, b) { return q.com[b].vplEnt - q.com[a].vplEnt; }); return o[0] + ' tem o maior VPL para o hospital (' + mi(q.com[o[0]].vplEnt) + '), seguida de ' + o[1] + ' (' + mi(q.com[o[1]].vplEnt) + ') e ' + o[2] + ' (' + mi(q.com[o[2]].vplEnt) + ')'; })() + '. A compra pelo FINAME (C) é a que menos pesa na cobertura: ' + X(q.com.C.dscr[0].v) + ' em ' + q.com.C.dscr[0].ano + ' e ' + X(q.com.C.dscr[1].v) + ' em ' + q.com.C.dscr[1].ano + ', contra ' + X(q.com.B.dscr[0].v) + ' e ' + X(q.com.B.dscr[1].v) + ' no HFS em 60 meses (B), porque a carência de 24 meses cobre a rampa da RM.</li>' +
+      '<li><b>O que faz a RM fechar</b>: SUS pelo Agora Tem Especialistas (R$ ' + NF2.format(+r.ticket_sus || 0) + ' por exame) para ocupar a agenda; preço mais perto das referências; horário estendido (a TC já roda 24 h); laudo por telerradiologia. Cada um pode ser testado no Simulador.</li>' +
+      '<li><b>Antes de decidir</b>: demanda real (RMs pedidas hoje para fora pelo PS, internação e ambulatório), ticket dos três maiores convênios, cotação de manutenção e de locação da RM pela VMI, projeto de pré-instalação (área, gaiola de RF, elétrica) e se o CFI 04252454 cobre a versão sem hélio. A internalização do serviço atual se paga sem a RM; vale tratá-la como gate separado.</li></ul></div></div>';
+    /* RM ano a ano (C) */
+    var fl = c.rm.isolada;
+    if (fl) h += '<div class="card"><div class="card-h"><h2>RM ano a ano</h2><span class="muted small">só a RM, compra (preço do pacote C), sem financiamento · R$ nominais</span></div><div class="tbl-wrap"><table><thead><tr><th></th><th class="n">Ano 0</th>' + fl.anos.map(function (a) { return '<th class="n">' + a.ano + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      [['Meses de operação', function (a) { return N(a.rm.meses); }, 'sub'], ['Volume (% do regime)', function (a) { return P(a.rm.rampa, 0); }, 'sub'], ['Exames', function (a) { return N(a.rm.exames); }], ['Receita líquida', function (a) { return R(a.rm.rl); }], ['(−) Laudo, contraste e material', function (a) { return R(-(a.rm.laudo + a.rm.matmed)); }], ['(−) Custos fixos', function (a) { return R(-a.rm.fixos); }], ['EBITDA da RM', function (a) { return R(a.rm.ebitda); }, 'total'], ['(−) Manutenção após a garantia', function (a) { return R(-a.manut); }]].map(function (x) { return '<tr class="' + (x[2] || '') + '"><td>' + x[0] + '</td><td class="n"></td>' + fl.anos.map(function (a) { return '<td class="n">' + x[1](a) + '</td>'; }).join('') + '</tr>'; }).join('') +
+      '<tr class="total hl"><td>Fluxo da RM</td><td class="n">' + R(fl.fl[0]) + '</td>' + fl.anos.map(function (a) { return '<td class="n">' + R(a.fc) + '</td>'; }).join('') + '</tr></tbody></table></div><p class="small muted" style="margin-top:8px">Ano 0: equipamento (' + mi(fl.equip) + ') e obra (' + mi(fl.inv - fl.equip) + '). VPL ' + mi(fl.vpl) + ' a ' + P(m.fin.desconto, 0) + ' a.a.; residual zero no fim do horizonte, como no resto do modelo.</p></div>';
+    return h;
   }
 
   /* ================= PLANO EM NÚMEROS ================= */
@@ -2147,9 +2338,9 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     h += '<div class="card"><div class="card-h"><h2>Fluxo de caixa incremental</h2><span class="muted small">R$, nominal</span></div><div class="tbl-wrap"><table><thead><tr><th></th><th class="n">Ano 0</th>' + fl.anos.map(function (a) { return '<th class="n">' + a.ano + '</th>'; }).join('') + '</tr></thead><tbody>' +
       tr('Fator de volume', function (a) { return N(a.fator, 2); }, 'sub') + tr('Fração do ano em operação própria', function (a) { return P(a.frac, 0); }, 'sub') +
       tr('Receita líquida', function (a) { return R(a.rl); }) + tr('EBITDA com a EMG (status quo), 12 meses', function (a) { return R(a.ebitdaEmg); }) + tr('EBITDA imagem própria antes de manutenção e aluguel, 12 meses', function (a) { return R(a.ebitdaPropBase); }) +
-      tr('Diferença × fração do ano', function (a) { return R(a.incBase); }) + tr(rotOpex, function (a) { return R(-a.opex); }) +
+      tr('Diferença × fração do ano', function (a) { return R(a.incBase); }) + (c.rm.on ? tr('(+) EBITDA da ressonância (serviço novo), antes da manutenção', function (a) { return R(a.rmEbitda); }) : '') + tr(rotOpex + (c.rm.on ? ', com a RM' : ''), function (a) { return R(-a.opex); }) +
       tr('EBITDA incremental', function (a) { return R(a.inc); }, 'total') + tr('(−) Depreciação', function (a) { return R(-a.dep); }, 'sub') + tr('(−) Tributos', function (a) { return R(-a.trib); }, 'sub') +
-      '<tr><td>(−) Investimento</td><td class="n">' + R(-fl.capex) + '</td>' + fl.anos.map(function () { return '<td class="n"></td>'; }).join('') + '</tr>' +
+      '<tr><td>(−) Investimento' + (fl.obra ? ' (com ' + mi(fl.obra) + ' de obra da RM)' : '') + '</td><td class="n">' + R(-fl.capex) + '</td>' + fl.anos.map(function () { return '<td class="n"></td>'; }).join('') + '</tr>' +
       tr('(+) Valor residual', function (a) { return R(a.residual); }, 'sub') +
       '<tr class="total"><td>Fluxo de caixa livre do projeto</td><td class="n">' + R(-fl.capex) + '</td>' + fl.anos.map(function (a) { return '<td class="n">' + R(a.fcp) + '</td>'; }).join('') + '</tr>' +
       tr('Acumulado', function (a) { return R(a.acumP); }, 'sub') +
@@ -2157,11 +2348,11 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       tr('(−) Parcelas', function (a) { return R(-a.servico); }) + (sel.id === 'C' ? tr('    das quais juros', function (a) { return R(-a.juros); }, 'sub') : '') +
       '<tr class="total hl"><td>Caixa para o hospital</td><td class="n">' + R(fl.ent[0]) + '</td>' + fl.anos.map(function (a) { return '<td class="n">' + R(a.fce) + '</td>'; }).join('') + '</tr>' +
       tr('Acumulado', function (a) { return R(a.acumE); }, 'sub') + tr('DSCR do projeto', function (a) { return X(a.dscr); }, 'sub') +
-      '</tbody></table></div><p class="small muted" style="margin-top:8px">' + (isD ? 'Ano 0: só a implantação do RIS/PACS.' : 'Ano 0 com financiamento: parte não financiada (RIS/PACS' + (sel.id === 'C' && sel.capexFin < sel.capex ? ' e ' + P(1 - sel.capexFin / (sel.capex || 1), 0) + ' do pacote' : '') + ') e custos iniciais (IOF, tarifa' + (sel.id === 'C' && sel.escolha && sel.escolha.sim.honor ? ', honorário da S&S de ' + R(sel.escolha.sim.honor) : '') + '). A Controladoria zera o ano 0 porque considera 100% financiado.') + ' ' + (isD ? 'Aluguel por ano = aluguel mensal × meses de operação × reajuste.' : 'Manutenção por ano = contrato mensal × meses após a garantia × reajuste (ano 1: zero; ano 2: ' + E.mesesAno(m, 2, m.manut.garantia_meses) + ' meses).') + '</p></div>';
+      '</tbody></table></div><p class="small muted" style="margin-top:8px">' + (isD ? 'Ano 0: só a implantação do RIS/PACS.' : 'Ano 0 com financiamento: parte não financiada (RIS/PACS' + (fl.obra ? ', obra da RM' : '') + (sel.id === 'C' && sel.capexFin < sel.capex ? ' e ' + P(1 - sel.capexFin / (sel.capex || 1), 0) + ' do pacote' : '') + ') e custos iniciais (IOF, tarifa' + (sel.id === 'C' && sel.escolha && sel.escolha.sim.honor ? ', honorário da S&S de ' + R(sel.escolha.sim.honor) : '') + '). A Controladoria zera o ano 0 porque considera 100% financiado.') + ' ' + (isD ? 'Aluguel por ano = aluguel mensal × meses de operação × reajuste' + (c.rm.on ? ' (a RM, desde a instalação no mês ' + (E.iniRM(m) + 1) + ')' : '') + '.' : 'Manutenção por ano = contrato mensal × meses após a garantia × reajuste (ano 1: zero; ano 2: ' + E.mesesAno(m, 2, m.manut.garantia_meses) + ' meses' + (c.rm.on ? '; na RM, ' + E.mesesDesde(E.iniRM(m) + (+m.manut.garantia_meses || 0), 2) + ' meses' : '') + ').') + '</p></div>';
     /* DRE anual em regime */
     var a2 = c.cen.prop;
     h += '<div class="card"><div class="card-h"><h2>DRE anual da imagem própria em regime</h2><span class="muted small">12 meses, ' + (isD ? 'com aluguel' : 'após a garantia') + ', volume do cenário</span></div><div class="tbl-wrap"><table><thead><tr><th></th><th class="n">R$/ano</th><th class="n">% RL</th></tr></thead><tbody>' +
-      [['Receita bruta', a2.rb], ['(−) Glosas', -a2.glosa], ['Receita líquida', a2.rl, 'total'], ['(−) Mat/Med', -a2.matmed], ['(−) Repasse médico', -a2.rep_med], ['(−) Outros repasses mantidos', -(a2.rep_mat + a2.rep_bio + a2.rep_sala)], ['Margem de contribuição', a2.mc, 'total'], ['(−) Custos fixos diretos', -a2.cf_dir], isD ? [locTxt().sep ? '(−) Aluguel e manutenção dos equipamentos' : '(−) Aluguel dos equipamentos', -a2.aluguel] : ['(−) Manutenção pós-garantia', -a2.manut], ['(−) RIS/PACS', -a2.rispacs], ['(−) Custos indiretos', -a2.cf_ind], ['EBITDA', a2.resultado, 'total hl']].map(function (r) { return '<tr class="' + (r[2] || '') + '"><td>' + r[0] + '</td><td class="n">' + R(r[1] * 12) + '</td><td class="n">' + P(r[1] / a2.rl, 1) + '</td></tr>'; }).join('') + '</tbody></table></div></div>';
+      [['Receita bruta', a2.rb], ['(−) Glosas', -a2.glosa], ['Receita líquida', a2.rl, 'total'], ['(−) Mat/Med', -a2.matmed], ['(−) Repasse médico', -a2.rep_med], ['(−) Outros repasses mantidos', -(a2.rep_mat + a2.rep_bio + a2.rep_sala)], ['Margem de contribuição', a2.mc, 'total'], ['(−) Custos fixos diretos', -a2.cf_dir], isD ? [locTxt().sep ? '(−) Aluguel e manutenção dos equipamentos' : '(−) Aluguel dos equipamentos', -a2.aluguel] : ['(−) Manutenção pós-garantia', -a2.manut], ['(−) RIS/PACS', -a2.rispacs], ['(−) Custos indiretos', -a2.cf_ind], ['EBITDA', a2.resultado, 'total hl']].map(function (r) { return '<tr class="' + (r[2] || '') + '"><td>' + r[0] + '</td><td class="n">' + R(r[1] * 12) + '</td><td class="n">' + P(r[1] / a2.rl, 1) + '</td></tr>'; }).join('') + '</tbody></table></div>' + (c.rm.on && c.rm.reg ? '<p class="small muted" style="margin-top:8px">Sem a ressonância, que tem DRE própria em Alternativas: em regime, ' + R(c.rm.reg.rl * 12) + '/ano de receita líquida e ' + R(c.rm.reg.ebitda * 12) + '/ano de EBITDA antes da manutenção' + (isD ? ' (o aluguel da RM está na linha de aluguel acima)' : ' (a manutenção da RM está na linha de manutenção acima)') + '.</p>' : '') + '</div>';
     $('#tab-numeros').innerHTML = h;
   }
 
@@ -2170,9 +2361,9 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     var itens = model.equip[key], isB = key === 'B', cx = E.capexDe(itens), mt = calc[key].manut;
     var h = '<div class="tbl-wrap"><table class="ge"><thead><tr><th>Item</th><th>Modelo</th><th class="n">Qtd</th><th class="n">Preço unit. (R$)</th>' + (isB ? '<th class="n">Parcela unit. (R$)</th><th class="n">Taxa implícita</th>' : '<th>CFI</th>') + '<th>Financiável</th><th class="n">Manut. Prata (R$/mês/un.)</th><th class="n">Manut. Ouro (R$/mês/un.)</th><th>Observação</th><th></th></tr></thead><tbody>';
     itens.forEach(function (it, i) {
-      var imp = isB ? calc.B.implic[i] : null;
-      h += '<tr><td><input class="w-m" data-eq="' + key + '.' + i + '.nome" value="' + esc(it.nome) + '"></td><td><input class="w-m" data-eq="' + key + '.' + i + '.modelo" value="' + esc(it.modelo) + '"></td><td class="n"><input class="n w-s" data-eq="' + key + '.' + i + '.qtd" value="' + esc(it.qtd) + '"></td><td class="n"><input class="n" data-eq="' + key + '.' + i + '.preco" value="' + esc(NF2.format(it.preco)) + '"></td>' +
-        (isB ? '<td class="n"><input class="n" data-eq="' + key + '.' + i + '.parcela" value="' + esc(NF2.format(it.parcela || 0)) + '"></td><td class="n">' + (imp ? (imp.taxaAno == null ? '—' : Pp(imp.taxaAno)) + (imp.alerta ? ' <span class="pill bad">' + esc(imp.alerta) + '</span>' : '') : '') + '</td>' : '<td><input class="w-s" data-eq="' + key + '.' + i + '.cfi" value="' + esc(it.cfi || '') + '" placeholder="a informar"></td>') +
+      var imp = isB ? calc.B.implic[i] : null, ehRM = E.isRM(it), fora = ehRM && !rmOn(), auto = isB && imp && imp.parcelaAuto != null;
+      h += '<tr' + (fora ? ' class="muted" title="Fora do cálculo no cenário sem RM"' : '') + '><td><input class="w-m" data-eq="' + key + '.' + i + '.nome" value="' + esc(it.nome) + '">' + (ehRM ? '<div class="tiny"><span class="pill ' + (fora ? '' : 'info') + '">' + (fora ? 'fora do cenário (sem RM)' : 'cenário com RM') + '</span></div>' : '') + '</td><td><input class="w-m" data-eq="' + key + '.' + i + '.modelo" value="' + esc(it.modelo) + '"></td><td class="n"><input class="n w-s" data-eq="' + key + '.' + i + '.qtd" value="' + esc(it.qtd) + '"></td><td class="n"><input class="n" data-eq="' + key + '.' + i + '.preco" value="' + esc(NF2.format(it.preco)) + '"></td>' +
+        (isB ? '<td class="n"><input class="n" data-eq="' + key + '.' + i + '.parcela" value="' + (auto ? '' : esc(NF2.format(it.parcela || 0))) + '"' + (auto ? ' placeholder="' + esc(NF2.format(imp.parcelaAuto)) + '" title="Calculada à taxa implícita dos demais itens; digite um valor para fixar"' : '') + '>' + (auto ? '<div class="tiny muted">calculada</div>' : '') + '</td><td class="n">' + (imp ? (imp.taxaAno == null ? '—' : Pp(imp.taxaAno)) + (imp.alerta ? ' <span class="pill bad">' + esc(imp.alerta) + '</span>' : '') : '') + '</td>' : '<td><input class="w-s" data-eq="' + key + '.' + i + '.cfi" value="' + esc(it.cfi || '') + '" placeholder="a informar"></td>') +
         '<td><input type="checkbox" data-eq="' + key + '.' + i + '.fin"' + (it.fin !== false ? ' checked' : '') + '></td>' +
         '<td class="n"><input class="n w-n" data-eq="' + key + '.' + i + '.m_prata" value="' + esc(NF2.format(it.m_prata || 0)) + '">' + (it.tubo ? '<div class="tiny muted">+ tubo ' + R(model.propria.tubo) + '</div>' : '') + '</td>' +
         '<td class="n"><input class="n w-n" data-eq="' + key + '.' + i + '.m_ouro" value="' + esc(NF2.format(it.m_ouro || 0)) + '"></td>' +
@@ -2194,12 +2385,12 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     var NOMES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
     var h = '<div class="card"><div class="card-h"><h2>Manutenção pós-garantia (compras B e C)</h2><div class="row"><label>Plano <select id="selPlano"><option value="ouro"' + (ouro ? ' selected' : '') + '>Ouro</option><option value="prata"' + (!ouro ? ' selected' : '') + '>Prata</option></select></label><label>Garantia <input class="n" style="width:64px" id="inGar" value="' + esc(G) + '"> meses</label></div></div>';
     h += '<div class="grid kpis">' + kpi('Pacote C · VMI', R(C.mes) + '/mês', 'plano ' + (ouro ? 'Ouro' : 'Prata') + ' · Prata ' + R(C.prata) + ' · Ouro ' + R(C.ouro), 'warn', true) + kpi('Pacote B · GE/CDK', R(B.mes) + '/mês', 'plano ' + (ouro ? 'Ouro' : 'Prata') + ' · Prata ' + R(B.prata) + ' · Ouro ' + R(B.ouro), 'warn', true) + kpi('Planilha da Controladoria', R(MANUT_CTRL) + '/mês', 'TC 7% a.a. + US e RX + provisão de tubo', '', true) + kpi('Início da cobrança', NOMES[mesCal - 1] + '/' + anoIni, 'depois de ' + G + ' meses de garantia, contados da instalação', '', true) + '</div>';
-    var rows = C.porItem.map(function (x, i) { var b = B.porItem[i] || {}; var it = m.equip.C[i] || {}, V = (+it.qtd || 0) * (+it.preco || 0); var itB = m.equip.B[i] || {}; return '<tr><td>' + esc(x.nome) + '</td><td class="n">' + R(b.prata) + '</td><td class="n">' + R(b.ouro) + '</td><td class="n">' + R(x.prata) + '</td><td class="n">' + R(x.ouro) + '</td><td class="n">' + (V ? P(x.ouro * 12 / V, 0) : '—') + '</td><td class="wrap tiny muted" style="min-width:260px;max-width:360px"><b>C:</b> ' + esc(it.m_fonte || '—') + '<br><b>B:</b> ' + esc(itB.m_fonte || '—') + '</td></tr>'; }).join('');
+    var rows = C.porItem.map(function (x, i) { var byId = function (l, id) { return l.filter(function (y) { return y.id === id; })[0]; }; var b = byId(B.porItem, x.id) || B.porItem[i] || {}; var it = byId(m.equip.C, x.id) || {}, V = (+it.qtd || 0) * (+it.preco || 0); var itB = byId(m.equip.B, x.id) || {}; return '<tr><td>' + esc(x.nome) + '</td><td class="n">' + R(b.prata) + '</td><td class="n">' + R(b.ouro) + '</td><td class="n">' + R(x.prata) + '</td><td class="n">' + R(x.ouro) + '</td><td class="n">' + (V ? P(x.ouro * 12 / V, 0) : '—') + '</td><td class="wrap tiny muted" style="min-width:260px;max-width:360px"><b>C:</b> ' + esc(it.m_fonte || '—') + '<br><b>B:</b> ' + esc(itB.m_fonte || '—') + '</td></tr>'; }).join('');
     h += '<div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>R$/mês (quantidade incluída)</th><th class="n">B · Prata</th><th class="n">B · Ouro</th><th class="n">C · Prata</th><th class="n">C · Ouro</th><th class="n">C · Ouro, % a.a. do preço</th><th>Fonte dos valores</th></tr></thead><tbody>' + rows + '<tr class="total"><td>Total</td><td class="n">' + R(B.prata) + '</td><td class="n">' + R(B.ouro) + '</td><td class="n">' + R(C.prata) + '</td><td class="n">' + R(C.ouro) + '</td><td></td><td></td></tr></tbody></table></div>';
     h += '<ul class="bullets small" style="margin-top:10px"><li><b>Ouro</b>: preventiva e corretiva com cobertura total de peças, incluindo tubo, gerador de alta tensão e sistemas de imagem. <b>Prata</b>: cobertura parcial, sem tubo, gerador e sistemas de imagem; a TC soma a provisão de tubo da Controladoria. No Prata, a quebra de gerador ou detector de RX fica com o hospital e não está provisionada.</li>' +
       '<li><b>Cotação VMI (média SP, 15/10/2026)</b>: Aquila S R$ 3.900 (Prata) e R$ 6.800 (Ouro); Aquila D R$ 4.600 e R$ 7.500, tratados como R$/mês. ' + pctVmi() + ' Confirmar com a VMI se são mensais e se cedem no pacote.</li>' +
       '<li><b>Pacote GE (benchmark)</b>: TC pelo plano GE citado pelo Jaime (R$ 17 mil/mês com peças), na linha dos contratos públicos de TC com tubo; ultrassom pelo contrato de manutenção GE da EBSERH; RX pela cotação VMI de equipamento da mesma classe, na falta de cotação da CDK. A TC GE tem peças importadas: reajuste do contrato exposto ao câmbio.</li>' +
-      '<li><b>Sem cotação ainda</b>: TC Pulsar e ultrassom Invictus, estimados pela mediana dos contratos públicos abaixo; RX digital Apolo, pela cotação do Aquila D.</li></ul>';
+      '<li><b>Sem cotação ainda</b>: TC Pulsar e ultrassom Invictus, estimados pela mediana dos contratos públicos abaixo; RX digital Apolo, pela cotação do Aquila D' + (rmOn() ? '; RM Cignus 600 a 8% a.a. do preço no Ouro (' + R(+((rmItem('C') || {}).m_ouro) || 0) + '/mês), começando ' + m.manut.garantia_meses + ' meses depois da instalação da RM' : '') + '.</li></ul>';
     h += '<details style="margin-top:8px"><summary>Contratos públicos usados como referência (PNCP)</summary><div class="tbl-wrap"><table><thead><tr><th>Mod.</th><th>Objeto</th><th>Órgão</th><th class="n">Ano</th><th class="n">Valor</th><th class="n">Meses</th><th class="n">R$/mês</th></tr></thead><tbody>' + BENCH_MANUT.map(function (b) { return '<tr><td>' + b.mod + '</td><td><a href="' + b.url + '" target="_blank" rel="noopener">' + esc(b.obj) + '</a></td><td class="small">' + esc(b.org) + '</td><td class="n">' + b.ano + '</td><td class="n">' + R(b.total) + '</td><td class="n">' + b.meses + '</td><td class="n">' + R(b.total / b.meses) + '</td></tr>'; }).join('') + '</tbody></table></div></details></div>';
     return h;
   }
@@ -2216,13 +2407,13 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     var c = calc, m = model, D = c.D, L = D.loc, PZ = c.prazosD || [], d = m.altD, lt = locTxt();
     var cot = m.equip.C.filter(function (it) { return it.loc_vmi; });
     var h = '<div class="card hero"><span class="eyebrow">Alternativa D · locação de longo prazo do pacote VMI</span><h2>' + (lt.sep ? 'Custo de ' + R(D.aluguel) + '/mês por ' + D.n + ' meses: aluguel de ' + R(L.fin) + ' e manutenção média de ' + R(L.manSep) + ' paga à parte' : 'Aluguel de ' + R(D.aluguel) + '/mês por ' + D.n + ' meses, com manutenção inclusa') + '</h2><p class="lead muted">' +
-      (lt.vmi ? 'Cotação de locação da VMI de 16/10/2026 para a TC, o Aquila S e o Aquila D, de 12 a 84 meses; a VMI sugere 48 meses. ' + (L.semCotacao.length ? 'Sem cotação (' + esc(L.semCotacao.join('; ')) + '): aluguel montado pelos custos de um locador. ' : '') + (L.manInclusa ? 'O aluguel já inclui a manutenção (confirmado em 17/10/2026): não há contrato à parte depois da garantia.' : 'Cenário de comparação: manutenção cobrada à parte, com o contrato ' + lt.plano + ' depois de ' + m.manut.garantia_meses + ' meses de garantia, como na compra. A VMI confirmou que o aluguel já a inclui.') : 'Aluguel montado pelos custos de um locador (cotação VMI desligada em Premissas): recuperar o valor do equipamento menos o que ele vale no fim do prazo, à taxa exigida, mais tributos e o contrato de manutenção Ouro.') + '</p></div>';
+      (lt.vmi ? 'Cotação de locação da VMI de 16/10/2026 para a TC, o Aquila S e o Aquila D, de 12 a 84 meses; a VMI sugere 48 meses. ' + (L.semCotacao.length ? 'Sem cotação (' + esc(L.semCotacao.join('; ')) + '): aluguel montado pelos custos de um locador. ' : '') + (L.nProxy ? 'RM sem cotação: aluguel pela mesma razão aluguel ÷ preço da TC Pulsar na tabela VMI (' + R(L.aluguelProxy) + '/mês em ' + D.n + ' meses), desde a instalação da RM. ' : '') + (L.manInclusa ? 'O aluguel já inclui a manutenção (confirmado em 17/10/2026): não há contrato à parte depois da garantia.' : 'Cenário de comparação: manutenção cobrada à parte, com o contrato ' + lt.plano + ' depois de ' + m.manut.garantia_meses + ' meses de garantia, como na compra. A VMI confirmou que o aluguel já a inclui.') : 'Aluguel montado pelos custos de um locador (cotação VMI desligada em Premissas): recuperar o valor do equipamento menos o que ele vale no fim do prazo, à taxa exigida, mais tributos e o contrato de manutenção Ouro.') + '</p></div>';
     /* tabela VMI */
     if (cot.length) {
       var prz = [12, 24, 36, 48, 60, 72, 84], pz = {}; PZ.forEach(function (z) { pz[z.n] = z; });
       h += '<div class="card"><div class="card-h"><h2>Tabela de locação da VMI</h2><span class="muted small">R$/mês por unidade · 16/10/2026</span></div><div class="tbl-wrap"><table><thead><tr><th>Prazo</th>' + cot.map(function (it) { return '<th class="n">' + esc(it.loc_vmi_modelo || it.modelo) + '</th>'; }).join('') + '<th class="n">Três itens</th><th class="n">Pacote completo/mês</th><th class="n">VPL hospital ' + m.fin.horizonte + 'a</th></tr></thead><tbody>' +
         prz.map(function (n) { var tot = cot.reduce(function (s, it) { return s + (+it.loc_vmi[n] || 0) * (+it.qtd || 1); }, 0), z = pz[n]; return '<tr class="' + (n === D.n ? 'hl' : '') + '"><td>' + n + ' meses' + (n === 48 ? ' <span class="pill info">sugestão VMI</span>' : '') + '</td>' + cot.map(function (it) { return '<td class="n">' + R(+it.loc_vmi[n] || 0) + '</td>'; }).join('') + '<td class="n">' + R(tot) + '</td><td class="n">' + (z ? R(z.aluguel) : '—') + '</td><td class="n">' + (z ? mi(z.vplEnt) : '—') + '</td></tr>'; }).join('') +
-        '</tbody></table></div><p class="small muted" style="margin-top:8px">Pacote completo = três itens cotados ' + (lt.sep ? '+ manutenção à parte (média no prazo) ' : '') + '+ ultrassons e placa DR pela composição de custos. 12 meses fica fora da simulação: renovar o pacote todo ano não é uma opção prática. Acima de 60 meses o aluguel quase não cai (TC: ' + R(cot[0].loc_vmi[60]) + ' em 60 m e ' + R(cot[0].loc_vmi[84]) + ' em 84 m) e o equipamento envelhece no contrato.' + (cot.some(function (it) { return it.id === 'rxdr'; }) ? ' A VMI cotou o RX digital como Aquila D; na compra, o RX digital é o Apolo D (fixo, ' + R((m.equip.C.filter(function (x) { return x.id === 'rxdr'; })[0] || {}).preco) + '): confirmar se é o mesmo equipamento.' : '') + '</p></div>';
+        '</tbody></table></div><p class="small muted" style="margin-top:8px">Pacote completo = três itens cotados ' + (lt.sep ? '+ manutenção à parte (média no prazo) ' : '') + '+ ultrassons e placa DR pela composição de custos' + (L.nProxy ? ' + RM pelo proxy da TC' : '') + '. 12 meses fica fora da simulação: renovar o pacote todo ano não é uma opção prática. Acima de 60 meses o aluguel quase não cai (TC: ' + R(cot[0].loc_vmi[60]) + ' em 60 m e ' + R(cot[0].loc_vmi[84]) + ' em 84 m) e o equipamento envelhece no contrato.' + (cot.some(function (it) { return it.id === 'rxdr'; }) ? ' A VMI cotou o RX digital como Aquila D; na compra, o RX digital é o Apolo D (fixo, ' + R((m.equip.C.filter(function (x) { return x.id === 'rxdr'; })[0] || {}).preco) + '): confirmar se é o mesmo equipamento.' : '') + '</p></div>';
     }
     /* composição no prazo */
     h += '<div class="card"><div class="card-h"><h2>Custo mensal no prazo de ' + D.n + ' meses</h2><div class="row"><label>Prazo <select id="selPrazoD">' + E.PRAZOS_D.map(function (n) { return '<option value="' + n + '"' + (n === D.n ? ' selected' : '') + '>' + n + ' meses' + (n === 48 ? ' (sugestão VMI)' : '') + '</option>'; }).join('') + '</select></label>' +
@@ -2230,11 +2421,12 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       '<label>Base <select id="selFonteD"><option value="vmi"' + ((d.fonte || 'vmi') !== 'composicao' ? ' selected' : '') + '>cotação VMI</option><option value="composicao"' + (d.fonte === 'composicao' ? ' selected' : '') + '>composição de custos</option></select></label></div></div>';
     h += '<div class="grid kpis">' + (lt.vmi ? kpi('Aluguel VMI', R(L.aluguelVmi) + '/mês', L.nVmi + ' itens cotados, ' + D.n + ' meses', '', true) : kpi('Taxa do locador', Pp(L.taxaAno * 100) + ' a.a.', 'arrendamento PJ ' + Pp(d.taxa_base * 100) + ' (BCB, ago/26) + prêmio ' + Pp(d.premio * 100), '', true)) +
       kpi('Manutenção à parte', R(L.manSep) + '/mês', lt.sep ? 'cenário: contrato ' + lt.plano + ' × (' + D.n + ' − ' + m.manut.garantia_meses + ') ÷ ' + D.n + ' meses' : 'nenhuma: inclusa no aluguel VMI', lt.sep ? 'warn' : '', true) +
-      kpi('Itens sem cotação', R(L.aluguel - L.aluguelVmi - L.manSep) + '/mês', L.semCotacao.length ? 'composição de custos, com Ouro' : 'nenhum', '', true) +
+      (L.nProxy ? kpi('RM pelo proxy da TC', R(L.aluguelProxy) + '/mês', 'sem cotação VMI da RM · ' + Pp(L.aluguelProxy / (+((rmItem('C') || {}).preco) || 1) * 100) + ' do preço ao mês', 'warn', true) : '') +
+      kpi('Itens sem cotação', R(L.aluguelComp) + '/mês', L.semCotacao.length ? 'composição de custos, com Ouro' : 'nenhum', '', true) +
       kpi('Custo mensal total', R(D.aluguel), Pp(L.pctMes * 100) + ' do valor do pacote ao mês', '', true) +
       kpi('Equilíbrio com C', R(D.equilibrioC) + '/mês', 'mesmo VPL para o hospital em ' + m.fin.horizonte + ' anos (' + Psig(D.equilibrioC / D.aluguel - 1, 0) + ')', D.equilibrioC < D.aluguel ? 'warn' : 'good', true) + '</div>';
     h += '<div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>Item</th><th>Base</th><th class="n">Valor de compra</th><th class="n">Aluguel</th><th class="n">Manutenção média</th><th class="n">Custo mensal</th><th class="n">% do valor/mês</th><th class="n">Taxa implícita a.a.</th></tr></thead><tbody>' +
-      L.linhas.map(function (x) { return '<tr><td>' + esc(x.nome) + (x.qtd > 1 ? ' (' + x.qtd + ')' : '') + '</td><td class="small">' + (x.fonte === 'vmi' ? 'VMI · ' + esc(x.cotModelo) + '<div class="tiny muted">' + R(x.cotUnit) + '/un.</div>' : 'composição') + '</td><td class="n">' + R(x.V) + '</td><td class="n">' + R(x.fin) + '</td><td class="n">' + R(x.man) + (x.fonte === 'vmi' ? (x.manSep ? '<div class="tiny muted">à parte</div>' : '') : '<div class="tiny muted">no aluguel</div>') + '</td><td class="n"><b>' + R(x.aluguel) + '</b></td><td class="n">' + Pp((x.pctMes || 0) * 100) + '</td><td class="n">' + (x.fonte === 'vmi' ? (x.taxaImpl == null ? '<span class="neg">não fecha</span>' : Pp(x.taxaImpl * 100)) : Pp(L.taxaAno * 100) + '<div class="tiny muted">locador</div>') + '</td></tr>'; }).join('') +
+      L.linhas.map(function (x) { return '<tr><td>' + esc(x.nome) + (x.qtd > 1 ? ' (' + x.qtd + ')' : '') + '</td><td class="small">' + (x.fonte === 'vmi' ? 'VMI · ' + esc(x.cotModelo) + '<div class="tiny muted">' + R(x.cotUnit) + '/un.</div>' : x.fonte === 'proxy' ? esc(x.cotModelo) + '<div class="tiny muted">' + R(x.cotUnit) + '/un.</div>' : 'composição') + '</td><td class="n">' + R(x.V) + '</td><td class="n">' + R(x.fin) + '</td><td class="n">' + R(x.man) + (x.fonte === 'vmi' ? (x.manSep ? '<div class="tiny muted">à parte</div>' : '') : '<div class="tiny muted">no aluguel</div>') + '</td><td class="n"><b>' + R(x.aluguel) + '</b></td><td class="n">' + Pp((x.pctMes || 0) * 100) + '</td><td class="n">' + (x.fonte !== 'composicao' ? (x.taxaImpl == null ? '<span class="neg">não fecha</span>' : Pp(x.taxaImpl * 100)) : Pp(L.taxaAno * 100) + '<div class="tiny muted">locador</div>') + '</td></tr>'; }).join('') +
       '<tr class="total"><td>Pacote</td><td></td><td class="n">' + R(L.V) + '</td><td class="n">' + R(L.fin) + '</td><td class="n">' + R(L.man) + '</td><td class="n">' + R(L.aluguel) + '</td><td class="n">' + Pp(L.pctMes * 100) + '</td><td></td></tr></tbody></table></div>' +
       '<p class="small muted" style="margin-top:8px">Taxa implícita: a taxa que faz o aluguel VMI, líquido de ' + Pp(d.trib * 100) + ' de tributos, pagar o valor de compra menos o residual de mercado no fim do prazo (queda a.a.: TC ' + P(d.dep_tc, 0) + ', RX ' + P(d.dep_rx, 0) + '). ' + (L.manInclusa ? 'É um teto: como o aluguel também paga a manutenção, a taxa financeira efetiva é menor. ' : '') + 'Referência: arrendamento PJ do BCB ' + Pp(d.taxa_base * 100) + ' a.a. "Não fecha" = o aluguel não paga nem o valor do equipamento. Composição: parcela financeira = (valor − residual descontado) × anuidade à taxa do locador ÷ (1 − tributos) + manutenção Ouro × (prazo − garantia) ÷ prazo.</p>';
     /* benchmarks */
@@ -2244,7 +2436,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       '<div><h3 class="h3">Cotação VMI × mercado</h3><ul class="bullets small">' +
       (tc60 ? '<li>TC: VMI ' + R(tc60) + '/mês em 60 meses com manutenção inclusa, contra R$ 60–62 mil/mês dos contratos públicos de TC 64–128 canais com manutenção (São Luís e São Paulo, 2026): cerca de ' + P(1 - tc60 / 61000, 0) + ' abaixo. Locador cativo: para a VMI, o custo do equipamento é o de fabricação, não o preço de venda. Comprar a TC e pagar o contrato Ouro (' + R(tcM) + '/mês) sai mais caro que alugá-la.</li>' : '<li>TC: ' + (tc ? R(tc.aluguel) : '—') + '/mês em ' + D.n + ' meses; mercado R$ 60–62 mil/mês com manutenção.</li>') +
       '<li>RX móvel: VMI ' + rxs.map(function (x) { return esc(x.cotModelo || x.modelo) + ' ' + R(x.fonte === 'vmi' ? x.cotUnit : x.aluguel); }).join(' e ') + '/mês em ' + D.n + ' meses; contratos públicos entre R$ 3,5 mil (analógico, interior) e R$ 9,5 mil/mês. O aluguel do Aquila S com manutenção (' + R(+((m.equip.C.filter(function (x) { return x.id === 'rxp'; })[0] || {}).loc_vmi || {})[D.n] || 0) + ') fica abaixo do contrato Ouro avulso do mesmo equipamento (R$ 6.800/mês): na compra (B e C), o contrato de manutenção dos RX está caro e deve ser negociado com a locação como referência.</li>' +
-      '<li>Ultrassom e placa DR: sem cotação VMI nem contrato público comparável; aluguel pela composição de custos.</li></ul></div></div></div>';
+      '<li>Ultrassom e placa DR: sem cotação VMI nem contrato público comparável; aluguel pela composição de custos.</li>' + (L.nProxy ? '<li>RM: o proxy dá ' + R(L.aluguelProxy) + '/mês em ' + D.n + ' meses. A locação emergencial de RM 1,5T da SMS São Paulo (2024) custou R$ 190 mil/mês por 12 meses, com a adequação da sala; na tabela VMI, o aluguel da TC em 48 meses é ' + P(((m.equip.C.filter(function (x) { return x.id === 'tc'; })[0] || {}).loc_vmi || {})[48] / (((m.equip.C.filter(function (x) { return x.id === 'tc'; })[0] || {}).loc_vmi || {})[12] || 1), 0) + ' do de 12 meses.</li>' : '') + '</ul></div></div></div>';
     /* prazos */
     h += '<div class="card"><div class="card-h"><h2>Simulação por prazo</h2><span class="muted small">' + esc(lt.base) + ' · VP a ' + P(m.fin.desconto, 0) + ' a.a. · compra = pacote C financiado pela linha em uso, manutenção Ouro</span></div><div class="tbl-wrap"><table><thead><tr><th>Prazo</th><th class="n">Custo/mês</th><th class="n">% valor/mês</th><th class="n">Total no prazo</th><th class="n">VP do custo</th><th class="n">VP possuir (C)</th><th class="n">Vantagem locação</th><th class="n">Equilíbrio no prazo</th><th class="n">VPL hospital ' + m.fin.horizonte + 'a</th><th class="n">Caixa acum.</th></tr></thead><tbody>' +
       PZ.map(function (z) { var on = z.n === D.n; return '<tr class="' + (on ? 'hl' : '') + '"><td>' + z.n + ' meses' + (z.n === 48 ? ' <span class="pill info">sugestão VMI</span>' : '') + '</td><td class="n">' + R(z.aluguel) + '</td><td class="n">' + Pp(z.pctMes * 100) + '</td><td class="n">' + mi(z.totalPrazo) + '</td><td class="n">' + mi(z.pvAluguel) + '</td><td class="n">' + mi(z.custoPossuir) + '</td><td class="n ' + sinal(z.vantagem) + '">' + mi(z.vantagem) + '</td><td class="n">' + R(z.equilibrio) + '</td><td class="n">' + mi(z.vplEnt) + '</td><td class="n">' + mi(z.acumEnt) + '</td></tr>'; }).join('') +
@@ -2254,9 +2446,9 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
   }
   function renderInvest() {
     var c = calc, m = model, C = c.C, av = C.av;
-    var h = '<div class="card hero"><span class="eyebrow">Investimento</span><h2>Mesmo perímetro, dois pacotes: GE/CDK (proposta do Jaime, ' + mi(c.B.capex) + ') e VMI (preços de 15/10/2026, ' + mi(c.C.capex) + ')</h2><p class="lead muted">Os preços, CFIs e contratos de manutenção de cada item são editáveis. Diferença de perímetro a decidir: a VMI propõe RX digital fixo (Apolo D, R$ 290 mil) onde o pacote GE tem RX portátil com placa DR (R$ 490 mil).</p></div>';
+    var h = '<div class="card hero"><span class="eyebrow">Investimento</span><h2>Mesmo perímetro, dois pacotes: GE/CDK (proposta do Jaime, ' + mi(c.B.capex) + ') e VMI (preços de 15/10/2026, ' + mi(c.C.capex) + ')' + (rmOn() ? ', com a RM nos dois' : '') + '</h2><p class="lead muted">Os preços, CFIs e contratos de manutenção de cada item são editáveis. Diferença de perímetro a decidir: a VMI propõe RX digital fixo (Apolo D, R$ 290 mil) onde o pacote GE tem RX portátil com placa DR (R$ 490 mil). A RM Cignus 600 (R$ 5,2 mi, 19/10/2026) está nos dois pacotes e entra no cálculo só no cenário com RM (' + (rmOn() ? 'ligado' : 'desligado') + '; troca em Alternativas ou em Premissas); no pacote GE, sem proposta de RM, ela usa o mesmo preço e a parcela é calculada à taxa do HFS.</p></div>';
     h += '<div class="card"><div class="card-h"><h2>Pacote B · GE/CDK, financiamento dos fornecedores</h2><span class="muted small">Projeto Radiologia e Proposta Estratégica (Jaime); HFS 60x para a TC</span></div>' + equipTable('B') + '<p class="small muted" style="margin-top:8px">Totais corretos: R$ 2.934.024,80 e R$ 73.537,38/mês. O documento do Jaime soma R$ 2.979.024,80 e R$ 68.458,38 (erros de soma).</p></div>';
-    h += '<div class="card"><div class="card-h"><h2>Pacote C · VMI, linha de fomento</h2><span class="muted small">Pulsar 128 (64 canais/128 cortes), Invictus, Aquila 320 S, Apolo D, placa DR VMI · preços VMI de 15/10/2026</span></div>' + equipTable('C') + '</div>';
+    h += '<div class="card"><div class="card-h"><h2>Pacote C · VMI, linha de fomento</h2><span class="muted small">Pulsar 128 (64 canais/128 cortes), Invictus, Aquila 320 S, Apolo D, placa DR VMI · preços VMI de 15/10/2026 · Cignus 600 (RM) de 19/10/2026</span></div>' + equipTable('C') + '</div>';
     h += cardManut();
     /* caso de crédito */
     var cl = m.cliente, ctx = av.ctx;
@@ -2296,7 +2488,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     $('#inPrazo').addEventListener('change', function () { model.altC.prazo = Math.max(1, Math.round(parseBR(this.value))); afterEdit(); });
     $('#inCar').addEventListener('change', function () { model.altC.carencia = Math.max(0, Math.round(parseBR(this.value))); afterEdit(); });
     $('#selSist').addEventListener('change', function () { model.altC.sistema = this.value; afterEdit(); });
-    $$('#tab-invest [data-eq]').forEach(function (inp) { inp.addEventListener('change', function () { var p = this.dataset.eq.split('.'); var it = model.equip[p[0]][+p[1]]; var f = p[2]; if (f === 'fin') it.fin = this.checked; else if (f === 'qtd' || f === 'preco' || f === 'parcela' || f === 'm_prata' || f === 'm_ouro') it[f] = parseBR(this.value); else it[f] = this.value; afterEdit(); }); });
+    $$('#tab-invest [data-eq]').forEach(function (inp) { inp.addEventListener('change', function () { var p = this.dataset.eq.split('.'); var it = model.equip[p[0]][+p[1]]; var f = p[2]; if (f === 'fin') it.fin = this.checked; else if (f === 'parcela' && E.isRM(it)) { var pv = parseBR(this.value); it.parcela = pv || null; it.parcela_auto = !pv; } else if (f === 'qtd' || f === 'preco' || f === 'parcela' || f === 'm_prata' || f === 'm_ouro') it[f] = parseBR(this.value); else it[f] = this.value; afterEdit(); }); });
     $$('#tab-invest [data-eqdel]').forEach(function (b) { b.addEventListener('click', function () { var p = this.dataset.eqdel.split('.'); model.equip[p[0]].splice(+p[1], 1); afterEdit(); }); });
     $$('#tab-invest [data-eqadd]').forEach(function (b) { b.addEventListener('click', function () { var k = this.dataset.eqadd; model.equip[k].push(k === 'B' ? { id: 'n' + Date.now(), nome: 'Novo item', modelo: '', qtd: 1, preco: 0, parcela: 0, n: 60, fin: true, obs: '', m_prata: 0, m_ouro: 0, m_fonte: 'Informar o contrato' } : { id: 'n' + Date.now(), nome: 'Novo item', modelo: '', qtd: 1, preco: 0, cfi: '', fin: true, obs: '', m_prata: 0, m_ouro: 0, m_fonte: 'Informar o contrato' }); afterEdit(); }); });
   }
@@ -2340,6 +2532,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     var c = calc, m = model, en = c.ent, L = en.linhas, l1 = L[0];
     var h = '<div class="card hero"><span class="eyebrow">Visão do banco · entidade tomadora</span><h2>O projeto se paga; a pergunta do agente financeiro é se o hospital cobre a dívida que já tem</h2><p class="lead muted">EBITDA anualizado de ' + mi(en.ebitdaBase) + ' contra serviço da dívida de ' + mi(l1.servAtual) + ' em ' + l1.ano + ' (mapa de empréstimos de dez/25, sem a conta garantida). O TDC de ' + mi(m.entidade.tdc_min) + '+ em ' + esc(m.entidade.tdc_mes) + ' muda o quadro; o modelo mostra os dois mundos.</p></div>';
     h += '<div class="grid kpis">' + kpi('Dívida líquida', mi(en.dl), 'dívida ' + mi(en.divTot) + ' − caixa ' + mi(en.caixa)) + kpi('Dívida líquida / EBITDA', X(en.dlEbitda), 'hoje · com o projeto ' + X(en.dlEbitdaProj), en.dlEbitda > 3 ? 'bad' : 'warn') + kpi('DSCR ' + l1.ano + ' sem o projeto', X(l1.dscrSemProj), 'referência usual dos agentes ≥ 1,3x (não é norma do BNDES)', l1.dscrSemProj < 1.3 ? 'bad' : 'good') + kpi('DSCR ' + l1.ano + ' com o projeto', X(l1.dscrSem), 'sem TDC', l1.dscrSem < 1.3 ? 'warn' : 'good') + kpi('DSCR ' + l1.ano + ' com TDC', X(l1.dscrCom), 'dívida liquidada em ' + esc(m.entidade.tdc_mes), 'good') + kpi('Dívida líquida após o TDC', mi(en.dlAposTdc), P(m.entidade.tdc_liquida, 0) + ' da dívida liquidada com ' + mi(m.entidade.tdc_min), 'good') + '</div>';
+    if (c.cenRM) { var qr = c.cenRM, sid = c.sel.id; h += '<div class="notice' + (rmOn() ? ' warn' : '') + '">Ressonância: no cenário ' + (rmOn() ? 'com RM (atual)' : 'sem RM (atual)') + ', a alternativa ' + sid + ' leva a cobertura de ' + qr.sem[sid].dscr[0].ano + ' a ' + X((rmOn() ? qr.com : qr.sem)[sid].dscr[0].v) + ' e a de ' + qr.sem[sid].dscr[1].ano + ' a ' + X((rmOn() ? qr.com : qr.sem)[sid].dscr[1].v) + '; ' + (rmOn() ? 'sem a RM seriam ' + X(qr.sem[sid].dscr[0].v) + ' e ' + X(qr.sem[sid].dscr[1].v) + ', com ' + mi(qr.com[sid].fin - qr.sem[sid].fin) + ' a menos de dívida nova.' : 'com a RM seriam ' + X(qr.com[sid].dscr[0].v) + ' e ' + X(qr.com[sid].dscr[1].v) + ', com ' + mi(qr.com[sid].fin - qr.sem[sid].fin) + ' a mais de dívida nova.') + '</div>'; }
     if (c.sel.id === 'D') h += '<div class="notice">Alternativa D (locação): não há financiamento novo; o aluguel de ' + R(c.D.aluguel) + '/mês reduz o EBITDA incremental. Para o banco, o aluguel não é dívida bancária, mas sob CPC 06 (R2)/IFRS 16 vira passivo de arrendamento (VP dos aluguéis do prazo: ' + mi(((c.prazosD || []).filter(function (z) { return z.n === c.D.n; })[0] || {}).pvAluguel) + '), e o agente pode olhar o EBITDAR.</div>';
     var cats = L.slice(0, Math.min(L.length, 6)).map(function (l) { return String(l.ano); });
     h += '<div class="grid two"><div class="card"><div class="card-h"><h2>Cobertura do serviço da dívida</h2><span class="muted small">EBITDA ÷ parcelas do ano, entidade</span></div><div class="chart">' + svgLines({ cats: cats, series: [{ nome: 'Sem o projeto', vals: L.slice(0, cats.length).map(function (l) { return l.dscrSemProj == null ? null : Math.min(l.dscrSemProj, 6); }), cor: 'var(--s-a)', dash: true }, { nome: 'Com o projeto, sem TDC', vals: L.slice(0, cats.length).map(function (l) { return l.dscrSem == null ? null : Math.min(l.dscrSem, 6); }), cor: 'var(--s-b)' }, { nome: 'Com o projeto e TDC', vals: L.slice(0, cats.length).map(function (l) { return l.dscrCom == null ? null : Math.min(l.dscrCom, 6); }), cor: 'var(--s-c)' }], fmt: function (v) { return X(v, 1); }, ref: { v: 1.3, label: 'mínimo 1,3x' }, h: 250, aria: 'DSCR' }) + '</div><p class="small muted">Valores acima de 6x cortados no gráfico. A tabela traz os números completos.</p></div>' +
@@ -2372,11 +2565,22 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     { id: 'cenario.reajuste_modo', nome: 'Inflação nos fluxos', seg: [['ipca', 'IPCA (Focus)'], ['fixo', 'Taxa fixa / constante']], hint: 'IPCA em todos os caminhos, como nas parcelas do FINAME' },
     { id: 'fin.horizonte', nome: 'Horizonte', seg: [[5, '5 anos'], [10, '10 anos']], hint: '' },
     { id: 'fin.alternativa', nome: 'Alternativa', seg: [['C', 'C · VMI compra'], ['B', 'B · GE/HFS'], ['D', 'D · VMI locação']], hint: '' },
-    { id: 'equip.precoC', nome: 'Preço do pacote VMI vs. GE', min: 0.7, max: 1.3, step: 0.05, fmt: function (v) { return (v >= 1 ? '+' : '−') + P(Math.abs(v - 1), 0); }, hint: 'escala todos os itens do pacote C', virtual: true }
+    { id: 'equip.precoC', nome: 'Preço do pacote VMI vs. GE', min: 0.7, max: 1.3, step: 0.05, fmt: function (v) { return (v >= 1 ? '+' : '−') + P(Math.abs(v - 1), 0); }, hint: 'escala todos os itens do pacote C (com a RM, se ligada)', virtual: true },
+    { id: 'rm.incluir', nome: 'Ressonância (Cignus 600)', seg: [['sim', 'Com RM'], ['nao', 'Sem RM']], hint: 'serviço novo; o quadro com × sem está em Alternativas' },
+    { id: 'rm.exames_mes', nome: 'RM: exames/mês em regime (convênio e particular)', min: 100, max: 900, step: 10, fmt: function (v) { return N(v); }, hint: 'premissa 400; capacidade 624 em 12 h' },
+    { id: 'rm.exames_sus_mes', nome: 'RM: exames/mês pelo SUS', min: 0, max: 400, step: 10, fmt: function (v) { return N(v); }, hint: 'R$ 499,88 com o Agora Tem Especialistas' },
+    { id: 'rm.ticket', nome: 'RM: ticket médio', min: 300, max: 900, step: 10, fmt: function (v) { return R(v); }, hint: 'premissa R$ 500' },
+    { id: 'equip.precoRM', nome: 'RM: preço do equipamento', min: 3500000, max: 6000000, step: 50000, fmt: function (v) { return mi(v); }, hint: 'R$ 5,2 mi informado; R$ 4,33 mi no FINAME da CEMAN; R$ 4,9 mi em Goiás', virtual: true },
+    { id: 'rm.horas_dia', nome: 'RM: horas de operação por dia', min: 8, max: 24, step: 1, fmt: function (v) { return N(v) + ' h'; }, hint: 'só a capacidade mostrada' }
   ];
-  function simGet(id) { if (id === 'equip.precoC') return sim._precoC == null ? 1 : sim._precoC; return getPath(sim, id); }
+  function simGet(id) {
+    if (id === 'equip.precoC') return sim._precoC == null ? 1 : sim._precoC;
+    if (id === 'equip.precoRM') { var it = (sim.equip.C || []).filter(E.isRM)[0]; return it ? +it.preco : 0; }
+    return getPath(sim, id);
+  }
   function simSet(id, v) {
     if (id === 'equip.precoC') { var f = v / (sim._precoC == null ? 1 : sim._precoC); sim._precoC = v; sim.equip.C.forEach(function (it) { it.preco = it.preco * f; }); return; }
+    if (id === 'equip.precoRM') { ['B', 'C'].forEach(function (k) { (sim.equip[k] || []).forEach(function (it) { if (E.isRM(it)) it.preco = v; }); }); return; }
     setPath(sim, id, v);
   }
   function renderSimulador() {
@@ -2397,13 +2601,13 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       else h += '<div class="lever"><span class="nm">' + esc(l.nome) + '</span><span class="val" id="lv' + i + '">' + l.fmt(v) + '</span><input class="rng" type="range" id="rg' + i + '" data-lever="' + i + '" min="' + l.min + '" max="' + l.max + '" step="' + l.step + '" value="' + v + '">' + (l.hint ? '<span class="hint">' + esc(l.hint) + '</span>' : '') + '</div>';
     });
     $('#levers').innerHTML = h;
-    $$('#levers [data-lever]').forEach(function (r) { r.addEventListener('input', function () { var l = LEVERS[+this.dataset.lever]; var v = +this.value; simSet(l.id, l.id === 'fin.horizonte' || l.id === 'altC.prazo' || l.id === 'altC.carencia' || l.id === 'altD.prazo' ? Math.round(v) : v); $('#lv' + this.dataset.lever).textContent = l.fmt(v); recomputeSim(); renderSimResults(); }); });
+    $$('#levers [data-lever]').forEach(function (r) { r.addEventListener('input', function () { var l = LEVERS[+this.dataset.lever]; var v = +this.value; simSet(l.id, l.id === 'fin.horizonte' || l.id === 'altC.prazo' || l.id === 'altC.carencia' || l.id === 'altD.prazo' || /^rm\.(exames|horas)/.test(l.id) ? Math.round(v) : v); $('#lv' + this.dataset.lever).textContent = l.fmt(v); recomputeSim(); renderSimResults(); }); });
     $$('#levers [data-seg]').forEach(function (b) { b.addEventListener('click', function () { var l = LEVERS[+this.dataset.seg]; var v = this.dataset.v; simSet(l.id, isNaN(+v) ? v : +v); recomputeSim(); renderLevers(); renderSimResults(); }); });
   }
   function renderSimResults() {
     var s = simCalc, fl = s.flSel, b = calc.flSel;
     function d(v, ref, fmt) { var dv = v - ref; return fmt(v) + ' <span class="small ' + sinal(dv) + '">' + (dv >= 0 ? '+' : '−') + fmt(Math.abs(dv)).replace('−', '') + '</span>'; }
-    $('#simKpis').innerHTML = kpi('VPL do projeto', d(fl.vpl, b.vpl, mi), 'vs. premissas salvas', fl.vpl > 0 ? 'good' : 'bad', true) + kpi('TIR', fl.tir == null ? '—' : P(fl.tir, 0), 'payback ' + anos(fl.pb), '', true) + kpi('Resultado mensal própria', R(s.cen.prop.resultado), (s.sel.id === 'D' ? 'com aluguel' : 'com manutenção, antes das parcelas') + ' · EMG ' + R(s.cen.emg.resultado), sinal(s.cen.prop.resultado) === 'pos' ? 'good' : 'bad', true) + kpi(s.sel.id === 'D' ? 'Aluguel' : 'Após a parcela', s.sel.id === 'D' ? R(s.D.aluguel) : R(s.ganhoMesComParcela + s.cen.emg.resultado), s.sel.id === 'D' ? s.D.n + ' meses · equilíbrio com C ' + R(s.D.equilibrioC) : 'parcela ' + R(s.sel.parcela) + ' · ' + (s.sel.id === 'C' && s.C.escolha ? esc(s.C.escolha.linha.nome.split(' – ')[0]) : 'HFS'), '', true) + kpi('VPL para o hospital', d(fl.vplEnt, b.vplEnt, mi), 'após parcelas ou aluguel · B ' + mi(s.flB.vplEnt) + ' · C ' + mi(s.flC.vplEnt) + ' · D ' + mi(s.flD.vplEnt), '', true) + kpi('Caixa acumulado', d(fl.acumEnt, b.acumEnt, mi), 'após parcelas ou aluguel, ' + sim.fin.horizonte + ' anos', '', true) + kpi('DSCR hospital ' + s.ent.linhas[0].ano, X(s.ent.linhas[0].dscrSem) + ' · ' + X(s.ent.linhas[0].dscrCom), 'sem TDC · com TDC', '', true);
+    $('#simKpis').innerHTML = kpi('VPL do projeto', d(fl.vpl, b.vpl, mi), 'vs. premissas salvas', fl.vpl > 0 ? 'good' : 'bad', true) + kpi('TIR', fl.tir == null ? '—' : P(fl.tir, 0), 'payback ' + anos(fl.pb), '', true) + kpi('Resultado mensal própria', R(s.cen.prop.resultado), (s.sel.id === 'D' ? 'com aluguel' : 'com manutenção, antes das parcelas') + ' · EMG ' + R(s.cen.emg.resultado), sinal(s.cen.prop.resultado) === 'pos' ? 'good' : 'bad', true) + kpi(s.sel.id === 'D' ? 'Aluguel' : 'Após a parcela', s.sel.id === 'D' ? R(s.D.aluguel) : R(s.ganhoMesComParcela + s.cen.emg.resultado), s.sel.id === 'D' ? s.D.n + ' meses · equilíbrio com C ' + R(s.D.equilibrioC) : 'parcela ' + R(s.sel.parcela) + ' · ' + (s.sel.id === 'C' && s.C.escolha ? esc(s.C.escolha.linha.nome.split(' – ')[0]) : 'HFS'), '', true) + kpi('VPL para o hospital', d(fl.vplEnt, b.vplEnt, mi), 'após parcelas ou aluguel · B ' + mi(s.flB.vplEnt) + ' · C ' + mi(s.flC.vplEnt) + ' · D ' + mi(s.flD.vplEnt), '', true) + kpi('Caixa acumulado', d(fl.acumEnt, b.acumEnt, mi), 'após parcelas ou aluguel, ' + sim.fin.horizonte + ' anos', '', true) + kpi('DSCR hospital ' + s.ent.linhas[0].ano, X(s.ent.linhas[0].dscrSem) + ' · ' + X(s.ent.linhas[0].dscrCom), 'sem TDC · com TDC', '', true) + (s.cenRM ? kpi('RM: com − sem', mi(s.cenRM.eq[s.sel.id].delta), 'VPL para o hospital (' + s.sel.id + ') · empata com ' + N(s.cenRM.eq[s.sel.id].volume) + ' exames/mês', s.cenRM.eq[s.sel.id].delta >= 0 ? 'good' : 'bad', true) : '');
     var n = Math.max(fl.anos.length, b.anos.length), cats = []; for (var i = 0; i < n; i++) cats.push(String(+model.fin.ano_inicio + i));
     $('#simChart').innerHTML = svgLines({ cats: cats, series: [{ nome: 'Premissas salvas', vals: cats.map(function (c, i) { return b.anos[i] ? b.anos[i].acumE : null; }), cor: 'var(--s-a)', dash: true }, { nome: 'Simulação', vals: cats.map(function (c, i) { return fl.anos[i] ? fl.anos[i].acumE : null; }), cor: 'var(--s-c)' }], fmt: function (v) { return mi(v); }, h: 230, aria: 'Simulação' });
     var al = [
@@ -2417,6 +2621,11 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       { nome: 'Taxa de desconto', set: function (mm, v) { mm.fin.desconto = v; }, lo: 0.20, hi: 0.10, loTxt: '20%', hiTxt: '10%' }
     ];
     if (sim.fin.alternativa === 'D') al.push({ nome: 'Prêmio do locador', set: function (mm, v) { mm.altD.premio = v; }, lo: 0.07, hi: 0.01, loTxt: '7 p.p.', hiTxt: '1 p.p.' }, { nome: 'Prazo da locação', set: function (mm, v) { mm.altD.prazo = v; }, lo: 36, hi: 84, loTxt: '36 m', hiTxt: '84 m' }, { nome: 'Manutenção na cotação VMI', set: function (mm, v) { mm.altD.vmi_manut = v ? 'sim' : 'nao'; }, lo: 0, hi: 1, loTxt: 'à parte', hiTxt: 'inclusa' });
+    if (E.rmOn(sim)) { var rr = sim.rm, rmP = function (mm, f) { ['B', 'C'].forEach(function (k) { (mm.equip[k] || []).forEach(function (it) { if (E.isRM(it)) it.preco *= f; }); }); };
+      al.push({ nome: 'RM: volume', set: function (mm, v) { mm.rm.exames_mes = v; }, lo: Math.round(+rr.exames_mes * 0.7), hi: Math.round(+rr.exames_mes * 1.3), loTxt: '−30%', hiTxt: '+30%' },
+        { nome: 'RM: ticket', set: function (mm, v) { mm.rm.ticket = v; }, lo: +rr.ticket * 0.8, hi: +rr.ticket * 1.2, loTxt: '−20%', hiTxt: '+20%' },
+        { nome: 'RM: preço do equipamento', set: function (mm, v) { rmP(mm, v); }, lo: 1.15, hi: 0.85, loTxt: '+15%', hiTxt: '−15%' },
+        { nome: 'RM: obra', set: function (mm, v) { mm.rm.obra = v; }, lo: +rr.obra * 1.5, hi: +rr.obra * 0.6, loTxt: '+50%', hiTxt: '−40%' }); }
     var base = clone(sim); delete base._precoC;
     var sens = E.sensibilidade(base, M, BASE, al);
     $('#tornado').innerHTML = svgTornado(sens.itens, function (v) { return mi(v); }) + '<p class="small muted" style="margin-top:6px">VPL base da simulação: ' + mi(sens.base) + '. Barras vermelhas reduzem o VPL; verdes aumentam.</p>';
@@ -2481,7 +2690,8 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       '<li><b>Locação da VMI</b> (tabela de 16/10/2026, sugestão de 48 meses): manutenção inclusa no aluguel (confirmado em 17/10/2026). Falta confirmar se o RX digital locado é o Aquila D ou o Apolo D e cotar ultrassons e placa DR, hoje estimados por composição de custos.</li>' +
       '<li><b>FGTS-Saúde</b>: CEBAS na modalidade de 60% ao SUS, participação no Agora Tem Especialistas, créditos SUS dos últimos 12 meses e contratos já descontados do Teto MAC. Sem as respostas, a linha fica em "depende de confirmação". O programa também habilita a tabela SUS incrementada para TC.</li>' +
       '<li><b>RIS/PACS</b>: o hospital já tem? Se não, a mensalidade e a implantação ficam como premissa; a escolha do sistema é um tema à parte, a investigar separadamente.</li>' +
-      '<li><b>Mapa de empréstimos</b> é de dez/25; o saldo subiu de R$ 28,8 mi para R$ 29,5 mi em ago/26, o que indica renovações não capturadas.</li></ol></div>';
+      '<li><b>Mapa de empréstimos</b> é de dez/25; o saldo subiu de R$ 28,8 mi para R$ 29,5 mi em ago/26, o que indica renovações não capturadas.</li>' +
+      '<li><b>Ressonância (Cignus 600, R$ 5,2 mi)</b>: o resultado depende de hipóteses ainda sem dado do hospital. Volume (RMs pedidas hoje para fora; premissa ' + N(model.rm.exames_mes) + '/mês), ticket dos convênios (premissa ' + R(model.rm.ticket) + '), equipe, laudo, obra de pré-instalação (premissa ' + mi(model.rm.obra) + '), cotação de manutenção e de locação da VMI, e se o CFI 04252454 cobre a versão sem hélio. Preço acima das referências públicas (R$ 4,33 mi no FINAME da CEMAN; R$ 4,9 mi em Goiás).' + (calc.cenRM ? ' Hoje a RM ' + (calc.cenRM.eq.C.delta >= 0 ? 'soma ' : 'tira ') + mi(Math.abs(calc.cenRM.eq.C.delta)) + ' do VPL de C e empata com ' + N(calc.cenRM.eq.C.volume) + ' exames/mês.' : '') + '</li></ol></div>';
     h += '<div class="card"><div class="card-h"><h2>Inconsistências encontradas nos documentos</h2></div><ul class="bullets">' +
       '<li>Projeto Radiologia (Jaime): investimento total R$ 2.979.024,80 e parcela R$ 68.458,38; a soma das linhas dá R$ 2.934.024,80 e R$ 73.537,38 (valores usados aqui e pela Controladoria).</li>' +
       '<li>Placa DR: 60 × R$ 1.700 = R$ 102 mil, abaixo dos R$ 110 mil à vista. RX portátil em 60x "sem juros".</li>' +
@@ -2502,7 +2712,8 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       '<dt>VPL, TIR, payback</dt><dd>VPL a valor presente pela taxa de desconto; TIR por bissecção; payback com interpolação linear dentro do ano (igual à planilha)</dd>' +
       '<dt>DSCR</dt><dd>EBITDA do ano ÷ parcelas do ano (projeto) · (EBITDA anualizado do hospital + incremental) ÷ (serviço da dívida atual + novo) (entidade)</dd>' +
       '<dt>Financiamento C</dt><dd>Motor da ferramenta Financiamento VMI: taxa anual = (1 + custo financeiro) × Π(1 + spread) − 1; cronograma mensal SAC ou Price com carência; IOF PJ; CET por TIR do fluxo líquido. Elegibilidade por natureza, porte, UF, CFI e condições de cada linha.</dd>' +
-      '<dt>Alternativa B</dt><dd>Parcelas informadas pelos fornecedores por 60 meses; taxa implícita por item resolvida pela anuidade.</dd></dl></div>';
+      '<dt>Alternativa B</dt><dd>Parcelas informadas pelos fornecedores por 60 meses; taxa implícita por item resolvida pela anuidade. RM sem proposta GE: parcela = preço × i ÷ (1 − (1 + i)^−60), com i = taxa implícita dos demais itens financiados.</dd>' +
+      '<dt>Ressonância (cenário com RM)</dt><dd>Serviço novo, todo incremental. Exames = regime × rampa do ano (ano 1, ano 2, depois 100%) × meses de operação (a partir do mês ' + (E.iniRM(model) + 1) + ' do ano 1). Receita líquida = (exames de convênio × ticket + exames SUS × valor SUS) × (1 − glosa) × reajuste. EBITDA da RM = RL − laudo − contraste e material − (equipe + energia + outros) × reajuste. Somado ao EBITDA incremental; a manutenção (B, C) e o aluguel (D) da RM contam desde a instalação da RM. Obra de pré-instalação no ano 0, com recurso próprio. Aluguel da RM em D = preço da RM × aluguel VMI da TC ÷ preço da TC, no mesmo prazo. Equilíbrio: o VPL para o hospital é linear no volume, no ticket e no preço da RM; o volume (ou ticket, ou preço) de equilíbrio é o que iguala o VPL com RM ao VPL sem RM.</dd></dl></div>';
     h += '<div class="card"><div class="card-h"><h2>Fontes</h2></div><ul class="src-list">' +
       '<li>Controladoria HDA, "Cópia de Viabilidade - Central de Imagem Própria v2.xlsx" (abas DRE, Viabilidade, Informações - Validar), base jan–jun/26.</li>' +
       '<li>Jaime (coordenação do serviço de imagem), "Projeto Radiologia JGB" (volumes 2025–2026, DRE ago/26, investimento) e "Proposta Estratégica de Renovação do Parque Tecnológico".</li>' +
@@ -2516,7 +2727,8 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       '<li>VMI Médica, contratos de manutenção Prata e Ouro do Aquila S e D, média São Paulo (mensagem de 15/10/2026).</li>' +
       '<li>Portal Nacional de Contratações Públicas (PNCP), contratos de manutenção de TC e ultrassom e de locação de TC e RX móvel, 2023–2026: ' + BENCH_MANUT.concat(BENCH_LOC).map(function (b) { return '<a href="' + b.url + '" target="_blank" rel="noopener">' + esc(b.org) + ' (' + b.ano + ')</a>'; }).join('; ') + '.</li>' +
       '<li>Banco Central, taxa média PJ de arrendamento mercantil de outros bens, SGS 20732, ago/2026 (17,19% a.a.). <a href="https://api.bcb.gov.br/dados/serie/bcdata.sgs.20732/dados/ultimos/3?formato=json" target="_blank" rel="noopener">BCB</a></li>' +
-      '<li>STF, Súmula Vinculante 31 (ISS não incide sobre locação de bens móveis); EC 132/2023 e LC 214/2025 (CBS em lugar de PIS/COFINS a partir de 2027).</li></ul>' +
+      '<li>STF, Súmula Vinculante 31 (ISS não incide sobre locação de bens móveis); EC 132/2023 e LC 214/2025 (CBS em lugar de PIS/COFINS a partir de 2027).</li>' +
+      '<li>Ressonância: preço da Cignus 600 sem hélio, 24 canais, informado em 19/10/2026 (R$ 5,2 mi); CFI 04252454 (Catálogo CFI do BNDES; contrato FINAME da CEMAN a R$ 4,33 mi); pregões da SES-GO de 2024 e 2025 (R$ 4,89 e 4,93 mi). Consumo de energia: Heye et al., <a href="https://irf.fhnw.ch/handle/11654/33447" target="_blank" rel="noopener">The energy consumption of radiology</a>, Radiology 2020 (134 MWh/ano por RM). Obra de pré-instalação: <a href="https://fas.org.br/wp-content/uploads/2026/06/Edital-e-Termo-de-Referencia-RM-1.pdf" target="_blank" rel="noopener">edital da FAS Niterói (2026)</a>. Locação de RM 1,5T: <a href="https://prefeitura.sp.gov.br/documents/d/saude/termo_contrato_emergencial_090_24_tr_samir_p-pdf" target="_blank" rel="noopener">contrato emergencial 090/2024 da SMS São Paulo</a>. Valor SUS: SIGTAP e Portaria SAES/MS 4.282/2026; credenciamento de RM da <a href="https://saude.es.gov.br/Media/sesa/Credenciamento/01_TR_RESSONANCIA_MAGNETICA_01_2022_%20Assinado-1.pdf" target="_blank" rel="noopener">SESA-ES</a> (R$ 268,75 por exame). Produtividade: SMS Joinville (30 min por exame). Ticket particular: <a href="https://www.unimed.coop.br/site/documents/512303/0/Tabela+Exames+-+Particular_Unimed.pdf/67ad6f46-9128-cf33-6578-fe35a803f9f4" target="_blank" rel="noopener">tabela de exames particular no portal da Unimed</a> (sem data). Uso de RM e TC na saúde suplementar: Mapa Assistencial da ANS 2024, via <a href="https://futurodasaude.com.br/?p=40406" target="_blank" rel="noopener">Futuro da Saúde</a>.</li></ul>' +
       '<p class="small muted" style="margin-top:10px">Honorário de intermediação da S&S na compra financiada (C): ' + P(+model.altC.honorario_pct || 0, 1) + ' do valor financiado, pago pelo hospital na contratação (' + R(calc.C.escolha ? calc.C.escolha.sim.honor : 0) + '), lançado no ano 0. Não há honorário do hospital na locação (D) nem no pacote GE (B).</p></div>';
     $('#tab-metodo').innerHTML = h;
   }
@@ -2586,7 +2798,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
      Gerado na hora a partir do modelo carregado (mesmos números das abas). Uma estrutura
      única alimenta a tela, o texto copiado e o .docx: { titulo, sub, secoes: [{ h, p:[], b:[], t:{head, rows} }] }.
      **negrito** é a única marcação.                                                                      */
-  var CURTO = { tc: 'TC Pulsar 128/64', us: 'ultrassons Invictus', rxp: 'Aquila 320 S', rxdr: 'Apolo D', dr: 'placa DR avulsa' };
+  var CURTO = { tc: 'TC Pulsar 128/64', us: 'ultrassons Invictus', rxp: 'Aquila 320 S', rxdr: 'Apolo D', dr: 'placa DR avulsa', rm: 'RM Cignus 600' };
   function curto(id, nome) { return CURTO[id] || nome; }
   function fmtMes(s) { var mm = /^(\d{4})-(\d{2})/.exec(String(s || '')); return mm ? ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][+mm[2] - 1] + '/' + mm[1] : String(s || ''); }
   function linhaCurta(l) { if (!l) return 'linha de fomento'; if (/^finame/.test(l.id)) return 'o FINAME'; if (/^fgts/.test(l.id)) return 'o FGTS-Saúde'; return l.nome.split(' – ')[0]; }
@@ -2608,6 +2820,12 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     if (best.id !== selId) rec += ' O plano em números está montado sobre a alternativa ' + selId + '.';
     var gap = ord[0].fl.vplEnt - ord[1].fl.vplEnt;
     if (gap < 0.05 * Math.abs(ord[0].fl.vplEnt)) rec += ' A diferença para ' + ord[1].id + ' é pequena (' + mi(gap) + '): a escolha depende das pendências abaixo, não do VPL.';
+    var qR = c.cenRM, rmLig = rmOn();
+    if (qR) {
+      var eqR = qR.eq[selId], semBest = ['B', 'C', 'D'].sort(function (a, b) { return qR.sem[b].vplEnt - qR.sem[a].vplEnt; })[0];
+      rec += rmLig ? ' Os números incluem a **ressonância** (Cignus 600, ' + mi(qR.p0) + ', mais ' + mi(+m.rm.obra || 0) + ' de obra). Sem a RM, o VPL de ' + selId + ' seria ' + mi(qR.sem[selId].vplEnt) + ' (melhor alternativa: ' + semBest + ', ' + mi(qR.sem[semBest].vplEnt) + '): com as hipóteses atuais a RM tira ' + mi(-eqR.delta) + ' e só empata com ' + N(eqR.volume) + ' exames/mês. Tratar a RM como decisão separada, depois de validar a demanda e negociar o preço.'
+        : ' Os números não incluem a ressonância. Com a Cignus 600 (' + mi(qR.p0) + ' e ' + mi(+m.rm.obra || 0) + ' de obra), o VPL de ' + selId + ' iria a ' + mi(qR.com[selId].vplEnt) + ' (' + Psig(eqR.delta / Math.abs(qR.sem[selId].vplEnt || 1), 0) + '); a RM empata com ' + N(eqR.volume) + ' exames/mês.';
+    }
     S.secoes.push({ h: 'Recomendação', p: [rec] });
     /* 2. por que */
     S.secoes.push({ h: 'Por que internalizar', b: [
@@ -2623,7 +2841,24 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       ['VPL para o hospital, ' + H + ' anos', mi(c.flB.vplEnt), mi(c.flC.vplEnt), mi(c.flD.vplEnt)],
       ['Caixa acumulado, ' + H + ' anos', mi(c.flB.acumEnt), mi(c.flC.acumEnt), mi(c.flD.acumEnt)],
       ['DSCR ' + l1.ano + ' do hospital com o projeto', X(e27('B')), X(e27('C')), X(e27('D'))]
-    ] }, p: ['Compromisso mensal = parcelas + manutenção (B e C) ou aluguel' + (lt.sep ? ' e manutenção' : '') + ' (D). Na compra, B e C chegam ao ano ' + H + ' com o equipamento original; na locação, o equipamento é trocado a cada ' + c.D.n + ' meses.'] });
+    ] }, p: [(qR ? (rmLig ? 'Cenário com RM. ' : 'Cenário sem RM. ') : '') + 'Compromisso mensal = parcelas + manutenção (B e C) ou aluguel' + (lt.sep ? ' e manutenção' : '') + ' (D). Na compra, B e C chegam ao ano ' + H + ' com o equipamento original; na locação, o equipamento é trocado a cada ' + c.D.n + ' meses.'] });
+    /* 3b. ressonância */
+    if (qR) {
+      var rr = m.rm, ri = c.rm.isolada, regR = E.rmMensal(m, 2, 1), dsc = function (x) { return X(x.dscr[0].v) + ' / ' + X(x.dscr[1].v); };
+      S.secoes.push({ h: 'Ressonância magnética: com e sem', t: { head: ['', 'B · GE, compra', 'C · VMI, compra', 'D · VMI, locação'], rows: [
+        ['VPL para o hospital, sem RM', mi(qR.sem.B.vplEnt), mi(qR.sem.C.vplEnt), mi(qR.sem.D.vplEnt)],
+        ['VPL para o hospital, com RM', mi(qR.com.B.vplEnt), mi(qR.com.C.vplEnt), mi(qR.com.D.vplEnt)],
+        ['Dívida nova, sem → com RM', mi(qR.sem.B.fin) + ' → ' + mi(qR.com.B.fin), mi(qR.sem.C.fin) + ' → ' + mi(qR.com.C.fin), 'nenhuma'],
+        ['DSCR ' + qR.sem.C.dscr[0].ano + ' / ' + qR.sem.C.dscr[1].ano + ', sem RM', dsc(qR.sem.B), dsc(qR.sem.C), dsc(qR.sem.D)],
+        ['DSCR ' + qR.com.C.dscr[0].ano + ' / ' + qR.com.C.dscr[1].ano + ', com RM', dsc(qR.com.B), dsc(qR.com.C), dsc(qR.com.D)],
+        ['Volume de equilíbrio da RM (exames/mês)', N(qR.eq.B.volume), N(qR.eq.C.volume), N(qR.eq.D.volume)]
+      ] }, b: [
+        'Premissas da RM (hipóteses a validar): ' + N(rr.exames_mes) + ' exames/mês de convênio e particular em regime a ' + R(rr.ticket) + (+rr.exames_sus_mes ? ', mais ' + N(rr.exames_sus_mes) + ' pelo SUS a ' + R(rr.ticket_sus) : '') + '; ' + P(rr.rampa1, 0) + ' do volume no ano 1 e ' + P(rr.rampa2, 0) + ' no ano 2; laudo a ' + P(rr.rep_med_pct, 1) + ' e contraste a ' + P(rr.matmed_pct, 0) + ' da receita; equipe, energia e outros fixos de ' + R(+rr.equipe_mes + +rr.energia_mes + +rr.outros_mes) + '/mês; manutenção Ouro de ' + R(ri ? ri.manutMes : +((rmItem('C') || {}).m_ouro) || 0) + '/mês depois da garantia; obra de ' + mi(+rr.obra || 0) + ' no ano 0.',
+        'Em regime, a RM gera ' + R(regR.ebitda) + '/mês de EBITDA antes da manutenção. Capacidade de ' + N(qR.cap.cap) + ' exames/mês em ' + N(+rr.horas_dia || 12) + ' h; a premissa ocupa ' + P(qR.cap.ocup, 0) + '.' + (ri ? ' Sozinha, sem financiamento: VPL de ' + mi(ri.vpl) + (ri.tir != null ? ', TIR de ' + P(ri.tir, 1) : '') + ', payback de ' + anos(ri.pb) + '.' : ''),
+        'Em C, a RM empata com ' + N(qR.eq.C.volume) + ' exames/mês, ou ticket de ' + R(qR.eq.C.ticket) + ', ou preço de ' + mi(qR.eq.C.preco) + '. Preço informado acima das referências públicas: R$ 4,33 mi no contrato FINAME da CEMAN e R$ 4,9 mi nos pregões de Goiás.',
+        'Com a RM, a compra pelo FINAME (C) é a forma de pagar que menos pesa na cobertura (carência de 24 meses e 120 de prazo); na locação, o aluguel da RM (proxy da tabela da TC, ' + R(c.D.loc.aluguelProxy || (qR.com.D.comp1 - qR.sem.D.comp1)) + '/mês) corre desde a instalação.'
+      ] });
+    }
     /* 4. compra C */
     var sC = c.C.escolha, fgTxt;
     if (!fg) fgTxt = '';
@@ -2633,16 +2868,16 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     var semCfi = m.equip.C.filter(function (it) { return !String(it.cfi || '').trim(); }).map(function (it) { return curto(it.id, it.nome); }), prevCfi = m.equip.C.filter(function (it) { return /previsto/i.test(it.cfi || ''); }).map(function (it) { return curto(it.id, it.nome) + ' (' + String(it.cfi).replace(/^previsto\s*/i, 'previsto para ') + ')'; });
     var cfiTxt = semCfi.length || prevCfi.length ? 'CFI: ' + (prevCfi.length ? prevCfi.join(', ') + ' ainda sem código' : '') + (prevCfi.length && semCfi.length ? '; ' : '') + (semCfi.length ? semCfi.join(' e ') + ' fora do catálogo (' + R(c.C.cfi ? c.C.cfi.sem : 0) + ')' : '') + '. O FINAME do pacote inteiro depende de todos os códigos publicados.' : '';
     S.secoes.push({ h: 'Compra do pacote VMI (C)', b: [
-      sC ? 'Linha em uso: **' + sC.linha.nome + '**, CET de ' + Pp(c.C.cetAno) + ' a.a., ' + c.C.n + ' meses com ' + (c.C.c || 0) + ' de carência; parcela de ' + R(c.C.primeira) + ' na carência e ' + R(c.C.parcela) + ' depois. Pacote de ' + mi(c.C.capex) + ' (preços VMI de 15/10/2026).' : 'Nenhuma linha elegível com as premissas atuais.',
-      'Manutenção pós-garantia, plano ' + (c.C.manut.plano === 'prata' ? 'Prata' : 'Ouro') + ': ' + R(c.C.manut.mes) + '/mês a partir do mês ' + (m.manut.garantia_meses + 1) + ' de operação.' + (sC && sC.sim.honor ? ' Honorário de intermediação da S&S: ' + R(sC.sim.honor) + ' (' + P(+m.altC.honorario_pct, 0) + ' do financiado), pago pelo hospital na contratação e já incluído no resultado.' : ''),
+      sC ? 'Linha em uso: **' + sC.linha.nome + '**, CET de ' + Pp(c.C.cetAno) + ' a.a., ' + c.C.n + ' meses com ' + (c.C.c || 0) + ' de carência; parcela de ' + R(c.C.primeira) + ' na carência e ' + R(c.C.parcela) + ' depois. Pacote de ' + mi(c.C.capex) + ' (preços VMI de 15/10/2026' + (rmLig ? '; RM de 19/10/2026' : '') + ').' : 'Nenhuma linha elegível com as premissas atuais.',
+      'Manutenção pós-garantia, plano ' + (c.C.manut.plano === 'prata' ? 'Prata' : 'Ouro') + ': ' + R(c.C.manut.mes) + '/mês a partir do mês ' + (m.manut.garantia_meses + 1) + ' de operação' + (rmLig ? ' (na RM, ' + R(c.rm.opex.C) + '/mês, contados da instalação da RM)' : '') + '.' + (sC && sC.sim.honor ? ' Honorário de intermediação da S&S: ' + R(sC.sim.honor) + ' (' + P(+m.altC.honorario_pct, 0) + ' do financiado), pago pelo hospital na contratação e já incluído no resultado.' : ''),
       fgTxt, cfiTxt
     ].filter(Boolean) });
     /* 5. locação D */
     var vplFlip = vplCom(function (mm) { mm.altD.vmi_manut = lt.sep ? 'sim' : 'nao'; }, 'D'), L = c.D.loc;
     S.secoes.push({ h: 'Locação do pacote VMI (D)', b: [
-      'Base: ' + lt.base + '. Prazo de ' + c.D.n + ' meses' + (c.D.n === 48 ? ' (sugestão da VMI)' : '') + ': custo de ' + R(c.D.aluguel) + '/mês' + (lt.vmi ? ', sendo ' + R(L.aluguelVmi) + ' de aluguel VMI (TC, Aquila S e Aquila D)' + (lt.sep ? ', ' + R(L.manSep) + ' de manutenção à parte (média no prazo)' : '') + ' e ' + R(c.D.aluguel - L.aluguelVmi - L.manSep) + ' dos itens sem cotação' : '') + (lt.vmi && !lt.sep ? '. O aluguel VMI já inclui a manutenção' : '') + '.',
+      'Base: ' + lt.base + '. Prazo de ' + c.D.n + ' meses' + (c.D.n === 48 ? ' (sugestão da VMI)' : '') + ': custo de ' + R(c.D.aluguel) + '/mês' + (lt.vmi ? ', sendo ' + R(L.aluguelVmi) + ' de aluguel VMI (TC, Aquila S e Aquila D)' + (lt.sep ? ', ' + R(L.manSep) + ' de manutenção à parte (média no prazo)' : '') + (L.nProxy ? ', ' + R(L.aluguelProxy) + ' da RM pelo proxy da TC' : '') + ' e ' + R(L.aluguelComp) + ' dos itens sem cotação' : '') + (lt.vmi && !lt.sep ? '. O aluguel VMI já inclui a manutenção' : '') + '.',
       (lt.sep ? '**Cenário com manutenção à parte**: o VPL de D é ' + mi(c.flD.vplEnt) + '; com a manutenção inclusa, como a VMI confirmou, seria ' + mi(vplFlip) + '.' : '**Manutenção inclusa no aluguel** (confirmado em 17/10/2026): não há contrato à parte. Se fosse cobrada depois da garantia, o VPL de D cairia de ' + mi(c.flD.vplEnt) + ' a ' + mi(vplFlip) + '.') + ' O aluguel do Aquila S com manutenção (' + R(((m.equip.C.filter(function (x) { return x.id === 'rxp'; })[0] || {}).loc_vmi || {})[c.D.n]) + '/mês) é menor que o contrato Ouro avulso do mesmo equipamento (R$ 6.800/mês): argumento para negociar a manutenção dos RX na compra.',
-      (c.D.equilibrioC >= c.D.aluguel ? 'Folga de ' + R(c.D.equilibrioC - c.D.aluguel) + '/mês até o aluguel de equilíbrio com a compra C (' + R(c.D.equilibrioC) + '/mês). É a margem para a cotação de ultrassons e placa DR, hoje estimados em ' + R(c.D.aluguel - L.aluguelVmi - L.manSep) + '/mês: até ' + R(c.D.equilibrioC - L.aluguelVmi - L.manSep) + '/mês por esses itens, D continua à frente de C.' : 'Aluguel de equilíbrio com a compra C: ' + R(c.D.equilibrioC) + '/mês (' + Psig(c.D.equilibrioC / c.D.aluguel - 1, 0) + ' sobre o custo atual). É o teto para negociar com a VMI.'),
+      (c.D.equilibrioC >= c.D.aluguel ? 'Folga de ' + R(c.D.equilibrioC - c.D.aluguel) + '/mês até o aluguel de equilíbrio com a compra C (' + R(c.D.equilibrioC) + '/mês). É a margem para a cotação de ultrassons e placa DR' + (L.nProxy ? ' e da RM' : '') + ', hoje estimados em ' + R(L.aluguelComp + L.aluguelProxy) + '/mês: até ' + R(c.D.equilibrioC - L.aluguelVmi - L.manSep) + '/mês por esses itens, D continua à frente de C.' : 'Aluguel de equilíbrio com a compra C: ' + R(c.D.equilibrioC) + '/mês (' + Psig(c.D.equilibrioC / c.D.aluguel - 1, 0) + ' sobre o custo atual). É o teto para negociar com a VMI.'),
       'A VMI cotou o RX digital como Aquila D; na compra, o RX digital é o Apolo D. Ultrassons e placa DR ainda sem cotação de locação.'
     ] });
     /* 6. crédito */
@@ -2658,8 +2893,9 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     if (semCfi.length) pend.push('CFI de ' + semCfi.join(' e ') + ' (ou trocar o ultrassom pelo Dominus L1, credenciado)' + (prevCfi.length ? ', e publicação do CFI da Pulsar' : '') + '.');
     pend.push('FGTS-Saúde: CEBAS na modalidade de 60% ao SUS, créditos SUS de 12 meses e contratos no Teto MAC.');
     pend.push('Perímetro do RX digital: fixo (Apolo D, proposta VMI) ou portátil (como no pacote GE).');
+    if (qR) pend.push('Ressonância: demanda (RMs pedidas hoje para fora), ticket dos convênios, equipe e laudo, projeto e custo da obra, cotação de manutenção e de locação, preço (referências de R$ 4,33 a 4,9 mi) e CFI da versão sem hélio. Cada 100 exames/mês valem ' + mi(qR.eq[selId].porExame * 100) + ' de VPL em ' + selId + '.');
     S.secoes.push({ h: 'Pendências que mudam o número', b: pend });
-    S.secoes.push({ h: 'Próximos passos', b: ['Gate 0 (agora): aprovar a tese e o perímetro; formalizar a proposta VMI de compra e de locação com as respostas acima; fechar as premissas a validar (linha da sala, material, contrato EMG, RIS/PACS).', 'Gate 1 (dez/26 a 1T27): TDC emitido; CFI da Pulsar publicado; protocolar o FINAME (ou fechar a locação) com o kit de documentos.', 'Gate 2: desembolso ou assinatura da locação, instalação e transição da EMG.'] });
+    S.secoes.push({ h: 'Próximos passos', b: ['Gate 0 (agora): aprovar a tese e o perímetro; formalizar a proposta VMI de compra e de locação com as respostas acima; fechar as premissas a validar (linha da sala, material, contrato EMG, RIS/PACS)' + (qR ? '; levantar a demanda de RM e decidir a ressonância em separado' : '') + '.', 'Gate 1 (dez/26 a 1T27): TDC emitido; CFI da Pulsar publicado; protocolar o FINAME (ou fechar a locação) com o kit de documentos.', 'Gate 2: desembolso ou assinatura da locação, instalação e transição da EMG.'] });
     S.nota = 'Números do modelo da página "Viabilidade da internalização com equipamentos VMI" (S&S Partners) no momento da geração. Premissas, fontes e fórmulas nas abas Premissas e Método.';
     return S;
   }
@@ -2759,6 +2995,16 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     var fB = c.flB, fC = c.flC, fD = c.flD, H = +model.fin.horizonte;
     var alt = [['Indicador', 'B · GE/HFS', 'C · VMI compra', 'D · VMI locação'], ['Forma', 'Compra, fornecedores 60x', 'Compra, ' + (c.C.escolha ? c.C.escolha.linha.nome : 'sem linha'), 'Locação ' + c.D.n + ' meses, renovável'], ['Investimento', c.B.capex, c.C.capex, 0], ['Financiado', c.B.capexFin, c.C.capexFin, 0], ['Prazo (m)', c.B.n, c.C.n, c.D.n], ['Carência (m)', 0, c.C.c, ''], ['Custo a.a. (%)', c.B.cetAno, c.C.cetAno, c.D.loc.taxaAno * 100], ['Parcela ou aluguel (R$/mês)', c.B.parcela, c.C.parcela, c.D.aluguel], ['Manutenção em regime (R$/mês)', c.B.manut.mes, c.C.manut.mes, 'inclusa'], ['Plano de manutenção', c.B.manut.plano, c.C.manut.plano, 'Ouro (no aluguel)'], ['Desembolso ano 0', -fB.ent[0], -fC.ent[0], -fD.ent[0]], ['Total desembolsado com equipamentos (' + H + ' anos)', fB.desembolsoTot, fC.desembolsoTot, fD.desembolsoTot], ['VPL projeto', fB.vpl, fC.vpl, fD.vpl], ['VPL hospital', fB.vplEnt, fC.vplEnt, fD.vplEnt], ['Caixa acumulado', fB.acumEnt, fC.acumEnt, fD.acumEnt], ['DSCR hospital ano 1, sem TDC', c.entAlt.B.linhas[0].dscrSem, c.entAlt.C.linhas[0].dscrSem, c.entAlt.D.linhas[0].dscrSem], ['Aluguel de equilíbrio com C (R$/mês)', '', '', c.D.equilibrioC], ['Aluguel de equilíbrio com B (R$/mês)', '', '', c.D.equilibrioB]];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(alt), 'Alternativas');
+    if (c.cenRM) {
+      var q = c.cenRM, rr = model.rm, reg = E.rmMensal(model, 2, 1), ks = ['B', 'C', 'D'];
+      var rmS = [['Ressonância magnética · cenário atual: ' + (rmOn() ? 'com RM' : 'sem RM')], [], ['Com × sem RM', 'B · GE/HFS', 'C · VMI compra', 'D · VMI locação']];
+      [['Investimento sem RM', 'sem', 'capex'], ['Investimento com RM', 'com', 'capex'], ['Dívida nova sem RM', 'sem', 'fin'], ['Dívida nova com RM', 'com', 'fin'], ['Desembolso ano 0 sem RM', 'sem', 'ano0'], ['Desembolso ano 0 com RM', 'com', 'ano0'], ['Compromisso mensal ano 3 sem RM', 'sem', 'comp3'], ['Compromisso mensal ano 3 com RM', 'com', 'comp3'], ['VPL hospital sem RM', 'sem', 'vplEnt'], ['VPL hospital com RM', 'com', 'vplEnt'], ['Caixa acumulado sem RM', 'sem', 'acumEnt'], ['Caixa acumulado com RM', 'com', 'acumEnt']].forEach(function (r) { rmS.push([r[0]].concat(ks.map(function (k) { return q[r[1]][k][r[2]]; }))); });
+      [0, 1, 2].forEach(function (i) { if (!q.sem.C.dscr[i]) return; rmS.push(['DSCR ' + q.sem.C.dscr[i].ano + ' sem RM'].concat(ks.map(function (k) { return q.sem[k].dscr[i].v; }))); rmS.push(['DSCR ' + q.com.C.dscr[i].ano + ' com RM'].concat(ks.map(function (k) { return q.com[k].dscr[i].v; }))); });
+      rmS.push(['Diferença de VPL (com − sem)'].concat(ks.map(function (k) { return q.eq[k].delta; })), ['VPL por exame/mês a mais'].concat(ks.map(function (k) { return q.eq[k].porExame; })), ['Volume de equilíbrio (exames/mês)'].concat(ks.map(function (k) { return q.eq[k].volume; })), ['Ticket de equilíbrio (R$)'].concat(ks.map(function (k) { return q.eq[k].ticket; })), ['Preço de equilíbrio (R$)'].concat(ks.map(function (k) { return q.eq[k].preco; })));
+      rmS.push([], ['DRE mensal da RM em regime (preços do ano 2)', 'R$/mês'], ['Exames', reg.exames], ['Receita bruta', reg.rb], ['Glosas', -reg.glosa], ['Receita líquida', reg.rl], ['Contraste e material', -reg.matmed], ['Laudo', -reg.laudo], ['Margem de contribuição', reg.mc], ['Equipe', -reg.equipe], ['Energia e climatização', -reg.energia], ['Outros fixos', -reg.outros], ['EBITDA antes da manutenção', reg.ebitda], ['Capacidade (exames/mês)', q.cap.cap], ['Ocupação', q.cap.ocup]);
+      var ri = c.rm.isolada; if (ri) { rmS.push([], ['RM isolada (compra, sem financiamento)', 'Ano 0'].concat(ri.anos.map(function (a) { return a.ano; })), ['Exames', ''].concat(ri.anos.map(function (a) { return a.rm.exames; })), ['Receita líquida', ''].concat(ri.anos.map(function (a) { return a.rm.rl; })), ['EBITDA da RM', ''].concat(ri.anos.map(function (a) { return a.rm.ebitda; })), ['Manutenção', ''].concat(ri.anos.map(function (a) { return -a.manut; })), ['Fluxo', ri.fl[0]].concat(ri.anos.map(function (a) { return a.fc; })), ['VPL', ri.vpl], ['TIR', ri.tir], ['Payback (anos)', ri.pb]); }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rmS), 'Ressonância');
+    }
     var loc = [['Locação D no prazo de ' + c.D.n + ' meses · ' + locTxt().base + ' · ' + locTxt().manut], ['Item', 'Base', 'Cotação VMI R$/mês/un.', 'Valor de compra', 'Queda a.a.', 'Residual %', 'Residual R$', 'Aluguel (com tributos)', 'dos quais tributos', 'Manutenção média', 'Custo mensal', '% do valor/mês', 'Taxa implícita a.a.']];
     c.D.loc.linhas.forEach(function (x) { loc.push([x.nome, x.fonte === 'vmi' ? 'VMI · ' + x.cotModelo : 'composição', x.cotUnit || '', x.V, x.dep, x.rvPct, x.RV, x.fin, x.trib, x.man, x.aluguel, x.pctMes, x.taxaImpl == null ? '' : x.taxaImpl]); });
     loc.push(['Pacote', '', '', c.D.loc.V, '', c.D.loc.RV / c.D.loc.V, c.D.loc.RV, c.D.loc.fin, c.D.loc.trib, c.D.loc.man, c.D.loc.aluguel, c.D.loc.pctMes, '']);
