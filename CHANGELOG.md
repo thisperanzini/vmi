@@ -7,6 +7,7 @@
 - Resultado (premissas salvas): VPL para o hospital sem RM B 9,65 / C 9,80 / D 9,77 mi; com RM B 6,38 / C 6,39 / D 5,80 mi. A RM sozinha, sem financiamento: VPL −R$ 3,40 mi, TIR 0,2%. Empata em C com 568 exames/mês, ou ticket de R$ 711, ou preço de R$ 1,80 mi. DSCR 2027/2028 em C: 1,15/1,45 sem RM, 1,09/1,37 com RM.
 - Alternativas: seção "Ressonância magnética" com quadro com × sem por forma de pagar, DRE mensal da RM, equilíbrio (volume, ticket, preço), grade volume × preço e RM ano a ano. Plano em números com a linha da RM; Crédito com o efeito na cobertura; sumário executivo e .xlsx (aba Ressonância) com os dois cenários; Simulador e tornado com alavancas da RM.
 - Modelos salvos antes da RM recebem o item uma única vez (marca equip.rm_v).
+- Pendência do lado do HDA (19/10, noite): os planos de saúde tiraram recentemente a RM dos pacotes de reembolso com o hospital; o volume de convênio do cenário com RM depende de negociar a volta. Incluída em Premissas, Tese (gate 0 e riscos), Alternativas, Método e sumário executivo.
 
 ## 2026-10-18 (tarde) · HDA: honorário da S&S na compra (C)
 - Honorário de intermediação da S&S pago pelo hospital: 2% do valor financiado na alternativa C (R$ 54,4 mil), lançado no ano 0 com IOF e tarifa e no custo total do ranking. B e D sem honorário do hospital. Corrigida a unidade da premissa (fração na tela, % no motor).
