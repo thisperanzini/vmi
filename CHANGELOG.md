@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-20 (tarde) · HDA: chave "PACS Sectra no modelo"
+- Nova premissa propria.pacs_incluir (Com PACS / Sem PACS), em Premissas, Tese e Simulador. Sem PACS zera o custo por exame (também na RM e no SUS informativo) e a implantação. Padrão: com PACS.
+- Tese: cartão "PACS Sectra: com e sem no modelo" com VPL das três alternativas, VPL do projeto, TIR e payback, resultado mensal e cobertura nos dois cenários; KPIs mostram o valor do outro cenário (ex.: "sem PACS: R$ 7,47 mi"). Simulador com KPI "PACS: com − sem"; tornado do PACS só com PACS incluído. Sumário e Método citam o cenário em uso.
+- Resultado: o PACS custa o mesmo em B, C e D (não muda a escolha). Sem RM: C 6,80 → 9,46 mi sem PACS (TIR 52% → 73%); com RM: C 4,26 → 7,09 mi; resultado mensal R$ 90,2 mil → R$ 124,1 mil. Cada R$ 1 por exame ≈ R$ 0,27 mi de VPL.
+
 ## 2026-10-20 · HDA: respostas do CEO, RIS Touch Health + PACS Sectra, SUS fora do modelo
 - Premissas fechadas com o CEO (20/10/2026), com origem "CEO" em Premissas: a linha "médicos que usam a sala" (~R$ 133 mil/mês) são os radiologistas do diagnóstico, já incluídos; material já contabilizado (5,2%; cenário de 15% descartado); de dia laudam os radiologistas, depois das 18 h telelaudo, incluso; equipe técnica na folha (~R$ 184 mil/mês), cobre a TC 24 h (detalhar se está superdimensionada; não muda a escolha); EMG sem multa, aviso de 90 dias; sala da TC reaproveitada.
 - Go-live em jul/2027 (6 meses de compra, aprovação e instalação), com a liberação do FINAME casada com a instalação e o aviso à EMG ~90 dias antes, sem sobreposição de custos.

@@ -58,7 +58,7 @@ var Engine = (function () {
       d.manut = num(opex && opex.manut) * reaj;
       d.aluguel = num(opex && opex.aluguel) * reaj;
       var v = m.volumes || {}, exPacs = (num(v.rx26) + num(v.tc26) + num(v.us26)) * fator; /* PACS: todos os exames, todos os pagadores */
-      d.exPacs = exPacs; d.ris = num(p.rispacs_mes) * reaj; d.pacs = num(p.pacs_exame) * exPacs * reaj;
+      d.exPacs = exPacs; d.ris = num(p.rispacs_mes) * reaj; d.pacs = pacsEx(m) * exPacs * reaj;
       d.rispacs = d.ris + d.pacs;
     }
     d.repasse = d.rep_med + d.rep_mat + d.rep_bio + d.rep_sala;
@@ -106,6 +106,10 @@ var Engine = (function () {
   function rampaRM(m, t) { var r = m.rm || {}; return t <= 1 ? (r.rampa1 == null ? 1 : num(r.rampa1)) : t === 2 ? (r.rampa2 == null ? 1 : num(r.rampa2)) : 1; }
   /* rampa pelo mês de operação da RM (j = 1 no primeiro mês): 1º ano, 2º ano, depois regime */
   function rampaOp(m, j) { var r = m.rm || {}; return j <= 12 ? (r.rampa1 == null ? 1 : num(r.rampa1)) : j <= 24 ? (r.rampa2 == null ? 1 : num(r.rampa2)) : 1; }
+  /* PACS Sectra: chave de inclusão (propria.pacs_incluir); fora do modelo = custo por exame e implantação zerados */
+  function pacsOn(m) { return ((m && m.propria) || {}).pacs_incluir !== 'nao'; }
+  function pacsEx(m) { return pacsOn(m) ? num(m.propria && m.propria.pacs_exame) : 0; }
+  function pacsImpl(m) { return pacsOn(m) ? num(m.propria && m.propria.pacs_impl) : 0; }
   function obraRM(m) { return rmOn(m) ? num(m.rm && m.rm.obra) : 0; }
   function capacidadeRM(m) { var r = m.rm || {}, cap = 2 * (num(r.horas_dia) || 12) * 26, ex = num(r.exames_mes); return { cap: cap, exames: ex, ocup: cap ? ex / cap : null }; }
   /* DRE mensal da RM no ano-projeto t; rampa opcional (1 = regime) */
@@ -115,7 +119,7 @@ var Engine = (function () {
     var rb = exC * num(r.ticket) * reaj, glosa = rb * num(m.base.glosa_pct), rl = rb - glosa;
     var matmed = rl * num(r.matmed_pct), laudo = rl * num(r.rep_med_pct), mc = rl - matmed - laudo;
     var equipe = num(r.equipe_mes) * reaj, energia = num(r.energia_mes) * reaj, outros = num(r.outros_mes) * reaj, fixos = equipe + energia + outros;
-    var pacs = num(m.propria && m.propria.pacs_exame) * (exC + exS) * reaj; /* PACS cobrado por exame também na RM */
+    var pacs = pacsEx(m) * (exC + exS) * reaj; /* PACS cobrado por exame também na RM */
     return { exames: exC + exS, exConv: exC, exSus: exS, rampa: k, rb: rb, glosa: glosa, rl: rl, matmed: matmed, laudo: laudo, mc: mc, equipe: equipe, energia: energia, outros: outros, fixos: fixos, pacs: pacs, ebitda: mc - fixos - pacs };
   }
   /* RM no ano-projeto t: valores mensais × meses de operação no ano */
@@ -288,7 +292,7 @@ var Engine = (function () {
        com a parte financiada e os custos do financiamento da RM no ano da entrega. Depreciação de cada parcela a partir do seu ano. */
     var obra = obraRM(m), tR = rmOn(m) ? Math.min(H, anoRM(m)) : 0, tE = rmOn(m) ? Math.min(H, anoEqRM(m)) : 0;
     var eqRM = rmOn(m) ? num(alt.capexRM) : 0, capexRM = eqRM + obra, finRM = num(alt.capexFinRM), ciRM = num(alt.custosIniRM);
-    var capex0 = alt.capex - num(alt.capexRM) + num(m.propria.rispacs_impl) + num(m.propria.pacs_impl);
+    var capex0 = alt.capex - num(alt.capexRM) + num(m.propria.rispacs_impl) + pacsImpl(m);
     var capex = capex0 + capexRM;
     var depAnoT = function (t) { return (t <= vida ? capex0 / vida : 0) + (tE && t >= tE && t < tE + vida ? eqRM / vida : 0) + (tR && t >= tR && t < tR + vida ? obra / vida : 0); };
     var anos = [], proj = [-capex0], ent = [-(capex0 - ((alt.capexFin || 0) - finRM)) - ((alt.custosIni || 0) - ciRM)];
@@ -476,6 +480,7 @@ var Engine = (function () {
       out.rm.isolada = rmIsolada(m, C);
       out.sus = susUpside(m);
       out.cenRM = cenariosRM(m, Motor, BASE, out);
+      out.cenPACS = cenariosPACS(m, Motor, BASE, out);
     }
     return out;
   }
@@ -495,8 +500,8 @@ var Engine = (function () {
   function susUpside(m) {
     var sx = m.sus || {}, p = m.propria, rr = m.rm || {}, g = num(m.base.glosa_pct), H = Math.max(1, Math.round(num(m.fin.horizonte))), r = num(m.fin.desconto);
     var iniTC = num(m.fin.inicio_op_mes) || 0, iniR = rmOn(m) ? iniRM(m) : null, fl = [0], anos = [];
-    var mcTC = function (reaj) { var v = num(sx.tc_mes), rl = v * num(sx.tc_valor) * (1 - g) * reaj; return { v: v, rl: rl, mc: rl * (1 - num(p.rep_med_pct) - num(p.matmed_pct)) - num(p.pacs_exame) * v * reaj }; };
-    var mcRM = function (reaj) { var v = rmOn(m) ? num(sx.rm_mes) : 0, rl = v * num(sx.rm_valor) * (1 - g) * reaj; return { v: v, rl: rl, mc: rl * (1 - num(rr.rep_med_pct) - num(rr.matmed_pct)) - num(p.pacs_exame) * v * reaj }; };
+    var mcTC = function (reaj) { var v = num(sx.tc_mes), rl = v * num(sx.tc_valor) * (1 - g) * reaj; return { v: v, rl: rl, mc: rl * (1 - num(p.rep_med_pct) - num(p.matmed_pct)) - pacsEx(m) * v * reaj }; };
+    var mcRM = function (reaj) { var v = rmOn(m) ? num(sx.rm_mes) : 0, rl = v * num(sx.rm_valor) * (1 - g) * reaj; return { v: v, rl: rl, mc: rl * (1 - num(rr.rep_med_pct) - num(rr.matmed_pct)) - pacsEx(m) * v * reaj }; };
     for (var t = 1; t <= H; t++) {
       var reaj = reajAno(m, t), a = mcTC(reaj), b = mcRM(reaj), mt = mesesDesde(iniTC, t), mr = iniR == null ? 0 : mesesDesde(iniR, t);
       var tot = a.mc * mt + b.mc * mr; anos.push({ t: t, ano: num(m.fin.ano_inicio) + t - 1, tc: a.mc * mt, rm: b.mc * mr, rl: a.rl * mt + b.rl * mr, total: tot }); fl.push(tot);
@@ -513,6 +518,16 @@ var Engine = (function () {
     var invH = -fl.ent[0] + fl.anos.reduce(function (a, x) { return a + (x.invRMHosp || 0); }, 0);
     return { capex: fl.capex, fin: alt.capexFin || 0, ano0: invH, vpl: fl.vpl, vplEnt: fl.vplEnt, acumEnt: fl.acumEnt, comp1: (fl.anos[0].servico + fl.anos[0].opex) / 12, comp3: (a3.servico + a3.opex) / 12,
       dscr: en.linhas.slice(0, 3).map(function (l) { return { ano: l.ano, v: l.dscrSem, tdc: l.dscrCom }; }), dlEbitda: en.dlEbitdaProj, inc3: a3.inc };
+  }
+  /* Com × sem PACS Sectra: as três alternativas no cenário atual e no oposto (a RM fica como está) */
+  function cenariosPACS(m, Motor, BASE, out) {
+    var on = pacsOn(m), m2 = clone(m); m2.propria.pacs_incluir = on ? 'nao' : 'sim';
+    var r2 = calcular(m2, Motor, BASE, { leve: true });
+    var res = function (r) { var o = {}; ['B', 'C', 'D'].forEach(function (k) { var fl = r['fl' + k]; o[k] = { vplEnt: fl.vplEnt, vpl: fl.vpl, tir: fl.tir, pb: fl.pb, acumEnt: fl.acumEnt, capex0: fl.capex0 }; }); o.resultado = r.cen.prop.resultado; o.ganhoMes = r.ganhoMes; o.pacsMes = r.cen.prop.pacs; o.selId = r.sel.id; o.dscr = entidade(r === out ? m : m2, r.sel, r.flSel).linhas.slice(0, 2).map(function (l) { return { ano: l.ano, v: l.dscrSem }; }); return o; };
+    var cur = res(out), alt = res(r2), com = on ? cur : alt, sem = on ? alt : cur, d = {};
+    ['B', 'C', 'D'].forEach(function (k) { d[k] = com[k].vplEnt - sem[k].vplEnt; });
+    var ord = function (x) { return ['B', 'C', 'D'].sort(function (a, b) { return x[b].vplEnt - x[a].vplEnt; }); };
+    return { on: on, com: com, sem: sem, delta: d, melhorCom: ord(com)[0], melhorSem: ord(sem)[0], exames: (on ? out : r2).cen.prop.exPacs, exame: num(m.propria.pacs_exame), impl: num(m.propria.pacs_impl) };
   }
   function cenariosRM(m, Motor, BASE, out) {
     var on = rmOn(m), m2 = clone(m); m2.rm = m2.rm || {}; m2.rm.incluir = on ? 'nao' : 'sim';
@@ -545,6 +560,6 @@ var Engine = (function () {
   }
 
   return { num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
-    mesesAno: mesesAno, mesesDesde: mesesDesde, rmOn: rmOn, isRM: isRM, ativos: ativos, rmMensal: rmMensal, rmAno: rmAno, capacidadeRM: capacidadeRM, iniRM: iniRM, aprovRM: aprovRM, anoRM: anoRM, anoEqRM: anoEqRM, mesRMStr: mesRMStr, susUpside: susUpside, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
+    mesesAno: mesesAno, mesesDesde: mesesDesde, rmOn: rmOn, pacsOn: pacsOn, pacsEx: pacsEx, pacsImpl: pacsImpl, isRM: isRM, ativos: ativos, rmMensal: rmMensal, rmAno: rmAno, capacidadeRM: capacidadeRM, iniRM: iniRM, aprovRM: aprovRM, anoRM: anoRM, anoEqRM: anoEqRM, mesRMStr: mesRMStr, susUpside: susUpside, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
