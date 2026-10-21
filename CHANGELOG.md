@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-20 (noite) · HDA: taxa de êxito da S&S de 2,15% (contrato Rev. 1.1)
+- altC.honorario_pct 2% → 2,15% (taxa de êxito sobre o valor captado, paga a cada desembolso, com o retainer de R$ 30 mil abatido). Textos de Método e sumário com duas casas decimais; nota de que, se o hospital assinar e optar por B ou D, paga só o retainer (fora dos fluxos).
+- Resultado: taxa de êxito R$ 58,5 mil no pacote e R$ 111,8 mil na RM (total R$ 170,3 mil). Sem RM: C 6,80, D 6,71, B 6,59 mi; com RM: C 4,25, B 3,95, D 3,33 mi; RM tira R$ 2,55 mi em C.
+
 ## 2026-10-20 (tarde) · HDA: chave "PACS Sectra no modelo"
 - Nova premissa propria.pacs_incluir (Com PACS / Sem PACS), em Premissas, Tese e Simulador. Sem PACS zera o custo por exame (também na RM e no SUS informativo) e a implantação. Padrão: com PACS.
 - Tese: cartão "PACS Sectra: com e sem no modelo" com VPL das três alternativas, VPL do projeto, TIR e payback, resultado mensal e cobertura nos dois cenários; KPIs mostram o valor do outro cenário (ex.: "sem PACS: R$ 7,47 mi"). Simulador com KPI "PACS: com − sem"; tornado do PACS só com PACS incluído. Sumário e Método citam o cenário em uso.
