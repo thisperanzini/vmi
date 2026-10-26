@@ -481,8 +481,43 @@ var Engine = (function () {
       out.sus = susUpside(m);
       out.cenRM = cenariosRM(m, Motor, BASE, out);
       out.cenPACS = cenariosPACS(m, Motor, BASE, out);
+      out.cenFIIS = cenariosFIIS(m, Motor, BASE, out);
+      out.lcdAuto = lcdAutomatico(m, Motor, BASE, out);
     }
     return out;
+  }
+
+  /* FIIS Saúde: só para proponentes da Chamada Pública 2025 (inscrição de 13/10 a 07/11/2025).
+     Simula o pacote C no FIIS indireto com o prazo pedido e, se o HDA tiver CEBAS, com 20 anos. */
+  function cenariosFIIS(m, Motor, BASE, out) {
+    var fl = (m.cliente && m.cliente.flags) || {}, marcado = !!num(fl.fiis_chamada2025), atual = out.C.escolha ? out.C.escolha.linha.id : null;
+    function sim(tipo, prazo) {
+      var m2 = clone(m); m2.cliente.flags = clone(fl); m2.cliente.flags.fiis_chamada2025 = 1; m2.cliente.flags.fiis_tipo = tipo;
+      m2.altC.linha = 'fiis-saude-indireto'; m2.altC.custo = 'auto'; if (prazo) m2.altC.prazo = prazo;
+      var r = calcular(m2, Motor, BASE, { leve: true }), e = r.C.escolha;
+      if (!e || e.linha.id !== 'fiis-saude-indireto') return null;
+      return { tipo: tipo, n: e.sim.n, c: e.sim.c, cet: e.sim.cet, tot: e.sim.custoTotal, taxa1: e.sim.taxaAno1, faixa: e.sim.faixaTotal, parcela: r.C.parcela, vplC: r.flC.vplEnt, delta: r.flC.vplEnt - out.flC.vplEnt, bloqueios: e.el.bloqueios };
+    }
+    var tipo = fl.fiis_tipo && fl.fiis_tipo !== 'sem_sus' ? fl.fiis_tipo : 'conveniada';
+    return { marcado: marcado, emUso: !!(atual && /^fiis-/.test(atual)), tipo: fl.fiis_tipo || '', prazoPedido: num(m.altC.prazo) || 120,
+      pedido: sim(tipo, num(m.altC.prazo) || 120), vinte: sim('filantropica_cebas', 240) };
+  }
+
+  /* Taxa LCD no BNDES Automático: custo total com a sobretaxa da base e a sobretaxa que empata com a linha em uso no pacote */
+  function lcdAutomatico(m, Motor, BASE, out) {
+    var C = out.C, av = C.av, e = C.escolha; if (!av || !e) return null;
+    var x = av.todas.filter(function (t) { return t.linha.id === 'bndes-automatico'; })[0]; if (!x || !x.sim) return null;
+    var lcd = (x.alternativas || []).filter(function (a) { return a.custo === 'LCD'; })[0]; if (!lcd) return null;
+    var sb = (BASE.macro.lcd && BASE.macro.lcd.sobretaxa) || { v: 0 }, oo = { sistema: C.caso.operacao.sistema, carModo: C.caso.operacao.carModo };
+    function tot(v) {
+      var b2 = {}; Object.keys(BASE).forEach(function (k) { b2[k] = BASE[k]; });
+      b2.macro = {}; Object.keys(BASE.macro).forEach(function (k) { b2.macro[k] = BASE.macro[k]; });
+      b2.macro.lcd = {}; Object.keys(BASE.macro.lcd || {}).forEach(function (k) { b2.macro.lcd[k] = BASE.macro.lcd[k]; }); b2.macro.lcd.sobretaxa = { v: v, min: v, max: v };
+      var ctx2 = {}; Object.keys(av.ctx).forEach(function (k) { ctx2[k] = av.ctx[k]; }); ctx2.base = b2;
+      return Motor.simular(x.linha, 'LCD', 'base', ctx2, oo).custoTotal;
+    }
+    var t0 = tot(0), t1 = tot(1), ref = e.sim.custoTotal, be = t1 > t0 ? (ref - t0) / (t1 - t0) : null;
+    return { sob: sb.v, sobMin: sb.min, sobMax: sb.max, confirmado: !!(BASE.macro.lcd && BASE.macro.lcd.confirmado), tot: lcd.custoTotal, cet: lcd.cet, n: lcd.n, c: lcd.c, ref: ref, refLinha: e.linha.nome, refCusto: e.sim.custo, empate: be, emUso: e.linha.id === 'bndes-automatico' && e.sim.custo === 'LCD' };
   }
 
   /* ---------- RM isolada: só o equipamento, a obra, a operação e a manutenção da RM, sem financiamento (preço do pacote C) ---------- */

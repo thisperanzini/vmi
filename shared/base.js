@@ -1,9 +1,10 @@
-/* Base de linhas, taxas e parâmetros — versão 2026-10-16 (levantamento de 09/10/2026; FGTS-Saúde revisto em 16/10/2026).
+/* Base de linhas, taxas e parâmetros — versão 2026-10-26 (levantamento de 09/10/2026; FGTS-Saúde revisto em 16/10/2026;
+   BNDES Automático e FIIS Saúde refeitos em 26/10/2026).
    Cada número tem fonte, data e confiança. A página usa esta base como padrão
    e a substitui pela versão salva no banco (config/base), quando houver. */
 var BASE_PADRAO = {
-  versao: "2026-10-16",
-  nota: "Levantamento S&S de 09/10/2026; FGTS-Saúde refeito pela Res. CCFGTS 1.152/2026 e pelo Manual de Fomento v002 em 16/10/2026 (só modalidade I para equipamento); catálogo CFI verificado em 14/10/2026 e cruzado com a tabela FINAME VMI em 15/10/2026 (validade por item; Pulsar com CFI previsto para dez/2026, premissa VMI); modos internalização/entidade adicionados. Valores de fontes oficiais lidas na data; os marcados 'calculado' derivam de fórmula oficial com insumos oficiais.",
+  versao: "2026-10-26",
+  nota: "Levantamento S&S de 09/10/2026; FGTS-Saúde refeito pela Res. CCFGTS 1.152/2026 e pelo Manual de Fomento v002 em 16/10/2026 (só modalidade I para equipamento); catálogo CFI verificado em 14/10/2026 e cruzado com a tabela FINAME VMI em 15/10/2026 (validade por item; Pulsar com CFI previsto para dez/2026, premissa VMI); modos internalização/entidade adicionados. Em 26/10/2026: BNDES Automático com os cinco custos financeiros por porte (TFB, TLP, Taxa LCD, Pré FAT e Pré FAT MPME), faixa mínima e máxima entre eles e Taxa do BNDES por porte; FIIS Saúde dividido em indireto e direto, só para proponentes da Chamada Pública 2025, com enquadramento, prazo por tipo de entidade e taxas da apresentação MS/BNDES e das 12 operações de saúde já contratadas. Valores de fontes oficiais lidas na data; os marcados 'calculado' derivam de fórmula oficial com insumos oficiais.",
 
   /* ---------- Macro ---------- */
   macro: {
@@ -20,6 +21,14 @@ var BASE_PADRAO = {
       fonte: { t: "BCB – Comunicado 46.044", u: "https://www.bcb.gov.br/api/conteudo/app/normativos/exibeoutrasnormas?p1=Comunicado&p2=46044", d: "2026-09-30", c: "alta" } },
     pmm: { v: 14.27, mes: "2026-10", obs: "Taxa Prefixada MPME (PMm) – custo 'Pré FAT MPME' do BNDES",
       fonte: { t: "BCB – Comunicado 46.044", u: "https://www.bcb.gov.br/api/conteudo/app/normativos/exibeoutrasnormas?p1=Comunicado&p2=46044", d: "2026-09-30", c: "alta" } },
+    tfb: { data: "2026-10-26",
+      lib30: { 36: 13.49, 60: 13.81, 84: 14.19, 120: 14.94 },
+      lib90: { 36: 13.70, 60: 14.02, 84: 14.40, 120: 15.14 },
+      obs: "Taxa Fixa do BNDES (custo financeiro pré, fixo até a quitação): TFB36 até 36 meses, TFB60 até 60, TFB84 até 84, TFB120 até 120. Muda todo dia; vale a do dia da aprovação ou da assinatura. Liberação em até 30 dias (cenários mín./base) ou até 90 dias (cenário máx.). Limites: prazo total até 120 meses e carência até 12.",
+      fonte: { t: "BNDES – TFB, série diária (Moedas Contratuais TFB_36_30 a TFB_120_90), cotação de 26/10/2026", u: "https://www.bndes.gov.br/wps/portal/site/home/financiamento/guia/custos-financeiros/tfb-taxa-fixa-bndes", d: "2026-10-26", c: "alta" } },
+    lcd: { sobretaxa: { v: 0.50, min: 0.0, max: 1.0 }, confirmado: false,
+      obs: "Taxa LCD = Selic acumulada + Sobretaxa de Referência LCD (código LD1 nas Moedas Contratuais, operações indiretas). A sobretaxa é revista no 1º dia útil de jan, abr, jul e out e fica fixa no contrato; não depende do prazo. Limites: prazo total até 120 meses e carência até 24. O valor de out/2026 não foi obtido (a consulta das Moedas Contratuais exige captcha): a ferramenta usa a premissa de 0,50% (faixa 0 a 1,0%) até a confirmação. A Selic segue o Focus.",
+      fonte: { t: "BNDES – Selic - Taxa LCD (Lei 14.937/2024)", u: "https://www.bndes.gov.br/wps/portal/site/home/financiamento/guia/custos-financeiros/selic-taxa-lcd", d: "2026-10-26", c: "baixa" } },
     tjlp: { v: 9.29, periodo: "4º tri 2026",
       fonte: { t: "BCB – Comunicado 46.042", u: "https://www.bcb.gov.br/api/conteudo/app/normativos/exibeoutrasnormas?p1=Comunicado&p2=46042", d: "2026-09-30", c: "alta" } },
     tr_am: { v: 0.1616, ref: "out/2026", obs: "TR mensal; o simulador a mantém constante",
@@ -52,8 +61,12 @@ var BASE_PADRAO = {
       { recorte: "FINAME · TLP · imagem e patologia (8640)", n: 34, p25: 4.69, med: 4.89, p75: 5.65, max: 8.51, car: 6, amort: 42 },
       { recorte: "FINAME · taxa fixa · Programa Mais Inovação", n: 47, p25: 12.30, med: 12.50, p75: 12.82, max: 15.08, car: 12, amort: 48 },
       { recorte: "FINAME · taxa fixa · demais instrumentos", n: 21, p25: 20.18, med: 20.76, p75: 21.78, max: 25.95, car: 3, amort: 48 },
-      { recorte: "BNDES Automático · TLP · todos os portes", n: 75, p25: 5.40, med: 6.16, p75: 8.22, max: 11.05, car: 6, amort: 48 }
+      { recorte: "BNDES Automático · TLP · todos os portes", n: 75, p25: 5.40, med: 6.16, p75: 8.22, max: 11.05, car: 6, amort: 48 },
+      { recorte: "BNDES Automático · Selic/LCD · spread sobre o custo financeiro", n: 68, p25: 5.00, med: 5.00, p75: 7.41, max: 11.61, car: 6, amort: 24 },
+      { recorte: "BNDES Automático · taxa fixa MPME · spread implícito sobre a TFB do dia (calculado)", n: 743, p25: 5.30, med: 6.55, p75: 7.62, max: 28.34, car: 3, amort: 48 },
+      { recorte: "FIIS Saúde · taxa fixa total · indireto (mar–ago/2026)", n: 12, p25: 10.57, med: 12.13, p75: 12.24, max: 14.25, car: 23, amort: 108 }
     ],
+    nota2: "Spread implícito da taxa fixa = (1 + taxa total) ÷ (1 + TFB do prazo no dia da contratação, liberação em 30 dias) − 1, com a série diária da TFB publicada pelo BNDES; as operações podem ter usado Pré FAT em vez da TFB. FIIS: 12 operações de saúde contratadas por Caixa, Banco do Brasil, BRDE, Sicredi e Desenvolve SP, de R$ 0,4 mi a R$ 30 mi, prazos de 87 a 240 meses (até 10 anos: 8,44% a 12,24%; 20 anos: 10,50% a 14,25%).",
     agentes: ["Banco do Brasil (72 ops FINAME)", "Banco Votorantim (37)", "Bradesco (20)", "Itaú (10)", "Sicredi (6)", "Santander (4)", "Sicoob (3)", "Banco do Nordeste (2)"]
   },
 
@@ -105,17 +118,38 @@ var BASE_PADRAO = {
     {
       id: "bndes-automatico", familia: "BNDES", nome: "BNDES Automático – projeto de investimento",
       operador: "Agente financeiro credenciado", status: "aberta",
-      elig: { natureza: ["privada", "filantropica"], portes: ["micro", "pequena", "media", "grande"], exige_cfi: true, importado: "nao", ufs: null },
+      elig: { natureza: ["privada", "filantropica"], portes: ["micro", "pequena", "media", "grande"], exige_cfi: true, importado: "nao", ufs: null, valor_max: 150000000 },
       cond: { part: 100, prazo: 240, carencia: 36, obras: true },
-      custos: ["TLP", "PMm"],
+      /* Cinco custos financeiros possíveis; o motor simula todos, mostra o mínimo e o máximo entre eles e escolhe o de menor custo total no prazo pedido. */
+      custos: ["TLP", "TFB", "LCD", "PMm", "Pm"],
+      custos_porte: { PMm: ["micro", "pequena", "media"] },
+      limites_custo: { TFB: { prazo: 120, carencia: 12, regra: "TFB: prazo total até 120 meses e carência até 12" }, LCD: { prazo: 120, carencia: 24, regra: "Taxa LCD: prazo total até 120 meses e carência até 24" } },
       spreads: [
-        { nome: "Taxa do BNDES", base: 0.75, min: 0.75, max: 0.95, grande: 0.95, fonte: "f_automatico", obs: "MPME 0,75%; grande empresa de saúde (setor prioritário) 0,95%." },
-        { nome: "Taxa do agente", base: 5.41, min: 4.65, max: 7.47, fonte: "f_emp", obs: "Spread contratado no Automático TLP de saúde (p25 5,40 · mediana 6,16 · p75 8,22) menos 0,75." }
+        { nome: "Taxa do BNDES", base: 0.75, min: 0.75, max: 0.75, grande: 0.95, fonte: "f_automatico", obs: "MPME (receita até R$ 300 mi) 0,75%; grande empresa incentivada 0,95% (saúde humana é setor prioritário); grande padrão e setor público 1,15%." },
+        { nome: "Taxa do agente", base: 5.41, min: 4.65, max: 7.47, fonte: "f_emp", obs: "Negociada com o agente. Com TLP: spread contratado no Automático de saúde (p25 5,40 · mediana 6,16 · p75 8,22) menos 0,75." }
       ],
+      spreads_custo: {
+        LCD: [
+          { nome: "Taxa do BNDES", base: 0.75, min: 0.75, max: 0.75, grande: 0.95, fonte: "f_automatico" },
+          { nome: "Taxa do agente", base: 4.25, min: 4.25, max: 6.66, fonte: "f_emp", obs: "Spread sobre a Selic nas operações Selic/LCD do Automático de saúde (p25 5,00 · mediana 5,00 · p75 7,41; 68 operações) menos 0,75." }
+        ],
+        TFB: [
+          { nome: "Taxa do BNDES", base: 0.75, min: 0.75, max: 0.75, grande: 0.95, fonte: "f_automatico" },
+          { nome: "Taxa do agente", base: 5.80, min: 4.55, max: 6.87, fonte: "f_emp", obs: "Spread implícito sobre a TFB do dia nas 743 operações a taxa fixa do Automático MPME de saúde (p25 5,30 · mediana 6,55 · p75 7,62) menos 0,75." }
+        ],
+        PMm: [
+          { nome: "Taxa do BNDES", base: 0.75, min: 0.75, max: 0.75, grande: 0.95, fonte: "f_automatico" },
+          { nome: "Taxa do agente", base: 5.80, min: 4.55, max: 6.87, fonte: "f_emp", obs: "Mesma faixa das operações a taxa fixa (spread implícito sobre a TFB)." }
+        ],
+        Pm: [
+          { nome: "Taxa do BNDES", base: 0.75, min: 0.75, max: 0.75, grande: 0.95, fonte: "f_automatico" },
+          { nome: "Taxa do agente", base: 5.80, min: 4.55, max: 6.87, fonte: "f_emp", obs: "Mesma faixa das operações a taxa fixa (spread implícito sobre a TFB)." }
+        ]
+      },
       iof: "regular", iof_base: "Sem alíquota zero específica (incisos XII e XXX do art. 8º revogados)",
-      garantias: "Negociadas; aceita FGI e FG BNDES-Sebrae.",
-      obs: "Linha para o projeto completo: obra civil, blindagem, gaiola de RF, bunker, instalação e treinamento, além das máquinas credenciadas. Use quando a obra pesa no investimento.",
-      fontes: ["f_automatico", "f_emp"]
+      garantias: "Negociadas com o agente; aceita FGI Tradicional, FGI PEAC e FG BNDES-Sebrae (MPME).",
+      obs: "Projeto completo: estudos, obra civil, blindagem, gaiola de RF, bunker, montagem e instalação, móveis, treinamento, despesas pré-operacionais, máquinas novas nacionais credenciadas, software nacional e capital de giro associado até 30%. Até 100% dos itens financiáveis e até R$ 150 mi; reembolsa investimentos pagos nos 12 meses antes do protocolo. Prazo total até 20 anos e carência até 3 anos, menores com TFB (120/12) e Taxa LCD (120/24). A Taxa Selic está suspensa como custo financeiro (Circ. BNDES 09/2026). A página do produto avisa que o BNDES não credencia nem indica consultores como intermediários e que consultor contratado não interfere na aprovação.",
+      fontes: ["f_automatico", "f_tfb", "f_lcd", "f_bcb_pm", "f_emp", "f_porte"]
     },
     {
       id: "fne-saude", familia: "Fundo constitucional", nome: "FNE Saúde Nordeste",
@@ -227,17 +261,39 @@ var BASE_PADRAO = {
       fontes: ["f_cartao"]
     },
     {
-      id: "fiis-saude", familia: "FIIS", nome: "FIIS Saúde – crédito indireto",
-      operador: "Agente credenciado pelo BNDES", status: "encerrada",
-      elig: { natureza: ["privada", "filantropica"], portes: ["micro", "pequena", "media", "grande"], exige_cfi: true, importado: "sem_similar", ufs: null, valor_max: 50000000,
-        condicao: { campo: "fiis_selecionado", rotulo: "Proposta já selecionada pelo CGFIIS (Res. CGFIIS 10/2026)" } },
-      cond: { part: 100, prazo: 120, carencia: 24, obras: true },
-      custos: ["FIXA_FIIS"],
+      id: "fiis-saude-indireto", familia: "FIIS", nome: "FIIS Saúde – crédito indireto (agente credenciado)",
+      operador: "Instituição credenciada pelo BNDES para o FIIS (nas operações de saúde de 2026: Caixa, Banco do Brasil, BRDE, Sicredi, Desenvolve SP)", status: "restrita",
+      elig: { natureza: ["privada", "filantropica"], portes: ["micro", "pequena", "media", "grande"], exige_cfi: "nacional", importado: "sem_similar", ufs: null, valor_max: 50000000, valor_ref: "fiis_soma",
+        condicao: { campo: "fiis_chamada2025", rotulo: "Proposta inscrita e habilitada na Chamada Pública FIIS Saúde 2025 (carta-consulta no Transferegov)",
+          bloqueio: "Só para proponentes da Chamada Pública FIIS Saúde 2025 (inscrição de 13/10 a 07/11/2025 no Transferegov): marque no caso se a proposta do cliente foi inscrita e habilitada" },
+        tipos_fiis: true,
+        avisos: ["O proponente não pode constar no CEIS e no CNEP (e no CEPIM, se for sem fins lucrativos): consultar no Portal da Transparência antes de seguir",
+          "Equipamento para assistência pública e gratuita no SUS; a capacidade de pagamento é avaliada pela instituição credenciada"] },
+      cond: { part: 100, prazo: 240, carencia: 24, obras: true,
+        prazo_por_flag: { campo: "fiis_tipo", valores: { filantropica_cebas: 240, os: 240, spe: 240, ate: 240, conveniada: 120 }, padrao: 120, regra: "FIIS: até 20 anos para filantrópica com CEBAS, OS, SPE e participante do Agora Tem Especialistas; até 10 anos para as demais privadas" } },
+      custos: ["FIIS_IND"],
       spreads: [],
-      iof: "regular", iof_base: "Sem alíquota zero específica",
-      garantias: "Do agente.",
-      obs: "Janela de propostas encerrada (30/06 a 06/07/2026). Só contrata quem foi selecionado. Teto de 12,69% a.a. até 10 anos (FIIS 5,0% × BNDES 1,25% × agente 6,0%).",
-      fontes: ["f_fiis", "f_fiis_ms"]
+      iof: "regular", iof_base: "Sem alíquota zero específica identificada para o FIIS; confirmar com o agente",
+      garantias: "Definidas pela instituição credenciada na análise de crédito.",
+      obs: "Lei 14.947/2024; Comitê Gestor com Casa Civil, MEC e MS; R$ 10 bi na LOA 2025. Financia obras, adequação de infraestrutura, equipamentos nacionais credenciados no BNDES (ou importados sem similar nacional) e veículos de transporte sanitário; não financia terreno, salários, dívidas ou comunicação. Indireto até R$ 50 mi, somadas todas as propostas FIIS do proponente. Taxa fixa total: média de 11,1% (10 anos) e 13,2% (20 anos) na apresentação MS/BNDES; as 12 operações de saúde contratadas de mar a ago/2026 saíram entre 8,44% e 14,25%. A janela de 2026 (Edital CGFIIS 2, 30/06 a 06/07/2026) também está encerrada.",
+      fontes: ["f_fiis_apres", "f_fiis_manual", "f_fiis_ms", "f_fiis", "f_emp"]
+    },
+    {
+      id: "fiis-saude-direto", familia: "FIIS", nome: "FIIS Saúde – crédito direto (BNDES)",
+      operador: "BNDES (operação direta)", status: "restrita",
+      elig: { natureza: ["privada", "filantropica"], portes: ["micro", "pequena", "media", "grande"], exige_cfi: "nacional", importado: "sem_similar", ufs: null, valor_min: 20000000, valor_ref: "fiis_soma",
+        condicao: { campo: "fiis_chamada2025", rotulo: "Proposta inscrita e habilitada na Chamada Pública FIIS Saúde 2025 (carta-consulta no Transferegov)",
+          bloqueio: "Só para proponentes da Chamada Pública FIIS Saúde 2025 (inscrição de 13/10 a 07/11/2025 no Transferegov): marque no caso se a proposta do cliente foi inscrita e habilitada" },
+        tipos_fiis: true,
+        avisos: ["O proponente não pode constar no CEIS e no CNEP (e no CEPIM, se for sem fins lucrativos): consultar no Portal da Transparência antes de seguir"] },
+      cond: { part: 100, prazo: 240, carencia: 24, obras: true,
+        prazo_por_flag: { campo: "fiis_tipo", valores: { filantropica_cebas: 240, os: 240, spe: 240, ate: 240, conveniada: 120 }, padrao: 120, regra: "FIIS: até 20 anos para filantrópica com CEBAS, OS, SPE e participante do Agora Tem Especialistas; até 10 anos para as demais privadas" } },
+      custos: ["FIIS_DIR"],
+      spreads: [],
+      iof: "regular", iof_base: "Sem alíquota zero específica identificada para o FIIS; confirmar com o BNDES",
+      garantias: "Definidas pelo BNDES na análise de crédito.",
+      obs: "Contratação direta pelo BNDES a partir de R$ 20 mi, somadas todas as propostas FIIS do proponente (inclusive a de educação, se houver). Taxa fixa média para entidade privada: 9,6% (10 anos) e 11,7% (20 anos), na apresentação MS/BNDES; as operações diretas não aparecem nos dados abertos de operações automáticas, então não há faixa observada.",
+      fontes: ["f_fiis_apres", "f_fiis_manual", "f_fiis_ms"]
     },
     {
       id: "cdc-banco", familia: "Banco privado", benchmark: true, nome: "CDC/CCB de investimento (recursos livres)",
@@ -268,6 +324,10 @@ var BASE_PADRAO = {
   fontes: {
     f_finame: { t: "BNDES – Finame BK Aquisição e Comercialização", u: "https://www.bndes.gov.br/wps/portal/site/home/financiamento/produto/bndes-finame-bk-aquisicao-comercializacao", d: "2026-10-09", c: "alta" },
     f_automatico: { t: "BNDES – BNDES Automático", u: "https://www.bndes.gov.br/wps/portal/site/home/financiamento/produto/bndes-automatico", d: "2026-10-09", c: "alta" },
+    f_tfb: { t: "BNDES – TFB, Taxa Fixa do BNDES (série diária por prazo e liberação)", u: "https://www.bndes.gov.br/wps/portal/site/home/financiamento/guia/custos-financeiros/tfb-taxa-fixa-bndes", d: "2026-10-26", c: "alta" },
+    f_lcd: { t: "BNDES – Selic - Taxa LCD (sobretaxa LD1 nas Moedas Contratuais)", u: "https://www.bndes.gov.br/wps/portal/site/home/financiamento/guia/custos-financeiros/selic-taxa-lcd", d: "2026-10-26", c: "media" },
+    f_fiis_apres: { t: "MS/BNDES – Apresentação FIIS Saúde e Educação (todas as UFs): elegíveis, itens, taxas médias por modalidade e prazo, propostas habilitadas por UF (documento recebido em 26/10/2026)", u: "https://www.gov.br/saude/pt-br/acesso-a-informacao/participacao-social/chamamentos-publicos/2025/chamamento-publico-no-02-2025-desid-fiis-saude", d: "2026-10-26", c: "alta" },
+    f_fiis_manual: { t: "MS – Manual da Chamada Pública FIIS Saúde (10/10/2025): quem participa, itens, modalidades, prazos por tipo de entidade (documento recebido em 26/10/2026)", u: "https://www.gov.br/saude/pt-br/acesso-a-informacao/participacao-social/chamamentos-publicos/2025/chamamento-publico-no-02-2025-desid-fiis-saude", d: "2025-10-10", c: "alta" },
     f_porte: { t: "BNDES – Porte de empresa", u: "https://www.bndes.gov.br/wps/portal/site/home/financiamento/guia/porte-de-empresa", d: "2026-10-09", c: "alta" },
     f_bcb_pm: { t: "BCB – Comunicados 46.043 e 46.044 (TLP, Pm, PMm de out/2026)", u: "https://www.bcb.gov.br/api/conteudo/app/normativos/exibeoutrasnormas?p1=Comunicado&p2=46044", d: "2026-09-30", c: "alta" },
     f_emp: { t: "BNDES Dados Abertos – operações indiretas automáticas (CNAE 86, 2025–2026)", u: "https://dadosabertos.bndes.gov.br/dataset/operacoes-financiamento/resource/612faa0b-b6be-4b2c-9317-da5dc2c0b901", d: "2026-10-02", c: "media" },
@@ -314,6 +374,22 @@ var BASE_PADRAO = {
     FCO: { me: [11.01, 11.98], f1: [13.37, 14.76], f15: [17.31, 19.39], f18: [19.67, 22.17] }
   },
   fiis_teto: 12.69,
+  /* FIIS Saúde: taxa fixa total por modalidade e prazo total (10 e 20 anos; interpolação linear entre 120 e 240 meses).
+     base = média da apresentação MS/BNDES; indireto: mín. = p25 das operações de saúde contratadas no mesmo prazo,
+     máx. = teto do Edital CGFIIS 2 (10 anos) e maior taxa observada (20 anos). Direto: só a média publicada. */
+  fiis: {
+    indireta: { t10: { min: 10.46, base: 11.10, max: 12.69 }, t20: { min: 11.59, base: 13.20, max: 14.25 } },
+    direta: { t10: { min: 9.60, base: 9.60, max: 9.60 }, t20: { min: 11.70, base: 11.70, max: 11.70 } },
+    tipos: [
+      { id: "filantropica_cebas", nome: "Filantrópica com CEBAS (Santa Casa, hospital beneficente)", prazo: 240 },
+      { id: "os", nome: "Organização Social com contrato de gestão de unidade SUS vigente", prazo: 240 },
+      { id: "spe", nome: "SPE com concessão, permissão, arrendamento ou PPP de serviço SUS vigente", prazo: 240 },
+      { id: "ate", nome: "Participante do Programa Agora Tem Especialistas", prazo: 240 },
+      { id: "conveniada", nome: "Privada (com ou sem fins lucrativos) com CEBAS ou ESRE e contrato ou convênio SUS vigente", prazo: 120 },
+      { id: "sem_sus", nome: "Privada sem contrato ou convênio SUS vigente", prazo: null }
+    ],
+    obs: "Custo do FIIS de 5,5% a 7% a.a. conforme o prazo, mais a remuneração do BNDES e a do agente (Manual, 4.4). Até 20 anos para filantrópicas com CEBAS, OS, SPE e participantes do Agora Tem Especialistas; até 10 anos para as demais privadas; carência até 24 meses (Manual, 4.3)."
+  },
 
   /* ---------- Kit de documentos (planilha-mestre S&S + exigências da Circ. BNDES 13/2022) ---------- */
   kit: [
@@ -352,8 +428,13 @@ var BASE_PADRAO = {
     { id: "k30", n: "30", cat: "G", nome: "Anuência do gestor local do SUS e termo de cessão de direitos creditórios", ob: "Se FGTS-Saúde", resp: "Cliente / Secretaria de Saúde", onde: "Secretaria municipal ou estadual de Saúde", fmt: "PDF", val: "—", obs: "Portaria GM/MS 2.182/2015: a parcela é descontada do Teto MAC e paga pelo FNS ao agente.", ia: null },
     { id: "k31", n: "31", cat: "G", nome: "Comprovação de participação no Programa Agora Tem Especialistas", ob: "Se FGTS-Saúde", resp: "Cliente", onde: "Declaração enviada a declaracao.pate@saude.gov.br; Termo de Execução ou códigos no CNES", fmt: "PDF / e-mail", val: "—", obs: "Manual de Fomento, Cap. III, 5.5.1 k.", ia: null },
     { id: "k32", n: "32", cat: "G", nome: "Cadastro no CNES", ob: "Se FGTS-Saúde", resp: "Cliente", onde: "CNES (cnes.datasus.gov.br)", fmt: "Print / PDF", val: "Atualizado", obs: "", ia: null },
+    { id: "kf1", n: "33", cat: "H", nome: "Comprovante da proposta na Chamada Pública FIIS Saúde 2025 (número no Transferegov e situação habilitada ou selecionada)", ob: "Se FIIS", resp: "Cliente", onde: "Transferegov.br (menu Propostas)", fmt: "PDF / print", val: "—", obs: "Pré-requisito: sem proposta inscrita na chamada de 2025 a linha não abre.", ia: null, regra_fonte: "Chamamento Público MS 02/2025 (FIIS Saúde); inscrição de 13/10 a 07/11/2025" },
+    { id: "kf2", n: "34", cat: "H", nome: "Documento de enquadramento no FIIS: CEBAS, contrato de gestão (OS), contrato de concessão ou PPP (SPE), contrato ou convênio SUS vigente, ou comprovação do Agora Tem Especialistas", ob: "Se FIIS", resp: "Cliente", onde: "Ministério da Saúde / gestor do SUS / DOU", fmt: "PDF", val: "Vigente", obs: "Define o prazo: 20 anos (filantrópica CEBAS, OS, SPE, Agora Tem Especialistas) ou 10 anos (demais privadas com vínculo SUS).", ia: null, regra_fonte: "Manual da Chamada Pública FIIS Saúde, itens 2 e 4.3" },
+    { id: "kf3", n: "35", cat: "H", nome: "Declaração de atividades no SUS por no mínimo 3 anos (privada sem fins lucrativos sem contrato SUS vigente)", ob: "Se FIIS", resp: "Cliente", onde: "Gestor local do SUS", fmt: "PDF assinado (gov.br prata ou ouro)", val: "—", obs: "", ia: null, regra_fonte: "Manual da Chamada Pública FIIS Saúde, Etapa 2" },
+    { id: "kf4", n: "36", cat: "H", nome: "Formulário de equipamentos do Ministério (Modelo B2_B3_B5) e CNES da unidade que recebe o equipamento", ob: "Se FIIS", resp: "Cliente / S&S", onde: "Transferegov / CNES", fmt: "PDF-A assinado", val: "—", obs: "Equipamento nacional credenciado no BNDES ou importado sem similar nacional.", ia: null, regra_fonte: "Manual da Chamada Pública FIIS Saúde, Etapas 2 e 3" },
+    { id: "kf5", n: "37", cat: "H", nome: "Consultas CEIS, CNEP e CEPIM sem registro", ob: "Se FIIS", resp: "S&S", onde: "Portal da Transparência (CGU)", fmt: "PDF", val: "Na formalização", obs: "CEPIM só para entidade sem fins lucrativos.", ia: null, regra_fonte: "Manual da Chamada Pública FIIS Saúde, item 2.7" }
   ],
-  kit_cats: { A: "Documentos societários e cadastrais", B: "Sócios e representantes legais", C: "Regularidade fiscal e cadastros", D: "Documentos econômico-financeiros", E: "Operação e bem (equipamento médico)", F: "Garantias", G: "FGTS-Saúde (só para filantrópicas que usarem a linha)" },
+  kit_cats: { A: "Documentos societários e cadastrais", B: "Sócios e representantes legais", C: "Regularidade fiscal e cadastros", D: "Documentos econômico-financeiros", E: "Operação e bem (equipamento médico)", F: "Garantias", G: "FGTS-Saúde (só para filantrópicas que usarem a linha)", H: "FIIS Saúde (só para proponentes da Chamada Pública 2025)" },
 
   /* ---------- Modalidades (ROI) ---------- */
   modalidades: [

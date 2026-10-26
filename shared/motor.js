@@ -37,10 +37,27 @@ var Motor = (function () {
   }
   function bcb(id, base) { var x = base.macro.bcb.filter(function (b) { return b.id === id; })[0]; return x ? x.v : null; }
 
-  /* Custo financeiro anual (% a.a.) para um ano-calendário e cenário. */
-  function custoFinanceiro(custo, ano, cen, ctx) {
+  /* TFB: vértice pelo prazo total (36, 60, 84 ou 120 meses). */
+  function tfbVertice(n) { return n <= 36 ? 36 : n <= 60 ? 60 : n <= 84 ? 84 : 120; }
+  /* FIIS: taxa fixa total pelo prazo total, interpolada entre 10 anos (120 meses) e 20 anos (240). */
+  function taxaFIIS(tab, n, cen) {
+    var k = cen === "min" ? "min" : cen === "max" ? "max" : "base", a = tab.t10[k], z = tab.t20[k];
+    if (!n || n <= 120) return a; if (n >= 240) return z;
+    return a + (z - a) * (n - 120) / 120;
+  }
+
+  /* Custo financeiro anual (% a.a.) para um ano-calendário e cenário. n = prazo total em meses (TFB e FIIS dependem dele). */
+  function custoFinanceiro(custo, ano, cen, ctx, n) {
     var b = ctx.base, m = b.macro;
     switch (custo) {
+      case "TFB": var vt = tfbVertice(n || ctx.prazo || 120), lib = cen === "max" ? "lib90" : "lib30", tv = m.tfb && m.tfb[lib] ? m.tfb[lib][vt] : null;
+        return { r: tv, rot: "TFB" + vt + "." + (lib === "lib90" ? "90" : "30") + " " + fmtP(tv), fixo: true };
+      case "LCD": var sb = (m.lcd && m.lcd.sobretaxa) || { v: 0, min: 0, max: 0 }, sv = cen === "min" ? sb.min : cen === "max" ? sb.max : sb.v, se = selicMediaAno(ano, b);
+        return { r: ((1 + se / 100) * (1 + sv / 100) - 1) * 100, rot: "Taxa LCD = Selic (Focus) + sobretaxa LCD " + fmtP(sv) + (m.lcd && m.lcd.confirmado ? "" : " (premissa)"), fixo: false };
+      case "FIIS_IND": case "FIIS_DIR": var tab = b.fiis && b.fiis[custo === "FIIS_IND" ? "indireta" : "direta"];
+        if (!tab) return { r: null, rot: "—", fixo: true };
+        var tf = taxaFIIS(tab, n || ctx.prazo, cen);
+        return { r: tf, rot: "Taxa fixa FIIS " + (custo === "FIIS_IND" ? "indireta" : "direta") + " " + fmtP(tf) + " (" + (n || ctx.prazo) + " meses)", fixo: true };
       case "PMm": return { r: m.pmm.v, rot: "Pré FAT MPME (PMm) " + fmtP(m.pmm.v), fixo: true };
       case "Pm": return { r: m.pm.v, rot: "Pré FAT (Pm) " + fmtP(m.pm.v), fixo: true };
       case "TLP": var ip = ipcaAno(ano, b); return { r: ((1 + ip / 100) * (1 + m.tlp_jm.v / 100) - 1) * 100, rot: "TLP = IPCA + " + fmtP(m.tlp_jm.v), fixo: false };
@@ -59,8 +76,10 @@ var Motor = (function () {
     }
   }
 
-  function spreadsDaLinha(linha, cen, ctx) {
-    return (linha.spreads || []).map(function (s) {
+  /* Spreads da linha; quando a linha tem spreads por custo financeiro (spreads_custo), usa os do custo. */
+  function spreadsBrutos(linha, custo) { return (custo && linha.spreads_custo && linha.spreads_custo[custo]) || linha.spreads || []; }
+  function spreadsDaLinha(linha, cen, ctx, custo) {
+    return spreadsBrutos(linha, custo).map(function (s) {
       var v = cen === "min" ? s.min : cen === "max" ? s.max : s.base;
       if (s.nne != null && ctx.nne && s.nome === "Taxa do BNDES") v = s.nne;
       if (s.grande != null && ctx.porte === "grande" && s.nome === "Taxa do BNDES") v = s.grande;
@@ -69,12 +88,18 @@ var Motor = (function () {
     });
   }
 
+  /* Custos financeiros que a linha oferece ao porte do caso (ex.: Pré FAT MPME só para MPME). Porte desconhecido: todos. */
+  function custosDaLinha(linha, ctx) {
+    var cp = linha.custos_porte || {};
+    return (linha.custos || []).filter(function (cu) { return !cp[cu] || !ctx.porte || cp[cu].indexOf(ctx.porte) >= 0; });
+  }
+
   /* Taxa nominal anual composta: (1+CF)×Π(1+spread)−1 */
-  function taxaAnual(linha, custo, ano, cen, ctx) {
-    var cf = custoFinanceiro(custo, ano, cen, ctx);
+  function taxaAnual(linha, custo, ano, cen, ctx, n) {
+    var cf = custoFinanceiro(custo, ano, cen, ctx, n);
     if (cf.r == null) return null;
     var f = 1 + cf.r / 100;
-    spreadsDaLinha(linha, cen, ctx).forEach(function (s) { f *= 1 + s.v / 100; });
+    spreadsDaLinha(linha, cen, ctx, custo).forEach(function (s) { f *= 1 + s.v / 100; });
     return (f - 1) * 100;
   }
 
@@ -144,11 +169,13 @@ var Motor = (function () {
     var eq = op.equipamento || {};
     var invest = (num(op.valor_equip) || 0) + (num(op.valor_obra) || 0);
     var fin = num(op.valor_financiar); if (fin == null) fin = invest;
+    var flags = {}; Object.keys(caso.flags || {}).forEach(function (k) { flags[k] = caso.flags[k]; });
+    if (flags.fiis_selecionado && flags.fiis_chamada2025 == null) flags.fiis_chamada2025 = true; /* casos antigos: "FIIS selecionado" implica a chamada de 2025 */
     return {
       base: base, rob: rob, porte: porte, porteInferido: rob == null, uf: uf, nne: regiaoNNE(uf),
       faixaFundos: faixaFundos(rob, base) || (porte === "grande" ? base.porte.fundos[5] : porte === "micro" || porte === "pequena" ? base.porte.fundos[1] : base.porte.fundos[3]),
       natureza: (caso.cliente && caso.cliente.natureza) || "privada", eq: eq, invest: invest, valorEquip: num(op.valor_equip) || 0, valorObra: num(op.valor_obra) || 0,
-      fin: fin, prazo: num(op.prazo) || 60, carencia: num(op.carencia) || 0, flags: caso.flags || {}, honor: num(caso.honorario_pct) == null ? 2 : num(caso.honorario_pct),
+      fin: fin, prazo: num(op.prazo) || 60, carencia: num(op.carencia) || 0, flags: flags, honor: num(caso.honorario_pct) == null ? 2 : num(caso.honorario_pct),
       sus: susCtx(caso),
       ini: op.inicio ? { y: +op.inicio.slice(0, 4), m: +op.inicio.slice(5, 7) } : { y: 2026, m: 11 }
     };
@@ -157,11 +184,23 @@ var Motor = (function () {
   /* Elegibilidade: retorna {ok, bloqueios[], avisos[], porques[]} */
   function elegibilidade(linha, ctx) {
     var e = linha.elig || {}, B = [], A = [], P = [], f = ctx.flags;
-    if (linha.status === "encerrada" && !(e.condicao && f[e.condicao.campo])) B.push("Linha encerrada para novas propostas" + (e.condicao ? " (só para quem já tem: " + e.condicao.rotulo.toLowerCase() + ")" : ""));
-    if (e.condicao && linha.status !== "encerrada") {
+    var fechada = linha.status === "encerrada" || linha.status === "restrita";
+    if (fechada && !(e.condicao && f[e.condicao.campo])) B.push(e.condicao && e.condicao.bloqueio ? e.condicao.bloqueio : "Linha encerrada para novas propostas" + (e.condicao ? " (só para quem já tem: " + e.condicao.rotulo.toLowerCase() + ")" : ""));
+    else if (fechada && e.condicao) P.push(e.condicao.rotulo + " (marcado no caso)");
+    if (e.condicao && !fechada) {
       if (!f[e.condicao.campo]) B.push("Condição não marcada no caso: " + e.condicao.rotulo);
       else P.push("Condição atendida: " + e.condicao.rotulo);
     }
+    if (e.tipos_fiis) {
+      var tipos = (ctx.base.fiis && ctx.base.fiis.tipos) || [], tp = f.fiis_tipo, ti = tipos.filter(function (t) { return t.id === tp; })[0];
+      if (!tp) B.push("Condição não marcada no caso: enquadramento do proponente no FIIS (filantrópica com CEBAS, OS, SPE, Agora Tem Especialistas ou privada com contrato SUS vigente)");
+      else if (!ti || ti.prazo == null) B.push("Proponente sem vínculo SUS vigente não é elegível ao FIIS (Manual da Chamada Pública, item 2)");
+      else {
+        P.push("Enquadramento FIIS: " + ti.nome + " (prazo até " + (ti.prazo / 12) + " anos)");
+        if ((tp === "filantropica_cebas" || tp === "os") && ctx.natureza !== "filantropica") A.push("O enquadramento marcado é de entidade sem fins lucrativos, mas a natureza do cadastro está como privada com fins lucrativos");
+      }
+    }
+    (e.avisos || []).forEach(function (a) { A.push(a); });
     if (e.natureza && e.natureza.indexOf(ctx.natureza) < 0) B.push("Natureza jurídica não atendida (" + (ctx.natureza === "filantropica" ? "filantrópica" : "privada com fins lucrativos") + ")");
     else if (e.natureza) P.push("Natureza jurídica aceita");
     if (e.cebas_sus60) {
@@ -189,7 +228,7 @@ var Motor = (function () {
       else P.push("UF " + ctx.uf + " dentro da área da linha");
     } else P.push("Abrangência nacional");
     var origem = ctx.eq.origem || (ctx.eq.cfi ? "nacional" : null);
-    if (e.exige_cfi) {
+    if (e.exige_cfi && !(e.exige_cfi === "nacional" && origem === "importado")) {
       if (!ctx.eq.cfi) B.push("Equipamento sem código FINAME (CFI): exige bem novo, nacional e credenciado");
       else if (/^\d+$/.test(String(ctx.eq.cfi))) P.push("Equipamento credenciado no BNDES (CFI " + ctx.eq.cfi + ")");
       else { P.push("CFI tratado como existente (" + ctx.eq.cfi + (ctx.eq.cfi_previsao ? ", previsão " + ctx.eq.cfi_previsao : "") + ")"); A.push("CFI ainda não emitido: a linha só contrata com o código publicado no Catálogo CFI; a simulação vale como premissa"); }
@@ -199,8 +238,11 @@ var Motor = (function () {
       else if (e.importado === "sem_similar") { if (f.sem_similar) P.push("Importado sem similar nacional (comprovação marcada)"); else B.push("Importado só se sem similar nacional (marque no caso, com comprovação)"); }
       else if (e.importado === "a_confirmar") A.push("Regra para importado não publicada: confirmar com o operador");
     }
-    if (e.valor_min && ctx.fin < e.valor_min) B.push("Valor abaixo do mínimo (" + fmtR(e.valor_min) + ")");
-    if (e.valor_max && ctx.fin > e.valor_max) B.push("Valor acima do máximo (" + fmtR(e.valor_max) + ")");
+    var vref = ctx.fin, vrefTxt = "";
+    if (e.valor_ref && num(f[e.valor_ref])) { vref = Math.max(num(f[e.valor_ref]), ctx.fin); vrefTxt = " (soma das propostas FIIS do proponente: " + fmtR(vref) + ")"; }
+    if (e.valor_min && vref < e.valor_min) B.push("Valor abaixo do mínimo (" + fmtR(e.valor_min) + ")" + vrefTxt);
+    if (e.valor_max && vref > e.valor_max) B.push("Valor acima do máximo (" + fmtR(e.valor_max) + ")" + vrefTxt);
+    if (e.valor_ref && !num(f[e.valor_ref]) && (e.valor_min || e.valor_max)) A.push("Os limites do FIIS valem para a soma de todas as propostas do proponente; informe a soma no caso se houver mais de uma");
     if (ctx.valorObra > 0 && linha.cond && linha.cond.obras === false) A.push("Obra/instalação não é financiável nesta linha; entra como recurso próprio ou linha à parte");
     if (linha.status === "informativa") A.push(linha.info || (linha.id === "fgts-saude-reestr" ? "Reestruturação de dívidas, não financia equipamento: não entra no ranking" : "Linha sem taxa publicada no mês: não entra no ranking"));
     return { ok: B.length === 0, bloqueios: B, avisos: A, porques: P };
@@ -217,13 +259,22 @@ var Motor = (function () {
     var P = ctx.fin;
     if (P > baseFin * partMax / 100 + 0.5) { P = baseFin * partMax / 100; avisos.push("Financiamento limitado a " + partMax + "% do item financiável: " + fmtR(P)); }
     var n = opts.prazo || ctx.prazo, car = opts.carencia != null ? opts.carencia : ctx.carencia;
-    if (c.prazo && n > c.prazo) { avisos.push("Prazo reduzido ao máximo da linha (" + c.prazo + " meses)"); n = c.prazo; }
-    if (!c.prazo) avisos.push("Prazo máximo não publicado: confirmar com o operador");
+    var prazoMax = c.prazo;
+    if (c.prazo_por_flag) { var pf = c.prazo_por_flag, pv = pf.valores[ctx.flags[pf.campo]]; prazoMax = pv || pf.padrao; }
+    if (prazoMax && n > prazoMax) { avisos.push("Prazo reduzido ao máximo da linha (" + prazoMax + " meses" + (c.prazo_por_flag ? "; " + c.prazo_por_flag.regra : "") + ")"); n = prazoMax; }
+    if (!prazoMax) avisos.push("Prazo máximo não publicado: confirmar com o operador");
     if (c.prazo_min && n < c.prazo_min) { avisos.push("Prazo elevado ao mínimo legal (" + c.prazo_min + " meses)"); n = c.prazo_min; }
     if (c.carencia != null && car > c.carencia) { avisos.push("Carência reduzida ao máximo da linha (" + c.carencia + " meses)"); car = c.carencia; }
+    /* Limites do custo financeiro (ex.: TFB 120/12, Taxa LCD 120/24): o que a linha permite, mas o custo não. */
+    var nLinha = n, cLinha = car, lc = linha.limites_custo && linha.limites_custo[custo];
+    if (lc) {
+      if (lc.prazo && n > lc.prazo) { avisos.push("Prazo reduzido a " + lc.prazo + " meses pelo custo financeiro (" + lc.regra + ")"); n = lc.prazo; }
+      if (lc.carencia != null && car > lc.carencia) { avisos.push("Carência reduzida a " + lc.carencia + " meses pelo custo financeiro (" + lc.regra + ")"); car = lc.carencia; }
+    }
     if (car >= n) car = Math.max(0, n - 1);
+    var limitado = n < nLinha || car < Math.min(cLinha, Math.max(0, nLinha - 1));
     var sistema = opts.sistema || "SAC", carModo = opts.carModo || "pagos";
-    var rows = cronograma({ P: P, n: n, c: car, sistema: sistema, carencia: carModo, ini: ctx.ini, taxaAno: function (y) { return taxaAnual(linha, custo, y, cen, ctx); } });
+    var rows = cronograma({ P: P, n: n, c: car, sistema: sistema, carencia: carModo, ini: ctx.ini, taxaAno: function (y) { return taxaAnual(linha, custo, y, cen, ctx, n); } });
     var iof = linha.iof === "regular" ? calcIOF(rows, P, ctx.base) : 0;
     if (linha.iof === "regular" && ctx.natureza === "filantropica") avisos.push("IOF calculado; filantrópica pode ter não incidência (Dec. 6.306/2007, art. 2º, §3º, III)");
     var tarifa = P * (linha.tarifa || 0) / 100;
@@ -234,13 +285,13 @@ var Motor = (function () {
     var tot = aa(irr(fl2));
     var juros = rows.reduce(function (s, r) { return s + r.juros; }, 0);
     var pagos = rows.reduce(function (s, r) { return s + r.parcela; }, 0);
-    var ano1 = taxaAnual(linha, custo, ctx.ini.y + (ctx.ini.m === 12 ? 1 : 0), cen, ctx);
-    var cf = custoFinanceiro(custo, ctx.ini.y + 1, cen, ctx);
+    var ano1 = taxaAnual(linha, custo, ctx.ini.y + (ctx.ini.m === 12 ? 1 : 0), cen, ctx, n);
+    var cf = custoFinanceiro(custo, ctx.ini.y + 1, cen, ctx, n);
     var primeira = rows.filter(function (r) { return r.parcela > 0; })[0];
     var posCar = rows[car] || rows[rows.length - 1];
     return {
-      linha: linha, custo: custo, cen: cen, P: P, n: n, c: car, sistema: sistema, carModo: carModo, rows: rows, iof: iof, tarifa: tarifa, honor: honor,
-      cet: cet, custoTotal: tot, juros: juros, pagos: pagos, taxaAno1: ano1, cfRot: cf.rot, spreads: spreadsDaLinha(linha, cen, ctx),
+      linha: linha, custo: custo, cen: cen, P: P, n: n, c: car, sistema: sistema, carModo: carModo, rows: rows, iof: iof, tarifa: tarifa, honor: honor, limitado: limitado,
+      cet: cet, custoTotal: tot, juros: juros, pagos: pagos, taxaAno1: ano1, cfRot: cf.rot, cfFixo: cf.fixo, spreads: spreadsDaLinha(linha, cen, ctx, custo),
       parcelaPosCarencia: posCar ? posCar.parcela : null, primeiraParcela: primeira ? primeira.parcela : null, avisos: avisos,
       servicoAno: servicoPorAno(rows)
     };
@@ -255,13 +306,24 @@ var Motor = (function () {
     base.linhas.forEach(function (l) {
       var el = elegibilidade(l, ctx), melhor = null, alternativas = [];
       if (l.custos && l.custos.length && l.status !== "informativa") {
-        l.custos.forEach(function (cu) {
-          var s = simular(l, cu, "base", ctx, { sistema: (caso.operacao || {}).sistema, carModo: (caso.operacao || {}).carModo });
+        var oo = { sistema: (caso.operacao || {}).sistema, carModo: (caso.operacao || {}).carModo };
+        custosDaLinha(l, ctx).forEach(function (cu) {
+          var s = simular(l, cu, "base", ctx, oo);
           if (s.custoTotal == null) return;
-          s.faixa = { min: simular(l, cu, "min", ctx, { sistema: (caso.operacao || {}).sistema, carModo: (caso.operacao || {}).carModo }).custoTotal, max: simular(l, cu, "max", ctx, { sistema: (caso.operacao || {}).sistema, carModo: (caso.operacao || {}).carModo }).custoTotal };
+          s.faixa = { min: simular(l, cu, "min", ctx, oo).custoTotal, max: simular(l, cu, "max", ctx, oo).custoTotal };
           alternativas.push(s);
-          if (!melhor || s.custoTotal < melhor.custoTotal) melhor = s;
         });
+        /* Melhor custo financeiro: o de menor custo total entre os que cumprem o prazo e a carência pedidos;
+           se nenhum cumpre, o de menor custo total entre todos. */
+        var cheios = alternativas.filter(function (s) { return !s.limitado; }), pool = cheios.length ? cheios : alternativas;
+        pool.forEach(function (s) { if (!melhor || s.custoTotal < melhor.custoTotal) melhor = s; });
+        if (melhor && alternativas.length > 1) {
+          var mins = alternativas.map(function (s) { return Math.min(s.faixa.min, s.custoTotal); }), maxs = alternativas.map(function (s) { return Math.max(s.faixa.max, s.custoTotal); });
+          var iMin = mins.indexOf(Math.min.apply(null, mins)), iMax = maxs.indexOf(Math.max.apply(null, maxs));
+          melhor.opcoes = alternativas.map(function (s) { return { custo: s.custo, rot: s.cfRot, fixo: s.cfFixo, base: s.custoTotal, min: s.faixa.min, max: s.faixa.max, taxa1: s.taxaAno1, cet: s.cet, n: s.n, c: s.c, parcela: s.parcelaPosCarencia, limitado: s.limitado }; });
+          melhor.faixaTotal = { min: mins[iMin], max: maxs[iMax], custoMin: alternativas[iMin].custo, custoMax: alternativas[iMax].custo };
+        }
+        if (melhor && !melhor.faixaTotal) melhor.faixaTotal = { min: Math.min(melhor.faixa.min, melhor.custoTotal), max: Math.max(melhor.faixa.max, melhor.custoTotal), custoMin: melhor.custo, custoMax: melhor.custo };
       }
       if (l.elig && l.elig.margem_sus) {
         var mg = margemSus(ctx, l.elig.margem_sus.pct);
@@ -467,7 +529,7 @@ var Motor = (function () {
       dlEbitdaProj: ebitda0 ? (divTot - caixa + (simRes ? simRes.P : 0)) / (ebitda0 + (linhas[1] ? linhas[1].inc : 0)) : null, dlAposEvento: Math.max(0, divTot - caixa - liq), evento: ev, temDividas: div.length > 0 };
   }
 
-  return { num: num, margemSus: margemSus, susCtx: susCtx, simNao: simNao, porteBNDES: porteBNDES, roiInternalizacao: roiInternalizacao, entidade: entidade, faixaFundos: faixaFundos, custoFinanceiro: custoFinanceiro, taxaAnual: taxaAnual, cronograma: cronograma, calcIOF: calcIOF, irr: irr, aa: aa,
+  return { num: num, custosDaLinha: custosDaLinha, spreadsBrutos: spreadsBrutos, tfbVertice: tfbVertice, margemSus: margemSus, susCtx: susCtx, simNao: simNao, porteBNDES: porteBNDES, roiInternalizacao: roiInternalizacao, entidade: entidade, faixaFundos: faixaFundos, custoFinanceiro: custoFinanceiro, taxaAnual: taxaAnual, cronograma: cronograma, calcIOF: calcIOF, irr: irr, aa: aa,
     contexto: contexto, elegibilidade: elegibilidade, simular: simular, avaliar: avaliar, indicadores: indicadores, roi: roi, fmtP: fmtP, fmtR: fmtR, PORTE_NOME: PORTE_NOME, ipcaAno: ipcaAno };
 })();
 if (typeof module !== "undefined") module.exports = Motor;
