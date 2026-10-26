@@ -1458,19 +1458,25 @@ var Engine = (function () {
      Sem opex, a própria sai sem manutenção nem aluguel: é a base que o fluxo usa,
      somando depois a manutenção ou o aluguel mês a mês (garantia, início da operação). */
   function dreMensal(m, fator, tipo, anoProj, opex) {
-    var b = m.base, p = m.propria, c = m.cenario;
+    var b = m.base, p = m.propria, c = m.cenario, su = m.sus || {}, g = num(b.glosa_pct);
     var reaj = reajAno(m, anoProj);
     var exames = num(b.exames) / num(b.meses) * fator;
-    var rb = exames * num(b.ticket) * reaj;
-    var glosa = rb * num(b.glosa_pct);
+    var rbConv = exames * num(b.ticket) * reaj;
+    /* SUS (chave sus.modo): o atual entra nos dois modelos; o SUS a mais (TC do Agora Tem Especialistas, na capacidade ociosa) só na imagem própria */
+    var exS = susAtualOn(m) ? num(su.atual_mes) * fator : 0, rbS = exS * num(su.atual_ticket) * reaj;
+    var exA = tipo !== 'emg' && susAteOn(m) ? num(su.tc_mes) : 0, rbA = exA * num(su.tc_valor) * reaj;
+    var rb = rbConv + rbS + rbA;
+    var glosa = rb * g;
     var rl = rb - glosa;
-    var d = { exames: exames, rb: rb, glosa: glosa, rl: rl };
+    var d = { exames: exames, exSus: exS, exSusMais: exA, rbConv: rbConv, rbSus: rbS, rbSusMais: rbA, rlSus: rbS * (1 - g), rlSusMais: rbA * (1 - g), rb: rb, glosa: glosa, rl: rl };
     if (tipo === 'emg') {
+      /* nos exames SUS atuais a EMG recebe os mesmos percentuais (sus.atual_emg = "mesmo") ou nada além do contrato ("nada") */
+      var rlRep = rl - (su.atual_emg === 'nada' ? d.rlSus : 0);
       d.matmed = rl * num(b.matmed_pct);
-      d.rep_med = rl * num(b.rep_med_pct);
-      d.rep_mat = rl * num(b.rep_mat_pct);
-      d.rep_bio = rl * num(b.rep_bio_pct);
-      d.rep_sala = rl * num(b.rep_sala_pct);
+      d.rep_med = rlRep * num(b.rep_med_pct);
+      d.rep_mat = rlRep * num(b.rep_mat_pct);
+      d.rep_bio = rlRep * num(b.rep_bio_pct);
+      d.rep_sala = rlRep * num(b.rep_sala_pct);
       d.manut = 0; d.aluguel = 0; d.rispacs = 0;
     } else {
       d.matmed = rl * num(p.matmed_pct);
@@ -1480,7 +1486,7 @@ var Engine = (function () {
       d.rep_sala = num(p.sala_elimina) ? 0 : rl * num(b.rep_sala_pct);
       d.manut = num(opex && opex.manut) * reaj;
       d.aluguel = num(opex && opex.aluguel) * reaj;
-      var v = m.volumes || {}, exPacs = (num(v.rx26) + num(v.tc26) + num(v.us26)) * fator; /* PACS: todos os exames, todos os pagadores */
+      var exPacs = exames + exS + exA; /* PACS: os exames que estão no modelo (convênio e particular; o SUS só quando a chave o inclui) */
       d.exPacs = exPacs; d.ris = num(p.rispacs_mes) * reaj; d.pacs = pacsEx(m) * exPacs * reaj;
       d.rispacs = d.ris + d.pacs;
     }
@@ -1533,17 +1539,22 @@ var Engine = (function () {
   function pacsOn(m) { return ((m && m.propria) || {}).pacs_incluir !== 'nao'; }
   function pacsEx(m) { return pacsOn(m) ? num(m.propria && m.propria.pacs_exame) : 0; }
   function pacsImpl(m) { return pacsOn(m) ? num(m.propria && m.propria.pacs_impl) : 0; }
+  /* SUS: chave sus.modo — "fora" (padrão; decisão do CEO de 20/10/2026), "atual" (o SUS que o hospital já atende, nos dois modelos)
+     ou "ate" (o atual mais o SUS a mais do Agora Tem Especialistas: TC na capacidade ociosa e, com RM, RM; só com equipamento próprio). */
+  function susModo(m) { var v = (m && m.sus && m.sus.modo) || 'fora'; return v === 'atual' || v === 'ate' ? v : 'fora'; }
+  function susAtualOn(m) { return susModo(m) !== 'fora'; }
+  function susAteOn(m) { return susModo(m) === 'ate'; }
   function obraRM(m) { return rmOn(m) ? num(m.rm && m.rm.obra) : 0; }
-  function capacidadeRM(m) { var r = m.rm || {}, cap = 2 * (num(r.horas_dia) || 12) * 26, ex = num(r.exames_mes); return { cap: cap, exames: ex, ocup: cap ? ex / cap : null }; }
+  function capacidadeRM(m) { var r = m.rm || {}, cap = 2 * (num(r.horas_dia) || 12) * 26, sus = susAteOn(m) ? num((m.sus || {}).rm_mes) : 0, ex = num(r.exames_mes) + sus; return { cap: cap, exames: ex, conv: num(r.exames_mes), sus: sus, ocup: cap ? ex / cap : null }; }
   /* DRE mensal da RM no ano-projeto t; rampa opcional (1 = regime) */
   function rmMensal(m, t, rampa) {
     var r = m.rm || {}, reaj = reajAno(m, t), k = rampa == null ? rampaRM(m, t) : rampa;
-    var exC = num(r.exames_mes) * k, exS = 0; /* SUS fora do modelo (CEO, 20/10): ver susUpside */
-    var rb = exC * num(r.ticket) * reaj, glosa = rb * num(m.base.glosa_pct), rl = rb - glosa;
+    var exC = num(r.exames_mes) * k, exS = susAteOn(m) ? num((m.sus || {}).rm_mes) : 0; /* SUS só com a chave em "ate" (fila SUS: sem rampa) */
+    var rbC = exC * num(r.ticket) * reaj, rbS = exS * num((m.sus || {}).rm_valor) * reaj, rb = rbC + rbS, glosa = rb * num(m.base.glosa_pct), rl = rb - glosa;
     var matmed = rl * num(r.matmed_pct), laudo = rl * num(r.rep_med_pct), mc = rl - matmed - laudo;
     var equipe = num(r.equipe_mes) * reaj, energia = num(r.energia_mes) * reaj, outros = num(r.outros_mes) * reaj, fixos = equipe + energia + outros;
     var pacs = pacsEx(m) * (exC + exS) * reaj; /* PACS cobrado por exame também na RM */
-    return { exames: exC + exS, exConv: exC, exSus: exS, rampa: k, rb: rb, glosa: glosa, rl: rl, matmed: matmed, laudo: laudo, mc: mc, equipe: equipe, energia: energia, outros: outros, fixos: fixos, pacs: pacs, ebitda: mc - fixos - pacs };
+    return { exames: exC + exS, exConv: exC, exSus: exS, rampa: k, rbConv: rbC, rbSus: rbS, rb: rb, glosa: glosa, rl: rl, matmed: matmed, laudo: laudo, mc: mc, equipe: equipe, energia: energia, outros: outros, fixos: fixos, pacs: pacs, ebitda: mc - fixos - pacs };
   }
   /* RM no ano-projeto t: valores mensais × meses de operação no ano */
   function rmAno(m, t) {
@@ -1785,6 +1796,18 @@ var Engine = (function () {
     return (lo + hi) / 2;
   }
 
+  /* Memória do Motor dentro de um cálculo: os cenários (RM, PACS, SUS, FIIS, sensibilidades) repetem o mesmo caso de crédito.
+     Zerada a cada cálculo completo; resultados só de leitura. */
+  var AV = { motor: null, base: null, map: {}, n: 0 };
+  function avaliarMemo(Motor, caso, BASE) {
+    if (AV.motor !== Motor || AV.base !== BASE) AV = { motor: Motor, base: BASE, map: {}, n: 0 };
+    var k = JSON.stringify(caso), v = AV.map[k];
+    if (v) return v;
+    if (AV.n >= 200) { AV.map = {}; AV.n = 0; }
+    v = Motor.avaliar(caso, BASE); AV.map[k] = v; AV.n++;
+    return v;
+  }
+
   /* ---------- Alternativa C: pacote VMI financiado pelo Motor (ferramenta Financiamento VMI) ---------- */
   function altC(m, Motor, BASE) {
     var todosC = ativos(m, m.equip.C), cx = capexDe(todosC), ac = m.altC, cl = m.cliente;
@@ -1793,7 +1816,7 @@ var Engine = (function () {
     var caso = { cliente: { natureza: cl.natureza, uf: cl.uf, rob: num(cl.rob) || null, porte_decl: cl.porte_decl || null, sus_creditos_12m: num(cl.sus_creditos_12m) || null, sus_mac_outros: cl.sus_mac_outros || '', sus_mac_parcelas: num(cl.sus_mac_parcelas) },
       operacao: { valor_equip: cx0.financiavel, valor_obra: num(ac.valor_obra), valor_financiar: ac.valor_financiar === '' || ac.valor_financiar == null ? null : num(ac.valor_financiar), prazo: num(ac.prazo) || 120, carencia: num(ac.carencia) || 0, inicio: ac.inicio || (num(m.fin.ano_inicio) + '-03'), sistema: ac.sistema || 'SAC', carModo: ac.carModo || 'pagos', equipamento: { cfi: cfiInfo.todos ? (cfiInfo.prev > 0 ? 'previsto' : 'informado') : (num(ac.cfi_presumido) ? 'presumido' : ''), cfi_previsao: cfiInfo.prev > 0 ? 'dez/2026' : null, origem: 'nacional' } },
       flags: clone(cl.flags || {}), honorario_pct: num(ac.honorario_pct) * 100 }; /* premissa em fração (0,02); o motor usa % (2) */
-    var av = Motor.avaliar(caso, BASE);
+    var av = avaliarMemo(Motor, caso, BASE);
     var escolha = null;
     if (ac.linha && ac.linha !== 'auto') {
       var x = av.todas.filter(function (t) { return t.linha.id === ac.linha; })[0];
@@ -1811,7 +1834,7 @@ var Engine = (function () {
       if (cxRM.financiavel > 0) {
         var caso2 = clone(caso); caso2.operacao.valor_equip = cxRM.financiavel; caso2.operacao.valor_obra = 0; caso2.operacao.valor_financiar = null;
         caso2.operacao.inicio = mesRMStr(m); /* liberação na entrega da RM */ caso2.operacao.equipamento = { cfi: itensRM.every(function (i) { return /^\d+$/.test(String(i.cfi || '').trim()); }) ? 'informado' : (num(ac.cfi_presumido) ? 'presumido' : ''), origem: 'nacional' };
-        var av2 = Motor.avaliar(caso2, BASE), x2 = av2.todas.filter(function (t) { return t.linha.id === escolha.linha.id; })[0];
+        var av2 = avaliarMemo(Motor, caso2, BASE), x2 = av2.todas.filter(function (t) { return t.linha.id === escolha.linha.id; })[0];
         var sim2 = x2 && x2.sim ? (x2.alternativas || []).filter(function (a) { return a.custo === s.custo; })[0] || x2.sim : (av2.ranking[0] ? av2.ranking[0].sim : null);
         if (sim2) { s2 = sim2; out.rmFin = { sim: sim2, linha: x2 && x2.sim ? x2.linha : av2.ranking[0].linha, av: av2, inicio: caso2.operacao.inicio }; }
       }
@@ -1872,13 +1895,14 @@ var Engine = (function () {
   function capacidadeTC(m) {
     var v = m.volumes, p = m.propria;
     var cap = num(p.tc_exh) * num(p.tc_h) * num(p.tc_d);
-    var tc = num(v.tc26) * (1 + num(m.cenario.volume_var));
-    return { cap: cap, tc: tc, ocup: cap ? tc / cap : null };
+    var tc0 = num(v.tc26) * (1 + num(m.cenario.volume_var)), sus = susAteOn(m) ? num((m.sus || {}).tc_mes) : 0, tc = tc0 + sus;
+    return { cap: cap, tc: tc, tcHoje: tc0, sus: sus, ocup: cap ? tc / cap : null };
   }
 
   /* ---------- Cálculo completo ---------- */
   function calcular(m, Motor, BASE, opts) {
     IPCA_PATH = (BASE && BASE.macro && BASE.macro.focus && BASE.macro.focus.ipca) || null;
+    if (!(opts && opts.leve)) AV = { motor: Motor, base: BASE, map: {}, n: 0 }; /* cálculo completo: memória nova (a base pode ter mudado) */
     var B = altB(m), C = altC(m, Motor, BASE);
     B.manut = manutPacote(m, ativos(m, m.equip.B)); B.opex = opexManut(B.manut);
     C.manut = manutPacote(m, ativos(m, m.equip.C)); C.opex = opexManut(C.manut);
@@ -1905,9 +1929,31 @@ var Engine = (function () {
       out.cenRM = cenariosRM(m, Motor, BASE, out);
       out.cenPACS = cenariosPACS(m, Motor, BASE, out);
       out.cenFIIS = cenariosFIIS(m, Motor, BASE, out);
+      out.cenSUS = cenariosSUS(m, Motor, BASE, out);
       out.lcdAuto = lcdAutomatico(m, Motor, BASE, out);
     }
     return out;
+  }
+
+  /* SUS: as três posições da chave lado a lado (a RM e o PACS ficam como estão) */
+  function cenariosSUS(m, Motor, BASE, out) {
+    var modo = susModo(m), r = {};
+    ['fora', 'atual', 'ate'].forEach(function (k) {
+      var rr = out; if (k !== modo) { var m2 = clone(m); m2.sus = m2.sus || {}; m2.sus.modo = k; rr = calcular(m2, Motor, BASE, { leve: true }); }
+      var o = {}; ['B', 'C', 'D'].forEach(function (a) { var fl = rr['fl' + a]; o[a] = { vplEnt: fl.vplEnt, vpl: fl.vpl, tir: fl.tir, pb: fl.pb }; });
+      o.resultado = rr.cen.prop.resultado; o.resultadoEmg = rr.cen.emg.resultado; o.ganhoMes = rr.ganhoMes; o.rmReg = rr.rm.reg ? rr.rm.reg.ebitda : null; o.selId = rr.sel.id;
+      o.dscr = entidade(k === modo ? m : (function () { var m3 = clone(m); m3.sus = m3.sus || {}; m3.sus.modo = k; return m3; })(), rr.sel, rr.flSel).linhas.slice(0, 2).map(function (l) { return { ano: l.ano, v: l.dscrSem }; });
+      r[k] = o;
+    });
+    var d = function (a, b) { var o = {}; ['B', 'C', 'D'].forEach(function (k) { o[k] = r[a][k].vplEnt - r[b][k].vplEnt; }); return o; };
+    var su = m.sus || {}, f1 = reajAno(m, 2);
+    /* SUS atual com a outra hipótese de repasse à EMG (o efeito depende de como a EMG é paga no SUS hoje) */
+    var mo = clone(m); mo.sus = mo.sus || {}; mo.sus.modo = 'atual'; mo.sus.atual_emg = su.atual_emg === 'nada' ? 'mesmo' : 'nada';
+    var ro = calcular(mo, Motor, BASE, { leve: true }), outroEmg = {}; ['B', 'C', 'D'].forEach(function (a) { outroEmg[a] = ro['fl' + a].vplEnt - r.fora[a].vplEnt; });
+    /* SUS a mais da RM (vale com a RM ligada): soma ao delta da RM */
+    var mr = clone(m); mr.rm = mr.rm || {}; mr.rm.incluir = 'sim'; var upR = susUpside(mr);
+    return { modo: modo, v: r, dAtual: d('atual', 'fora'), dMais: d('ate', 'atual'), dTotal: d('ate', 'fora'), dAtualOutroEmg: outroEmg, vplRMsus: upR.vplRM, vplTCsus: upR.vplTC,
+      atual: { exames: num(su.atual_mes), ticket: num(su.atual_ticket), rlMes: num(su.atual_mes) * num(su.atual_ticket) * (1 - num(m.base.glosa_pct)) * f1, emg: su.atual_emg === 'nada' ? 'nada' : 'mesmo' } };
   }
 
   /* FIIS Saúde: só para proponentes da Chamada Pública 2025 (inscrição de 13/10 a 07/11/2025).
@@ -2018,7 +2064,7 @@ var Engine = (function () {
   }
 
   return { num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
-    mesesAno: mesesAno, mesesDesde: mesesDesde, rmOn: rmOn, pacsOn: pacsOn, pacsEx: pacsEx, pacsImpl: pacsImpl, isRM: isRM, ativos: ativos, rmMensal: rmMensal, rmAno: rmAno, capacidadeRM: capacidadeRM, iniRM: iniRM, aprovRM: aprovRM, anoRM: anoRM, anoEqRM: anoEqRM, mesRMStr: mesRMStr, susUpside: susUpside, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
+    mesesAno: mesesAno, mesesDesde: mesesDesde, rmOn: rmOn, pacsOn: pacsOn, susModo: susModo, susAtualOn: susAtualOn, susAteOn: susAteOn, pacsEx: pacsEx, pacsImpl: pacsImpl, isRM: isRM, ativos: ativos, rmMensal: rmMensal, rmAno: rmAno, capacidadeRM: capacidadeRM, iniRM: iniRM, aprovRM: aprovRM, anoRM: anoRM, anoEqRM: anoEqRM, mesRMStr: mesRMStr, susUpside: susUpside, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
 </script>
@@ -2062,7 +2108,7 @@ var SCHEMA = [
   { id: 'propria.rispacs_mes', bloco: 'Imagem própria: operação', label: 'RIS (Touch Health): mensalidade', un: 'R$/mês', fmt: 'num', def: 5875, origem: 'pendente', fonte: 'Sugestão do CEO e da S&S (20/10/2026): RIS da Touch Health. Sem cotação: mantida a referência da Controladoria para RIS/PACS (faixa de R$ 1.750 a R$ 10.000/mês). O PACS entra à parte, por exame (abaixo).' },
   { id: 'propria.rispacs_impl', bloco: 'Imagem própria: operação', label: 'RIS (Touch Health): implantação (ano 0)', un: 'R$', fmt: 'num', def: 30000, origem: 'pendente', fonte: 'Sem cotação: referência da Controladoria (R$ 10 mil a R$ 50 mil). Inclui integração com o HIS do hospital.' },
   { id: 'propria.pacs_incluir', bloco: 'Imagem própria: operação', label: 'PACS Sectra no modelo', un: '', fmt: 'txt', def: 'sim', origem: 'ss', fonte: 'Chave de cenário (20/10/2026): o PACS Sectra Standard tem grande impacto no resultado e ainda não tem cotação. "Incluído" cobra o custo por exame (também na RM) e a implantação; "fora do modelo" zera os dois, mas o hospital continua precisando de um PACS: o valor cai no lugar errado, não some. A tese e o simulador mostram os dois cenários lado a lado.', ui: { choices: [['sim', 'Incluído (estimativa S&S)'], ['nao', 'Fora do modelo (a cotar)']] } },
-  { id: 'propria.pacs_exame', bloco: 'Imagem própria: operação', label: 'PACS Sectra One Cloud Standard: custo por exame', un: 'R$/exame', fmt: 'num', def: 8.33, origem: 'ss', fonte: 'Sugestão do CEO e da S&S (20/10/2026): PACS Sectra, edição Standard, em nuvem. Estimativa S&S, sem impostos: assinatura por exame (software, hospedagem e cache) mais arquivo em nuvem pela média de 5 anos; faixa de R$ 6,94 a R$ 10,58. Cobrada sobre todos os exames de imagem, de todos os pagadores (~3.920/mês pelos volumes do Jaime), e sobre os exames de RM. A confirmar com cotação da Sectra e com a disponibilidade da edição Standard no Brasil. Conflito de interesse: a S&S representa a Sectra.' },
+  { id: 'propria.pacs_exame', bloco: 'Imagem própria: operação', label: 'PACS Sectra One Cloud Standard: custo por exame', un: 'R$/exame', fmt: 'num', def: 8.33, origem: 'ss', fonte: 'Sugestão do CEO e da S&S (20/10/2026): PACS Sectra, edição Standard, em nuvem. Estimativa S&S, sem impostos: assinatura por exame (software, hospedagem e cache) mais arquivo em nuvem pela média de 5 anos; faixa de R$ 6,94 a R$ 10,58. Cobrada sobre os exames que estão no modelo: convênio e particular (~3.568/mês), mais o SUS quando a chave "SUS no modelo" o inclui (~352/mês hoje; o SUS a mais, na posição Agora Tem Especialistas), e sobre os exames de RM. A confirmar com cotação da Sectra e com a disponibilidade da edição Standard no Brasil. Conflito de interesse: a S&S representa a Sectra.' },
   { id: 'propria.pacs_impl', bloco: 'Imagem própria: operação', label: 'PACS Sectra: setup e implantação (ano 0)', un: 'R$', fmt: 'num', def: 607900, origem: 'ss', fonte: 'Estimativa S&S, sem impostos: setup do ambiente em nuvem, hospedagem até o go-live e implantação (workflow, integrações HL7/DICOM, configuração, treinamento). Faixa de R$ 0,33 a 0,77 mi. A cotar com a Sectra.' },
   { id: 'propria.tc_exh', bloco: 'Imagem própria: operação', label: 'Capacidade da TC: exames por hora', un: 'exames/h', fmt: 'num', def: 3, origem: 'ss', fonte: 'Padrão da ferramenta de financiamento (TC).' },
   { id: 'propria.tc_h', bloco: 'Imagem própria: operação', label: 'Capacidade da TC: horas por dia', un: 'h', fmt: 'num', def: 24, origem: 'ss', fonte: 'Hospital com PS 24 h; 1.400 TC/mês não cabem em 12 h.' },
@@ -2090,11 +2136,15 @@ var SCHEMA = [
   { id: 'rm.obra', bloco: 'Ressonância magnética (novo serviço)', label: 'Sala da RM (obra de pré-instalação, recurso próprio)', un: 'R$', fmt: 'num', def: 200000, origem: 'ceo', fonte: 'CEO, 20/10/2026: R$ 200 mil para a sala da RM. Sai do caixa no ano da aprovação nas três formas de pagar (o FINAME não financia obra). Risco: referências de pré-instalação são maiores (edital da FAS Niterói, 2026, RM e TC em ~200 m²: blindagem R$ 434 mil e elétrica R$ 1,28 mi); confirmar o escopo com o projeto da VMI (gaiola de RF, climatização, elétrica, nobreak).' },
   { id: 'rm.horas_dia', bloco: 'Ressonância magnética (novo serviço)', label: 'Horas de operação da RM por dia', un: 'h', fmt: 'num', def: 12, origem: 'ss', fonte: 'Define só a capacidade mostrada (2 exames/h × horas × 26 dias). Com PS 24 h, a agenda pode ser estendida se a demanda passar de 624/mês.' },
 
-  /* ---- SUS: fora do modelo (informativo) ---- */
-  { id: 'sus.tc_mes', bloco: 'SUS: fora do modelo (só informativo)', label: 'TC pelo SUS a mais por mês (Agora Tem Especialistas)', un: 'exames/mês', fmt: 'int', def: 300, origem: 'ss', fonte: 'Decisão do CEO (20/10/2026): a receita SUS fica fora do modelo, mas o valor é mostrado. Ilustrativo: 300 TC/mês ocupam 40% da capacidade ociosa da TC (2.160 em 24 h contra 1.400). O SUS que o hospital já atende (~350 exames/mês, diferença entre os volumes do Jaime e a base da Controladoria) também está fora da receita do modelo.' },
-  { id: 'sus.tc_valor', bloco: 'SUS: fora do modelo (só informativo)', label: 'Valor SUS por TC com o Agora Tem Especialistas', un: 'R$/exame', fmt: 'num', def: 300, origem: 'fonte', fonte: 'Portaria SAES/MS 4.282/2026 leva a TC a cerca de R$ 300 para quem adere (SIGTAP: média de R$ 109,06). Exige habilitação no programa e contratualização com o gestor.' },
-  { id: 'sus.rm_mes', bloco: 'SUS: fora do modelo (só informativo)', label: 'RM pelo SUS por mês (só com RM)', un: 'exames/mês', fmt: 'int', def: 200, origem: 'ss', fonte: 'Ilustrativo: completa a agenda da RM (400 de convênio e particular + 200 SUS = 600 de 624 em 12 h).' },
-  { id: 'sus.rm_valor', bloco: 'SUS: fora do modelo (só informativo)', label: 'Valor SUS por RM com o Agora Tem Especialistas', un: 'R$/exame', fmt: 'num', def: 499.88, origem: 'fonte', fonte: 'Portaria SAES/MS 4.282/2026 (SIGTAP: R$ 268,75).' },
+  /* ---- SUS: chave de três posições ---- */
+  { id: 'sus.modo', bloco: 'SUS (chave "SUS no modelo")', label: 'SUS no modelo', un: '', fmt: 'txt', def: 'fora', origem: 'ceo', fonte: 'Chave de cenário (26/10/2026). "fora" = decisão do CEO de 20/10/2026: nenhuma receita nem custo SUS no VPL (o PACS também deixa de contar os exames SUS). "atual" = o SUS que o hospital já atende entra nos dois modelos (EMG e própria): na própria o hospital fica com a receita e paga laudo, material e PACS; na EMG paga o repasse conforme a premissa abaixo. "ate" = o atual mais o SUS a mais do Agora Tem Especialistas, só com equipamento próprio (TC na capacidade ociosa e, com RM, RM).', ui: { choices: [['fora', 'Fora (decisão do CEO)'], ['atual', 'SUS atual'], ['ate', 'SUS atual + Agora Tem Especialistas']] } },
+  { id: 'sus.atual_mes', bloco: 'SUS (chave "SUS no modelo")', label: 'Exames SUS que o hospital já atende', un: 'exames/mês', fmt: 'int', def: 352, origem: 'pendente', fonte: 'Diferença entre os volumes do Jaime de 2026 (3.920/mês, todos os pagadores) e a base da Controladoria (3.568/mês, convênio e particular). A confirmar com a produção SUS (SIA/BPA) por modalidade. Cresce com o volume do cenário.' },
+  { id: 'sus.atual_ticket', bloco: 'SUS (chave "SUS no modelo")', label: 'Valor SUS médio por exame (hoje)', un: 'R$/exame', fmt: 'num', def: 48.47, origem: 'pendente', fonte: 'Estimativa S&S pela tabela SIGTAP, sem incentivo, no mix de todos os pagadores (RX 52%, TC 36%, US 12%): radiografia de tórax R$ 9,50, TC média R$ 109,06, ultrassom de abdome total R$ 37,95. Trocar pelo valor aprovado ÷ quantidade da produção SUS do HDA.' },
+  { id: 'sus.atual_emg', bloco: 'SUS (chave "SUS no modelo")', label: 'Como a EMG é paga nos exames SUS hoje', un: '', fmt: 'txt', def: 'mesmo', origem: 'pendente', fonte: 'Define o que o hospital deixa de pagar à EMG no SUS atual ao internalizar. "mesmo" = a EMG recebe sobre a receita SUS os mesmos percentuais do convênio (médicos, material, biópsias e sala); "nada" = a EMG faz os exames SUS sem repasse adicional, e internalizar só traz custo (laudo, material, PACS). Confirmar no contrato da EMG.', ui: { choices: [['mesmo', 'Mesmos percentuais do convênio'], ['nada', 'Sem repasse adicional']] } },
+  { id: 'sus.tc_mes', bloco: 'SUS (chave "SUS no modelo")', label: 'TC pelo SUS a mais por mês (Agora Tem Especialistas)', un: 'exames/mês', fmt: 'int', def: 300, origem: 'ss', fonte: 'Entra no VPL só com a chave em "SUS atual + Agora Tem Especialistas"; nas outras posições, o valor é mostrado à parte. Ilustrativo: 300 TC/mês ocupam 40% da capacidade ociosa da TC (2.160 em 24 h contra 1.400). Exige habilitação no programa e contratualização com o gestor e espaço no Teto MAC.' },
+  { id: 'sus.tc_valor', bloco: 'SUS (chave "SUS no modelo")', label: 'Valor SUS por TC com o Agora Tem Especialistas', un: 'R$/exame', fmt: 'num', def: 300, origem: 'fonte', fonte: 'Portaria SAES/MS 4.282/2026 leva a TC a cerca de R$ 300 para quem adere (SIGTAP: média de R$ 109,06). Exige habilitação no programa e contratualização com o gestor.' },
+  { id: 'sus.rm_mes', bloco: 'SUS (chave "SUS no modelo")', label: 'RM pelo SUS por mês (só com RM)', un: 'exames/mês', fmt: 'int', def: 200, origem: 'ss', fonte: 'Ilustrativo: completa a agenda da RM (400 de convênio e particular + 200 SUS = 600 de 624 em 12 h). Sem rampa (fila SUS). Entra no VPL só com a chave em "SUS atual + Agora Tem Especialistas".' },
+  { id: 'sus.rm_valor', bloco: 'SUS (chave "SUS no modelo")', label: 'Valor SUS por RM com o Agora Tem Especialistas', un: 'R$/exame', fmt: 'num', def: 499.88, origem: 'fonte', fonte: 'Portaria SAES/MS 4.282/2026 (SIGTAP: R$ 268,75).' },
 
   /* ---- Cenário ---- */
   { id: 'cenario.volume_var', bloco: 'Cenário de volume', label: 'Variação de volume vs. base', un: '%', fmt: 'pct', def: 0, origem: 'controladoria', fonte: 'Cenário 1 = volume atual; cenário 2 da Controladoria = +30%. Jaime projeta +27,3% para 2027.' },
@@ -2393,8 +2443,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     if (q) h += '<div class="card"><div class="card-h"><h2>Ressonância magnética: cenário com e sem</h2>' + rmSegHtml('segRmTese') + '</div>' +
       '<p class="small">Cignus 600 sem hélio, 24 canais, por ' + mi(+((rmItem('C') || {}).preco) || 0) + ', mais ' + mi(+rr.obra || 0) + ' para a sala. Aprovação em ' + fmtMes(rr.aprovacao) + ' e operação a partir de ' + fmtMes(E.mesRMStr(model)) + ', com financiamento próprio liberado na entrega. Serviço novo (a EMG não faz RM): ' + N(rr.exames_mes) + ' exames/mês de convênio e particular em regime a ' + R(rr.ticket) + ', ' + P(rr.rampa1, 0) + ' no 1º ano de operação e ' + P(rr.rampa2, 0) + ' no 2º. Volume e ticket são hipóteses a validar e dependem de os planos de saúde voltarem a incluir a RM nos pacotes do HDA. A página está no cenário <b>' + (rmOn() ? 'com RM' : 'sem RM') + '</b>.</p>' +
       '<div class="grid two" style="margin-top:10px"><div>' + rmTabela([sel.id], true) + '</div><div><table><thead><tr><th>VPL para o hospital</th><th class="n">Sem RM</th><th class="n">Com RM</th></tr></thead><tbody>' + ['B', 'C', 'D'].map(function (k) { return '<tr' + (k === sel.id ? ' class="hl"' : '') + '><td>' + k + ' · ' + altNome_(k) + '</td><td class="n">' + mi(q.sem[k].vplEnt) + '</td><td class="n">' + mi(q.com[k].vplEnt) + '</td></tr>'; }).join('') + '</tbody></table><p class="small" style="margin-top:10px">' + rmEquilibrioTxt(sel.id) + '</p></div></div></div>';
-    if (c.sus) { var su = c.sus, sx = model.sus || {}; h += '<div class="card"><div class="card-h"><h2>SUS: fora do modelo</h2><span class="pill">não entra no VPL</span></div><p class="small">Por decisão do CEO, a receita SUS não está no modelo: nem o SUS que o hospital já atende (~350 exames/mês, pela diferença entre os volumes do Jaime e a base da Controladoria), nem o SUS a mais. O PACS, por prudência, é cobrado sobre todos os exames, inclusive os do SUS.</p>' +
-      '<div class="grid kpis" style="margin-top:10px">' + kpi('SUS a mais em regime', R(su.regMes) + '/mês', 'margem depois de laudo, material e PACS · ' + mi(su.regAno) + '/ano', 'good', true) + kpi('Valor presente, ' + model.fin.horizonte + ' anos', mi(su.vpl), 'a ' + P(model.fin.desconto, 0) + ' a.a. · não somado ao VPL do projeto', 'good', true) + kpi('TC pelo SUS', N(sx.tc_mes) + '/mês a ' + R(sx.tc_valor), 'Agora Tem Especialistas · ' + mi(su.vplTC) + ' de VPL', '', true) + (c.rm.on ? kpi('RM pelo SUS', N(sx.rm_mes) + '/mês a R$ ' + NF2.format(+sx.rm_valor || 0), mi(su.vplRM) + ' de VPL; a RM sem SUS rende ' + mi(c.cenRM ? c.cenRM.eq[sel.id].delta : null), '', true) : '') + '</div><p class="small muted" style="margin-top:8px">Volumes ilustrativos, na capacidade ociosa (TC: ' + N(su.capTC.cap) + ' por mês em 24 h; RM: ' + N(su.capRM.cap) + ' em ' + N(+(model.rm || {}).horas_dia || 12) + ' h). Exige habilitação no Agora Tem Especialistas e contratualização com o gestor do SUS. Editável em Premissas, bloco SUS.</p></div>'; }
+    h += cardSUS();
     var ach = [];
     ach.push('<b>Hoje o serviço dá prejuízo.</b> Receita líquida de ' + R(emg.rl) + '/mês; a EMG fica com ' + R(emg.repasse) + ' (' + P(emg.repasse / emg.rl, 0) + '), o hospital arca com ' + R(emg.cf_dir + emg.cf_ind) + ' de custos fixos e indiretos e fecha em ' + R(emg.resultado) + '/mês (' + mi(emg.resultado * 12) + '/ano).');
     ach.push('<b>Internalizar inverte o sinal com a mesma receita.</b> Mantida a equipe médica a ' + P(model.propria.rep_med_pct, 1) + ' da receita e assumidos material, ' + (isD ? (locTxt().sep ? 'aluguel dos equipamentos e manutenção (' : 'aluguel dos equipamentos com manutenção (') + R(prop.aluguel) + '/mês)' : 'manutenção pós-garantia (' + R(prop.manut) + '/mês, plano ' + (sel.manut.plano === 'prata' ? 'Prata' : 'Ouro') + ')') + ', ' + (pacsOn() ? 'RIS (Touch Health) e PACS Sectra (' + R(prop.ris + prop.pacs) + '/mês)' : 'RIS (Touch Health, ' + R(prop.ris) + '/mês), com o PACS fora do modelo') + ', o resultado vai a ' + R(prop.resultado) + '/mês. Ganho de ' + mi(c.ganhoMes * 12) + ' por ano, dos quais ' + mi(-emg.resultado * 12) + ' são a eliminação do prejuízo.');
@@ -2410,7 +2459,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       '<div class="tile"><h3>FINAME exige CFI, e o catálogo decide item a item</h3><p>Verificado no Catálogo CFI do BNDES em 14 e 15/10/2026: RX móvel Aquila 320 S (03538400) e RX digital Apolo D (03538246) constam; o ultrassom Invictus e a placa DR da VMI não aparecem (só o FGTS-Saúde, que não exige CFI, os financia, ou pedir o credenciamento); <b>a TC Pulsar ainda não consta</b>; a VMI prevê o credenciamento até dez/2026 (premissa de 15/10/2026), antes da contratação em 2027, e o modelo já a trata como credenciada. GE (CT Ascend, Aspire), Siemens, Philips, Canon e Imex têm TCs credenciadas. Validade dos códigos VMI usados: Aquila 320 S e Apolo D até mar/2030.</p><p class="src"><a href="https://ws.bndes.gov.br/cfi_catalogo/" target="_blank" rel="noopener">Catálogo CFI do BNDES</a></p></div>' +
       '<div class="tile"><h3>FGTS-Saúde: só a modalidade I está regulamentada</h3><p>Até 60 meses, sem carência, TR + 8,66% + até 3% de risco, pela Caixa, BB ou BNDES. Exige CEBAS na modalidade de 60% ao SUS e participação no Agora Tem Especialistas, e a parcela tem de caber em 35% da média mensal dos créditos SUS. A modalidade de investimento (20 anos, 12 de carência) ainda não foi regulamentada. ' + (calc.C.escolha && calc.C.escolha.linha.id === 'fgts-saude' ? 'Com as respostas informadas, é a linha em uso.' : 'Sem as respostas, o plano usa o FINAME.') + '</p><p class="src">Manual de Fomento FGTS Saúde v002 (Caixa, ago/2026); Res. CCFGTS 1.152/2026</p></div>' +
       '<div class="tile"><h3>Sem câmbio</h3><p>A proposta GE fixa o preço em dólar a R$ 5,1604; o pacote VMI é cotado em reais. Entre a proposta e o contrato o risco é do hospital.</p></div>' +
-      '<div class="tile"><h3>SUS paga mais por TC no privado e no filantrópico</h3><p>A Portaria SAES/MS 4.282/2026 (Agora Tem Especialistas) leva a TC a cerca de R$ 300 por exame para quem adere. Receita adicional não modelada: entra como upside.</p><p class="src"><a href="https://www.conass.org.br/?p=57841" target="_blank" rel="noopener">Conass, Portaria 4.282</a></p></div>' +
+      '<div class="tile"><h3>SUS paga mais por TC no privado e no filantrópico</h3><p>A Portaria SAES/MS 4.282/2026 (Agora Tem Especialistas) leva a TC a cerca de R$ 300 por exame para quem adere. ' + (E.susAteOn(model) ? 'Receita incluída no número (chave "SUS no modelo").' : 'Receita fora do caso-base; entra pela chave "SUS no modelo".') + '</p><p class="src"><a href="https://www.conass.org.br/?p=57841" target="_blank" rel="noopener">Conass, Portaria 4.282</a></p></div>' +
       '</div></div>' +
       '<div class="card"><div class="card-h"><h2>O que pode dar errado</h2></div><div class="grid" style="gap:12px">' +
       '<div class="tile"><h3>Janela sem TC na troca</h3><p>O contrato com a EMG não tem multa e pede 90 dias de aviso (CEO, 20/10). A EMG é dona dos equipamentos: o aviso deve sair ~90 dias antes da instalação (go-live em ' + fmtMes(goLive()) + ' no modelo). Se a entrega atrasar depois do aviso, o hospital fica sem TC: amarrar o prazo de entrega no pedido e manter a opção de prorrogar com a EMG.</p></div>' +
@@ -2427,7 +2476,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       '<div class="gate"><div class="gh"><b>Gate 3</b><span>operação</span></div><ul><li>Imagem própria em regime</li><li>Indicadores do Jaime: exames, tempo de espera, repetição, disponibilidade, custo por exame</li><li>Revisar premissas e esta página a cada trimestre</li></ul></div>' +
       '</div></div>';
     $('#tab-tese').innerHTML = h;
-    bindRmSeg('segRmTese'); bindPacsSeg('segPacsTese');
+    bindRmSeg('segRmTese'); bindPacsSeg('segPacsTese'); bindSusSeg('segSusTese');
   }
 
   /* ================= DIAGNÓSTICO ================= */
@@ -2438,7 +2487,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     /* DRE comparativa mensal */
     function row(l, a, b, cls) { return '<tr class="' + (cls || '') + '"><td>' + l + '</td><td class="n">' + R(a) + '</td><td class="n">' + (a != null && e.rl ? P(a / e.rl, 1) : '') + '</td><td class="n">' + R(b) + '</td><td class="n">' + (b != null && p.rl ? P(b / p.rl, 1) : '') + '</td></tr>'; }
     h += '<div class="grid two"><div class="card"><div class="card-h"><h2>DRE mensal: EMG × imagem própria</h2><span class="muted small">volume atual, regime após a garantia · alternativa ' + calc.sel.id + '</span></div><div class="tbl-wrap"><table><thead><tr><th>R$/mês</th><th class="n">EMG</th><th class="n">A.V.</th><th class="n">Própria</th><th class="n">A.V.</th></tr></thead><tbody>' +
-      row('Receita bruta', e.rb, p.rb) + row('(−) Glosas', -e.glosa, -p.glosa, 'sub') + row('Receita líquida', e.rl, p.rl, 'total') +
+      row('Receita bruta', e.rb, p.rb) + (e.rbSus || p.rbSus ? row('dos quais SUS atual', e.rbSus, p.rbSus, 'sub') : '') + (p.rbSusMais ? row('dos quais SUS a mais (Agora Tem Especialistas)', e.rbSusMais, p.rbSusMais, 'sub') : '') + row('(−) Glosas', -e.glosa, -p.glosa, 'sub') + row('Receita líquida', e.rl, p.rl, 'total') +
       row('(−) Mat/Med', -e.matmed, -p.matmed) + row('(−) Repasse: médicos', -e.rep_med, -p.rep_med) + row('(−) Repasse: material EMG', -e.rep_mat, -p.rep_mat) + row('(−) Repasse: biópsias', -e.rep_bio, -p.rep_bio) + row('(−) Médicos que usam a sala', -e.rep_sala, -p.rep_sala) +
       row('Margem de contribuição', e.mc, p.mc, 'total') + row('(−) Custos fixos diretos', -e.cf_dir, -p.cf_dir) + row('(−) Manutenção pós-garantia', -e.manut, -p.manut) + (p.aluguel ? row('(−) Aluguel dos equipamentos', -e.aluguel, -p.aluguel) : '') + row('(−) RIS (Touch Health)', -(e.ris || 0), -(p.ris || 0)) + row('(−) PACS Sectra, por exame' + (pacsOn() ? '' : ' (fora do modelo)'), -(e.pacs || 0), -(p.pacs || 0)) + row('Margem direta', e.margem_direta, p.margem_direta, 'total') + row('(−) Custos indiretos', -e.cf_ind, -p.cf_ind) + row('Resultado operacional (EBITDA)', e.resultado, p.resultado, 'total hl') +
       '</tbody></table></div><p class="small muted" style="margin-top:8px">Fonte: Viabilidade v2, aba Viabilidade, linhas 48–63. A aba DRE da mesma planilha mostra R$ 162 mil para a própria porque omite manutenção e RIS/PACS no cenário de volume atual.</p></div>';
@@ -2470,13 +2519,40 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
   function bindPacsSeg(id) { var el = document.getElementById(id); if (!el) return; $$('button[data-pacs]', el).forEach(function (b) { b.addEventListener('click', function () { if ((model.propria.pacs_incluir || 'sim') === this.dataset.pacs) return; model.propria.pacs_incluir = this.dataset.pacs; afterEdit(); }); }); }
   /* texto "no outro cenário de PACS" para os KPIs */
   function pacsOutro(f) { var q = calc.cenPACS; if (!q) return ''; var o = q.on ? q.sem : q.com; return ' · ' + (q.on ? 'sem PACS: ' : 'com PACS: ') + f(o); }
+  /* SUS: chave de três posições (fora, atual, atual + Agora Tem Especialistas) */
+  function susNome(k) { return { fora: 'SUS fora', atual: 'SUS atual', ate: 'SUS atual + Agora Tem Especialistas' }[k] || k; }
+  function susSegHtml(id) { var md = E.susModo(model); return '<span class="seg" id="' + id + '">' + [['fora', 'Fora'], ['atual', 'SUS atual'], ['ate', '+ Agora Tem Esp.']].map(function (o) { return '<button data-sus="' + o[0] + '" class="' + (md === o[0] ? 'on' : '') + '">' + o[1] + '</button>'; }).join('') + '</span>'; }
+  function bindSusSeg(id) { var el = document.getElementById(id); if (!el) return; $$('button[data-sus]', el).forEach(function (b) { b.addEventListener('click', function () { model.sus = model.sus || {}; if ((model.sus.modo || 'fora') === this.dataset.sus) return; model.sus.modo = this.dataset.sus; afterEdit(); }); }); }
+  function sgMi(v) { return v == null || !isFinite(v) ? '—' : '<span class="' + (v >= 0 ? 'pos' : 'neg') + '">' + (v >= 0 ? '+' : '−') + mi(Math.abs(v)) + '</span>'; }
+  /* delta da RM em C (ou na alternativa) sem e com o SUS a mais da RM */
+  function rmSusDelta(sid) { var q = calc.cenSUS, r = calc.cenRM; if (!q || !r || !r.eq || !r.eq[sid]) return null; var base = r.eq[sid].delta - (E.susAteOn(model) && rmOn() ? q.vplRMsus : 0); return { sem: base, com: base + q.vplRMsus }; }
+  function cardSUS() {
+    var q = calc.cenSUS, sx = model.sus || {}; if (!q) return '';
+    var md = q.modo, sid = calc.sel.id, A = { B: 'B · GE/HFS', C: 'C · VMI compra', D: 'D · VMI locação' }, cols = ['fora', 'atual', 'ate'];
+    var th = function (k, t) { return '<th class="n">' + (k === md ? '<u>' + t + '</u>' : t) + '</th>'; };
+    var tc = calc.tc, capR = 2 * (+(model.rm || {}).horas_dia || 12) * 26, rmS = rmSusDelta(sid);
+    var emgM = q.atual.emg === 'mesmo', dM = emgM ? q.dAtual[sid] : q.dAtualOutroEmg[sid], dN = emgM ? q.dAtualOutroEmg[sid] : q.dAtual[sid];
+    var h = '<div class="card"><div class="card-h"><h2>SUS no modelo</h2>' + susSegHtml('segSusTese') + '</div>' +
+      '<p class="small">Por decisão do CEO (20/10), o padrão é deixar o SUS <b>fora</b>: nenhuma receita nem custo SUS no VPL, e o PACS conta só os exames de convênio e particular. As outras posições mostram o efeito de incluí-lo. A página está em <b>' + susNome(md) + '</b>.</p>' +
+      '<div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th>VPL para o hospital</th>' + th('fora', 'Fora') + th('atual', 'SUS atual') + th('ate', '+ Agora Tem Especialistas') + '</tr></thead><tbody>' +
+      ['B', 'C', 'D'].map(function (k) { return '<tr' + (k === sid ? ' class="hl"' : '') + '><td>' + A[k] + (k === sid ? ' (em uso)' : '') + '</td>' + cols.map(function (c0) { return '<td class="n">' + mi(q.v[c0][k].vplEnt) + '</td>'; }).join('') + '</tr>'; }).join('') +
+      '<tr><td>Resultado mensal da imagem própria, em regime</td>' + cols.map(function (c0) { return '<td class="n">' + R(q.v[c0].resultado) + '</td>'; }).join('') + '</tr>' +
+      '<tr><td>Cobertura do hospital ' + q.v.fora.dscr.map(function (x) { return x.ano; }).join(' / ') + ' (' + sid + ')</td>' + cols.map(function (c0) { return '<td class="n">' + q.v[c0].dscr.map(function (x) { return X(x.v); }).join(' / ') + '</td>'; }).join('') + '</tr>' +
+      '</tbody></table></div>' +
+      '<div class="grid two" style="margin-top:12px"><div><p class="small"><b>SUS atual</b>: ' + N(q.atual.exames) + ' exames/mês (diferença entre os volumes do Jaime e a base da Controladoria) a R$ ' + NF2.format(q.atual.ticket) + ' em média pela tabela SIGTAP (estimativa S&S), cerca de ' + R(q.atual.rlMes) + '/mês de receita líquida. Esse SUS já existe com a EMG: internalizar só muda quem fica com a margem. Se a EMG recebe sobre ele os mesmos percentuais do convênio, o efeito em ' + sid + ' é de ' + sgMi(dM) + '; se não recebe nada além do contrato, ' + sgMi(dN) + '. Falta a produção SUS por modalidade (SIA/BPA) e a cláusula do contrato da EMG.</p></div>' +
+      '<div><p class="small"><b>SUS a mais (Agora Tem Especialistas)</b>: ' + N(sx.tc_mes) + ' TCs/mês a ' + R(sx.tc_valor) + ' (SIGTAP: R$ 109,06) na capacidade ociosa, com a TC passando de ' + P(tc.tcHoje / tc.cap, 0) + ' para ' + P((tc.tcHoje + (+sx.tc_mes || 0)) / tc.cap, 0) + ' de ocupação: ' + sgMi(q.vplTCsus) + ' em ' + sid + '. ' +
+      (rmS ? 'Com a RM, ' + N(sx.rm_mes) + ' RMs/mês a R$ ' + NF2.format(+sx.rm_valor || 0) + ' (sem rampa, pela fila SUS) somam ' + sgMi(q.vplRMsus) + ' e a RM passa de ' + sgMi(rmS.sem) + ' para ' + sgMi(rmS.com) + ' de VPL em ' + sid + ', com a agenda a ' + P(((+(model.rm || {}).exames_mes || 0) + (+sx.rm_mes || 0)) / capR, 0) + ' da capacidade. ' : '') +
+      'Depende de habilitação no programa, contratualização com o gestor e espaço no Teto MAC, o que não está nas mãos do HDA; por isso fica fora do caso-base.</p></div></div>' +
+      '<p class="small muted" style="margin-top:8px">O FIIS Saúde financia equipamento para uso SUS: se o HDA estiver na chamada de 2025, o caso-base deve ficar ao menos em "SUS atual". Premissas no bloco SUS.</p></div>';
+    return h;
+  }
   function cardPACS() {
     var q = calc.cenPACS; if (!q) return '';
     var on = q.on, sid = calc.sel.id, A = { B: 'B · GE/HFS', C: 'C · VMI compra', D: 'D · VMI locação' };
     var dl = function (v, fmt) { return '<span class="' + (v >= 0 ? 'pos' : 'neg') + '">' + (v >= 0 ? '+' : '−') + fmt(Math.abs(v)).replace('−', '') + '</span>'; };
     var row = function (l, a, b, fmt, cls) { return '<tr class="' + (cls || '') + '"><td>' + l + '</td><td class="n">' + fmt(a) + '</td><td class="n">' + fmt(b) + '</td><td class="n">' + dl(a - b, fmt) + '</td></tr>'; };
     var h = '<div class="card"><div class="card-h"><h2>PACS Sectra: com e sem no modelo</h2>' + pacsSegHtml('segPacsTese') + '</div>' +
-      '<p class="small">O PACS Sectra Standard ainda não tem cotação e é o custo que mais pesa depois do volume: estimativa S&S de R$ ' + NF2.format(q.exame) + ' por exame × ' + N(q.exames) + ' exames/mês de todos os pagadores (' + R(q.com.pacsMes) + '/mês' + (rmOn() ? ', mais a RM' : '') + ') e ' + mi(q.impl) + ' de setup e implantação. A página está no cenário <b>' + (on ? 'com PACS' : 'sem PACS') + '</b>.</p>' +
+      '<p class="small">O PACS Sectra Standard ainda não tem cotação e é o custo que mais pesa depois do volume: estimativa S&S de R$ ' + NF2.format(q.exame) + ' por exame × ' + N(q.exames) + ' exames/mês no modelo (convênio e particular' + (E.susAtualOn(model) ? ', mais o SUS' : '; o SUS só entra com a chave do SUS') + ') (' + R(q.com.pacsMes) + '/mês' + (rmOn() ? ', mais a RM' : '') + ') e ' + mi(q.impl) + ' de setup e implantação. A página está no cenário <b>' + (on ? 'com PACS' : 'sem PACS') + '</b>.</p>' +
       '<div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th></th><th class="n">Com PACS</th><th class="n">Sem PACS</th><th class="n">Diferença</th></tr></thead><tbody>' +
       ['B', 'C', 'D'].map(function (k) { return row('VPL para o hospital, ' + A[k] + (k === sid ? ' (em uso)' : ''), q.com[k].vplEnt, q.sem[k].vplEnt, mi, k === sid ? 'hl' : ''); }).join('') +
       row('VPL do projeto (' + sid + ')', q.com[sid].vpl, q.sem[sid].vpl, mi) +
@@ -2606,7 +2682,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     h += '<div class="card"><div class="card-h"><h2>Leitura</h2></div><ul class="bullets">' +
       '<li><b>A RM é um negócio de volume.</b> Os custos fixos (equipe, energia, manutenção, ' + R(reg.fixos + man) + '/mês) e o investimento (' + mi((+it.preco || 0) + (+r.obra || 0)) + ') não mudam com o número de exames; cada exame a mais deixa ' + R(reg.mc / (reg.exames || 1)) + ' de margem. ' + rmEquilibrioTxt('C') + '</li>' +
       '<li><b>Forma de pagar.</b> Com a RM, ' + (function () { var o = ['B', 'C', 'D'].sort(function (a, b) { return q.com[b].vplEnt - q.com[a].vplEnt; }); return o[0] + ' tem o maior VPL para o hospital (' + mi(q.com[o[0]].vplEnt) + '), seguida de ' + o[1] + ' (' + mi(q.com[o[1]].vplEnt) + ') e ' + o[2] + ' (' + mi(q.com[o[2]].vplEnt) + ')'; })() + '. A compra pelo FINAME (C) é a que menos pesa na cobertura: ' + X(q.com.C.dscr[0].v) + ' em ' + q.com.C.dscr[0].ano + ' e ' + X(q.com.C.dscr[1].v) + ' em ' + q.com.C.dscr[1].ano + ', contra ' + X(q.com.B.dscr[0].v) + ' e ' + X(q.com.B.dscr[1].v) + ' no HFS em 60 meses (B), porque a carência de 24 meses cobre a rampa da RM.</li>' +
-      '<li><b>O que faz a RM fechar</b>: volume de convênio (depende da volta da RM aos pacotes dos planos); preço mais perto das referências; horário estendido; laudo por telerradiologia. O SUS ficou fora do modelo por decisão do CEO, mas ' + (c.sus ? N((m.sus || {}).rm_mes) + ' RMs/mês pelo Agora Tem Especialistas (R$ ' + NF2.format(+(m.sus || {}).rm_valor || 0) + ' por exame) valeriam ' + mi(c.sus.vplRM) + ' de VPL à parte' : 'o SUS pode ocupar a agenda ociosa') + '. Volume, ticket e preço podem ser testados no Simulador.</li>' +
+      '<li><b>O que faz a RM fechar</b>: volume de convênio (depende da volta da RM aos pacotes dos planos); preço mais perto das referências; horário estendido; laudo por telerradiologia; e o SUS. ' + (c.cenSUS ? (E.susAteOn(m) ? 'Com a chave do SUS em "+ Agora Tem Especialistas", ' + N((m.sus || {}).rm_mes) + ' RMs/mês pelo programa (R$ ' + NF2.format(+(m.sus || {}).rm_valor || 0) + ' por exame) já estão no número e valem ' + mi(c.cenSUS.vplRMsus) + ' de VPL' : 'O SUS está fora do caso-base por decisão do CEO, mas ' + N((m.sus || {}).rm_mes) + ' RMs/mês pelo Agora Tem Especialistas (R$ ' + NF2.format(+(m.sus || {}).rm_valor || 0) + ' por exame) valeriam ' + mi(c.cenSUS.vplRMsus) + ' de VPL e mudariam o sinal da RM (chave "SUS no modelo", na Tese)') : 'o SUS pode ocupar a agenda ociosa') + '. Volume, ticket e preço podem ser testados no Simulador.</li>' +
       '<li><b>Condição do lado do HDA</b>: os planos de saúde tiraram recentemente a RM dos pacotes de reembolso com o hospital. Sem negociar a volta da RM a esses pacotes, o volume de convênio deste cenário não existe; é a primeira pendência da RM.</li>' +
       '<li><b>Antes de decidir</b>: demanda real (RMs pedidas hoje para fora pelo PS, internação e ambulatório), ticket dos três maiores convênios, cotação de manutenção e de locação da RM pela VMI, projeto de pré-instalação (área, gaiola de RF, elétrica) e se o CFI 04252454 cobre a versão sem hélio. A internalização do serviço atual se paga sem a RM; vale tratá-la como gate separado.</li></ul></div></div>';
     /* RM ano a ano (C) */
@@ -3008,8 +3084,8 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       '<li><b>Manutenção</b>: cotação VMI para a Pulsar, o Apolo D e o Invictus (hoje estimadas por contratos públicos ou pelo Aquila D); confirmar se os valores do Aquila são mensais (equivalem a muito mais que os 5% a 12% a.a. usuais) e negociá-los no pacote; cotação da CDK para o RX do pacote GE.</li>' +
       '<li><b>Locação da VMI</b> (tabela de 16/10/2026, sugestão de 48 meses): manutenção inclusa no aluguel (confirmado em 17/10/2026). Falta confirmar se o RX digital locado é o Aquila D ou o Apolo D e cotar ultrassons e placa DR, hoje estimados por composição de custos.</li>' +
       '<li><b>FGTS-Saúde</b>: CEBAS na modalidade de 60% ao SUS, participação no Agora Tem Especialistas, créditos SUS dos últimos 12 meses e contratos já descontados do Teto MAC. Sem as respostas, a linha fica em "depende de confirmação". O programa também habilita a tabela SUS incrementada para TC.</li>' +
-      '<li><b>RIS e PACS</b> (chave "PACS Sectra no modelo": hoje ' + (pacsOn() ? 'incluído' : 'fora do modelo') + (calc.cenPACS ? ', ' + mi(-calc.cenPACS.delta[calc.sel.id]) + ' de VPL em ' + calc.sel.id : '') + '): sugestão Touch Health (RIS, ' + R(+model.propria.rispacs_mes || 0) + '/mês e ' + R(+model.propria.rispacs_impl || 0) + ' de implantação) e Sectra PACS Standard (R$ ' + NF2.format(+model.propria.pacs_exame || 0) + ' por exame sobre todos os exames, inclusive SUS, e ' + mi(+model.propria.pacs_impl || 0) + ' de setup e implantação). Os valores do PACS são estimativa S&S por benchmark de volume e tamanho médio de exame, não cotação; faixa de R$ 6,94 a 10,58 por exame. A S&S representa a Sectra no Brasil: declarar ao hospital.</li>' +
-      '<li><b>SUS fora do modelo</b>: nem o SUS atual (~350 exames/mês) nem o SUS a mais entram no VPL. O SUS a mais (Agora Tem Especialistas, na capacidade ociosa) aparece à parte na tese: ' + (calc.sus ? mi(calc.sus.vpl) + ' de VPL' : '—') + '.</li>' +
+      '<li><b>RIS e PACS</b> (chave "PACS Sectra no modelo": hoje ' + (pacsOn() ? 'incluído' : 'fora do modelo') + (calc.cenPACS ? ', ' + mi(-calc.cenPACS.delta[calc.sel.id]) + ' de VPL em ' + calc.sel.id : '') + '): sugestão Touch Health (RIS, ' + R(+model.propria.rispacs_mes || 0) + '/mês e ' + R(+model.propria.rispacs_impl || 0) + ' de implantação) e Sectra PACS Standard (R$ ' + NF2.format(+model.propria.pacs_exame || 0) + ' por exame sobre os exames no modelo, o SUS só quando a chave o inclui, e ' + mi(+model.propria.pacs_impl || 0) + ' de setup e implantação). Os valores do PACS são estimativa S&S por benchmark de volume e tamanho médio de exame, não cotação; faixa de R$ 6,94 a 10,58 por exame. A S&S representa a Sectra no Brasil: declarar ao hospital.</li>' +
+      '<li><b>SUS no modelo</b> (chave: hoje "' + susNome(E.susModo(model)) + '"): o padrão é fora, por decisão do CEO (20/10). ' + (calc.cenSUS ? 'Em ' + calc.sel.id + ': SUS atual (~' + N(calc.cenSUS.atual.exames) + ' exames/mês, já atendidos com a EMG) ' + sgMi(calc.cenSUS.dAtual[calc.sel.id]) + ', de ' + sgMi(Math.min(calc.cenSUS.dAtual[calc.sel.id], calc.cenSUS.dAtualOutroEmg[calc.sel.id])) + ' a ' + sgMi(Math.max(calc.cenSUS.dAtual[calc.sel.id], calc.cenSUS.dAtualOutroEmg[calc.sel.id])) + ' conforme o repasse da EMG; SUS a mais do Agora Tem Especialistas ' + sgMi(calc.cenSUS.dMais[calc.sel.id]) + '. ' : '') + 'Com o SUS fora, o PACS conta só os exames de convênio e particular.</li>' +
       '<li><b>Custo financeiro</b>: o motor é o mesmo da ferramenta Financiamento VMI. No BNDES Automático compara TLP, TFB (cotação do dia, fixa), Taxa LCD (Selic + sobretaxa) e Pré FAT, com a Taxa do BNDES do porte (média empresa: 0,75%), e mostra o mínimo e o máximo entre eles; escolhe o de menor custo total que cumpre o prazo e a carência pedidos (TFB vai até 120 meses e 12 de carência; Taxa LCD até 120 e 24). No FINAME, TLP e Pré FAT. ' + (calc.lcdAuto ? 'A sobretaxa LCD de ' + Pp(calc.lcdAuto.sob) + ' é premissa (a de out/2026 não foi obtida); a Taxa LCD no Automático só fica mais barata que a linha em uso (' + esc(calc.lcdAuto.refLinha) + ', ' + esc(rotCusto(calc.lcdAuto.refCusto)) + ') com sobretaxa abaixo de ' + Pp(calc.lcdAuto.empate) + '.' : '') + '</li>' +
       '<li><b>FIIS Saúde</b>: só para proponentes da Chamada Pública de 2025 (13/10 a 07/11/2025). ' + (calc.cenFIIS && calc.cenFIIS.pedido ? (calc.cenFIIS.marcado ? 'Inscrição marcada: o FIIS entra no ranking.' : 'Fora do plano até a confirmação; se o HDA tiver proposta habilitada, o VPL de C passa a ' + mi(calc.cenFIIS.pedido.vplC) + ' (' + (calc.cenFIIS.pedido.delta >= 0 ? '+' : '') + mi(calc.cenFIIS.pedido.delta) + ').') : '') + ' O FIIS financia equipamento para uso no SUS.</li>' +
       '<li><b>Mapa de empréstimos</b> é de dez/25; o saldo subiu de R$ 28,8 mi para R$ 29,5 mi em ago/26, o que indica renovações não capturadas.</li>' +
@@ -3024,8 +3100,8 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       '<dt>Reajuste</dt><dd>Índice do ano = produto de (1 + IPCA projetado pelo Focus) do ano 2 até o ano; o ano 1 fica nos preços da base. Vale igual para receita, custos, manutenção e aluguel em todos os caminhos. As parcelas são nominais (a TLP do FINAME já carrega o IPCA projetado). Com taxa fixa: (1 + reajuste)^(ano − 1).</dd>' +
       '<dt>Receita líquida</dt><dd>exames/mês × ticket × (1 − glosa) × índice de reajuste do ano; exames = base/meses × (1 + variação) × (1 + crescimento)^(ano − 2)</dd>' +
       '<dt>EBITDA EMG</dt><dd>RL − Mat/Med − repasses (médicos, material, biópsias, sala) − fixos diretos − indiretos</dd>' +
-      '<dt>EBITDA própria</dt><dd>RL − Mat/Med própria − repasse médico próprio − repasses mantidos − fixos diretos − RIS (mensalidade) − PACS (R$ por exame × exames de todos os pagadores, inclusive SUS; zero com a chave "sem PACS") − indiretos (antes de manutenção e aluguel)</dd>' +
-      '<dt>SUS (informativo, fora do VPL)</dt><dd>Exames SUS a mais × valor SUS × (1 − glosa) × (1 − laudo − material) − PACS por exame, desde o go-live (TC) e desde a operação da RM; descontado à mesma taxa, mostrado à parte.</dd>' +
+      '<dt>EBITDA própria</dt><dd>RL − Mat/Med própria − repasse médico próprio − repasses mantidos − fixos diretos − RIS (mensalidade) − PACS (R$ por exame × exames no modelo: convênio e particular, mais o SUS quando a chave o inclui; zero com a chave "sem PACS") − indiretos (antes de manutenção e aluguel)</dd>' +
+      '<dt>SUS (chave "SUS no modelo")</dt><dd>Fora: nada do SUS entra; o valor do SUS a mais é mostrado à parte. SUS atual: exames SUS de hoje × valor SIGTAP × (1 − glosa), nos dois modelos; na EMG, o repasse sobre essa receita segue a premissa (mesmos percentuais do convênio ou nenhum); na própria, laudo, material e PACS. + Agora Tem Especialistas: soma, só na própria, as TCs (e as RMs, com RM) do programa × valor do programa × (1 − glosa) × (1 − laudo − material) − PACS, desde o go-live e desde a operação da RM.</dd>' +
       '<dt>EBITDA incremental</dt><dd>(EBITDA própria − EBITDA EMG) × 12 × fração do ano em operação própria − manutenção do ano (B, C) ou aluguel do ano (D)</dd>' +
       '<dt>Manutenção (B, C)</dt><dd>Σ itens (contrato Ouro, ou Prata + provisão de tubo da TC) × quantidade × fator × meses do ano após a garantia × reajuste. A garantia conta da instalação (mês ' + ((+model.fin.inicio_op_mes || 0) + 1) + ' do ano 1).</dd>' +
       '<dt>Aluguel (D)</dt><dd>Itens com cotação da VMI (16/10/2026: TC, Aquila S, Aquila D, 12 a 84 meses; prazos intermediários por interpolação linear): aluguel cotado × quantidade, mais, se a cotação não incluir manutenção, contrato do plano escolhido × (n − garantia) ÷ n. Itens sem cotação: (valor − residual ÷ (1 + i)^n) × i ÷ (1 − (1 + i)^−n) ÷ (1 − tributos) + contrato Ouro × (n − garantia) ÷ n; i = taxa mensal do locador (arrendamento PJ + prêmio), n = prazo, residual = valor × (1 − queda anual)^(n/12). Taxa implícita da cotação: a mesma fórmula resolvida para i. Cobrado desde a instalação e renovado ao mesmo valor até o fim do horizonte.</dd>' +
@@ -3152,7 +3228,8 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
         : ' Os números não incluem a ressonância. Com a Cignus 600 (' + mi(qR.p0) + ' e ' + mi(+m.rm.obra || 0) + ' para a sala, aprovada em ' + fmtMes(m.rm.aprovacao) + '), o VPL de ' + selId + ' iria a ' + mi(qR.com[selId].vplEnt) + ' (' + Psig(eqR.delta / Math.abs(qR.sem[selId].vplEnt || 1), 0) + '); a RM empata com ' + N(eqR.volume) + ' exames/mês e depende de o HDA reincluir a RM nos pacotes de reembolso dos planos de saúde.';
     }
     if (c.cenPACS) { var qp = c.cenPACS; rec += pacsOn() ? ' Os números incluem o **PACS Sectra** pela estimativa S&S, ainda sem cotação (R$ ' + NF2.format(qp.exame) + ' por exame e ' + mi(qp.impl) + ' de implantação); sem ele, o VPL de ' + selId + ' seria ' + mi(qp.sem[selId].vplEnt) + '. O PACS custa o mesmo nas três alternativas: muda o tamanho do ganho, não a escolha.' : ' Os números **não incluem o PACS Sectra** (sem cotação); com a estimativa S&S (R$ ' + NF2.format(qp.exame) + ' por exame e ' + mi(qp.impl) + ' de implantação), o VPL de ' + selId + ' cairia a ' + mi(qp.com[selId].vplEnt) + '. O hospital vai precisar de um PACS: este número é o teto.'; }
-    if (c.sus) rec += ' A receita SUS não está no modelo; o SUS a mais, na capacidade ociosa, valeria ' + mi(c.sus.vpl) + ' de VPL à parte (' + R(c.sus.regMes) + '/mês em regime).';
+    var sgn = function (v) { return (v >= 0 ? '+' : '') + mi(v); };
+    if (c.cenSUS) { var qs = c.cenSUS; rec += E.susModo(m) === 'fora' ? ' O SUS está fora do número, por decisão do CEO; o SUS que o hospital já atende mudaria o VPL de ' + selId + ' em ' + sgn(qs.dAtual[selId]) + ' (de ' + sgn(Math.min(qs.dAtual[selId], qs.dAtualOutroEmg[selId])) + ' a ' + sgn(Math.max(qs.dAtual[selId], qs.dAtualOutroEmg[selId])) + ', conforme o repasse da EMG), e o SUS a mais do Agora Tem Especialistas somaria ' + sgn(qs.dMais[selId]) + '.' : ' O número inclui o ' + susNome(E.susModo(m)) + ' (chave do SUS); com o SUS fora, como decidiu o CEO, o VPL de ' + selId + ' seria ' + mi(qs.v.fora[selId].vplEnt) + '.'; }
     S.secoes.push({ h: 'Recomendação', p: ['**Objetivo do CEO:** transformar o HDA num centro boutique de referência em imagem, com Sectra, Integrare e equipamentos modernos.', rec] });
     /* 2. por que */
     S.secoes.push({ h: 'Por que internalizar', b: [
@@ -3180,7 +3257,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
         ['DSCR ' + qR.com.C.dscr[0].ano + ' / ' + qR.com.C.dscr[1].ano + ', com RM', dsc(qR.com.B), dsc(qR.com.C), dsc(qR.com.D)],
         ['Volume de equilíbrio da RM (exames/mês)', N(qR.eq.B.volume), N(qR.eq.C.volume), N(qR.eq.D.volume)]
       ] }, b: [
-        'Premissas da RM (hipóteses a validar): ' + N(rr.exames_mes) + ' exames/mês de convênio e particular em regime a ' + R(rr.ticket) + ' (SUS fora do modelo); aprovação em ' + fmtMes(rr.aprovacao) + ' e operação a partir de ' + fmtMes(E.mesRMStr(m)) + '; ' + P(rr.rampa1, 0) + ' do volume no 1º ano de operação e ' + P(rr.rampa2, 0) + ' no 2º; laudo a ' + P(rr.rep_med_pct, 1) + ' e contraste a ' + P(rr.matmed_pct, 0) + ' da receita; equipe, energia e outros fixos de ' + R(+rr.equipe_mes + +rr.energia_mes + +rr.outros_mes) + '/mês; manutenção Ouro de ' + R(ri ? ri.manutMes : +((rmItem('C') || {}).m_ouro) || 0) + '/mês depois da garantia; sala de ' + mi(+rr.obra || 0) + ' no ano da aprovação.',
+        'Premissas da RM (hipóteses a validar): ' + N(rr.exames_mes) + ' exames/mês de convênio e particular em regime a ' + R(rr.ticket) + ' (' + (E.susAteOn(m) ? 'mais ' + N((m.sus || {}).rm_mes) + ' RMs/mês do SUS pelo Agora Tem Especialistas' : 'sem SUS') + '); aprovação em ' + fmtMes(rr.aprovacao) + ' e operação a partir de ' + fmtMes(E.mesRMStr(m)) + '; ' + P(rr.rampa1, 0) + ' do volume no 1º ano de operação e ' + P(rr.rampa2, 0) + ' no 2º; laudo a ' + P(rr.rep_med_pct, 1) + ' e contraste a ' + P(rr.matmed_pct, 0) + ' da receita; equipe, energia e outros fixos de ' + R(+rr.equipe_mes + +rr.energia_mes + +rr.outros_mes) + '/mês; manutenção Ouro de ' + R(ri ? ri.manutMes : +((rmItem('C') || {}).m_ouro) || 0) + '/mês depois da garantia; sala de ' + mi(+rr.obra || 0) + ' no ano da aprovação.',
         'Em regime, a RM gera ' + R(regR.ebitda) + '/mês de EBITDA antes da manutenção. Capacidade de ' + N(qR.cap.cap) + ' exames/mês em ' + N(+rr.horas_dia || 12) + ' h; a premissa ocupa ' + P(qR.cap.ocup, 0) + '.' + (ri ? ' Sozinha, sem financiamento: VPL de ' + mi(ri.vpl) + (ri.tir != null ? ', TIR de ' + P(ri.tir, 1) : '') + ', payback de ' + anos(ri.pb) + '.' : ''),
         'Em C, a RM empata com ' + N(qR.eq.C.volume) + ' exames/mês, ou ticket de ' + R(qR.eq.C.ticket) + ', ou preço de ' + mi(qR.eq.C.preco) + '. Preço informado acima das referências públicas: R$ 4,33 mi no contrato FINAME da CEMAN e R$ 4,9 mi nos pregões de Goiás.',
         'Com a RM, a compra pelo FINAME (C) é a forma de pagar que menos pesa na cobertura (carência de 24 meses e 120 de prazo); na locação, o aluguel da RM (proxy da tabela da TC, ' + R(c.D.loc.aluguelProxy || (qR.com.D.comp1 - qR.sem.D.comp1)) + '/mês) corre desde a instalação.'
@@ -3228,9 +3305,11 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     if (qR) pend.push('Ressonância, do lado do HDA: negociar com os planos de saúde a volta da RM aos pacotes de reembolso, de onde ela saiu recentemente. Sem isso, o volume de convênio do cenário com RM não existe.');
     if (qR) pend.push('Ressonância: demanda (RMs pedidas hoje para fora), ticket dos convênios, equipe e laudo, projeto da sala (o modelo usa ' + mi(+m.rm.obra || 0) + ', informado pelo CEO; referências públicas de pré-instalação são maiores), cotação de manutenção e de locação, preço (referências de R$ 4,33 a 4,9 mi) e CFI da versão sem hélio. Cada 100 exames/mês valem ' + mi(qR.eq[selId].porExame * 100) + ' de VPL em ' + selId + '.');
     S.secoes.push({ h: 'Pendências que mudam o número', b: pend });
-    if (c.sus) { var sx = m.sus || {}; S.secoes.push({ h: 'SUS: fora do modelo', b: [
-      'Por decisão do CEO, a receita SUS não está no modelo: nem o SUS que o hospital já atende (~350 exames/mês), nem o SUS a mais. O PACS é cobrado sobre todos os exames, inclusive os do SUS.',
-      'Valor do SUS a mais, à parte: ' + N(sx.tc_mes) + ' TCs/mês a ' + R(sx.tc_valor) + (rmLig ? ' e ' + N(sx.rm_mes) + ' RMs/mês a R$ ' + NF2.format(+sx.rm_valor || 0) : '') + ' pelo Agora Tem Especialistas, na capacidade ociosa: ' + R(c.sus.regMes) + '/mês de margem em regime (' + mi(c.sus.regAno) + '/ano) e ' + mi(c.sus.vpl) + ' de VPL em ' + H + ' anos' + (rmLig ? ' (TC ' + mi(c.sus.vplTC) + ', RM ' + mi(c.sus.vplRM) + ')' : '') + '. Exige habilitação e contratualização com o gestor do SUS.'
+    if (c.cenSUS && c.sus) { var sx = m.sus || {}, qs = c.cenSUS; S.secoes.push({ h: 'SUS no modelo', b: [
+      'Chave "SUS no modelo" em ' + susNome(qs.modo) + '. O padrão é fora, por decisão do CEO (20/10): nenhuma receita nem custo SUS no VPL, e o PACS conta só os exames de convênio e particular.',
+      'VPL de ' + selId + ' nas três posições: fora ' + mi(qs.v.fora[selId].vplEnt) + '; SUS atual ' + mi(qs.v.atual[selId].vplEnt) + '; SUS atual + Agora Tem Especialistas ' + mi(qs.v.ate[selId].vplEnt) + '.',
+      'SUS atual: ~' + N(qs.atual.exames) + ' exames/mês a R$ ' + NF2.format(qs.atual.ticket) + ' (SIGTAP, estimativa S&S), já atendidos com a EMG; o efeito de internalizar vai de ' + sgn(Math.min(qs.dAtual[selId], qs.dAtualOutroEmg[selId])) + ' a ' + sgn(Math.max(qs.dAtual[selId], qs.dAtualOutroEmg[selId])) + ' conforme a EMG receba ou não repasse sobre o SUS hoje. Falta a produção SUS por modalidade e o contrato da EMG.',
+      'SUS a mais: ' + N(sx.tc_mes) + ' TCs/mês a ' + R(sx.tc_valor) + (rmLig ? ' e ' + N(sx.rm_mes) + ' RMs/mês a R$ ' + NF2.format(+sx.rm_valor || 0) : '') + ' pelo Agora Tem Especialistas, na capacidade ociosa: ' + R(c.sus.regMes) + '/mês de margem em regime e ' + mi(c.sus.vpl) + ' de VPL em ' + H + ' anos' + (rmLig ? ' (TC ' + mi(c.sus.vplTC) + ', RM ' + mi(c.sus.vplRM) + '; com ele a RM muda de sinal)' : '') + '. Exige habilitação no programa, contratualização com o gestor e espaço no Teto MAC.'
     ] }); }
     S.secoes.push({ h: 'Próximos passos', b: ['Gate 0 (agora): aprovar a tese e o perímetro; formalizar a proposta VMI de compra e de locação com as respostas acima; detalhar a folha da equipe técnica, confirmar o telelaudo e cotar o RIS (Touch Health) e o PACS (Sectra Standard)' + (qR ? '; negociar com os planos de saúde a volta da RM aos pacotes de reembolso, levantar a demanda de RM e decidir a ressonância em separado' : '') + '.', 'Gate 1 (dez/26 a 1T27): TDC emitido; CFI da Pulsar publicado; protocolar o FINAME (ou fechar a locação) com o kit de documentos.', 'Gate 2: desembolso ou assinatura da locação; aviso de 90 dias à EMG casado com a entrega, sem sobreposição de custos; instalação em ' + fmtMes(goLive()) + (rmLig ? '; RM aprovada em ' + fmtMes(m.rm.aprovacao) + ', sala e financiamento próprio, operação a partir de ' + fmtMes(E.mesRMStr(m)) : '') + '.'] });
     S.nota = 'Números do modelo da página "Viabilidade da internalização com equipamentos VMI" (S&S Partners) no momento da geração. Premissas, fontes e fórmulas nas abas Premissas e Método.';
@@ -3342,10 +3421,13 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       var ri = c.rm.isolada; if (ri) { rmS.push([], ['RM isolada (compra, sem financiamento)', 'Ano 0'].concat(ri.anos.map(function (a) { return a.ano; })), ['Exames', ''].concat(ri.anos.map(function (a) { return a.rm.exames; })), ['Receita líquida', ''].concat(ri.anos.map(function (a) { return a.rm.rl; })), ['EBITDA da RM', ''].concat(ri.anos.map(function (a) { return a.rm.ebitda; })), ['Manutenção', ''].concat(ri.anos.map(function (a) { return -a.manut; })), ['Investimento (sala e equipamento)', ''].concat(ri.anos.map(function (a) { return -a.inv; })), ['Fluxo', ri.fl[0]].concat(ri.anos.map(function (a) { return a.fc; })), ['VPL', ri.vpl], ['TIR', ri.tir], ['Payback (anos)', ri.pb]); }
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rmS), 'Ressonância');
     }
-    if (c.sus) { var su = c.sus, sx = model.sus || {}; var sS = [['SUS: fora do modelo (informativo, não entra no VPL)'], [], ['Premissa', 'Valor'], ['TC SUS a mais (exames/mês)', +sx.tc_mes || 0], ['Valor SUS por TC (R$)', +sx.tc_valor || 0], ['RM SUS a mais (exames/mês)', rmOn() ? +sx.rm_mes || 0 : 0], ['Valor SUS por RM (R$)', +sx.rm_valor || 0], [], ['Ano', 'Margem TC', 'Margem RM', 'Receita líquida', 'Margem total']];
+    if (c.sus) { var su = c.sus, sx = model.sus || {}, qs = c.cenSUS; var sS = [['SUS no modelo: chave em ' + susNome(E.susModo(model)) + ' (padrão: fora, decisão do CEO de 20/10/2026)'], []];
+      if (qs) { sS.push(['VPL para o hospital', 'Fora', 'SUS atual', 'SUS atual + Agora Tem Especialistas']); ['B', 'C', 'D'].forEach(function (k) { sS.push([k, qs.v.fora[k].vplEnt, qs.v.atual[k].vplEnt, qs.v.ate[k].vplEnt]); }); sS.push(['Resultado mensal da própria em regime', qs.v.fora.resultado, qs.v.atual.resultado, qs.v.ate.resultado], []); }
+      sS.push(['Premissa', 'Valor'], ['SUS atual (exames/mês)', +sx.atual_mes || 0], ['Valor SUS médio atual (R$, SIGTAP)', +sx.atual_ticket || 0], ['Repasse à EMG no SUS atual', sx.atual_emg === 'nada' ? 'nenhum' : 'mesmos percentuais do convênio'], ['TC SUS a mais (exames/mês)', +sx.tc_mes || 0], ['Valor SUS por TC (R$)', +sx.tc_valor || 0], ['RM SUS a mais (exames/mês)', rmOn() ? +sx.rm_mes || 0 : 0], ['Valor SUS por RM (R$)', +sx.rm_valor || 0]);
+      sS.push([], ['SUS a mais (Agora Tem Especialistas), margem por ano'], ['Ano', 'Margem TC', 'Margem RM', 'Receita líquida', 'Margem total']);
       su.anos.forEach(function (a) { sS.push([a.ano, a.tc, a.rm, a.rl, a.total]); });
       sS.push([], ['Margem mensal em regime', su.regMes], ['Margem anual em regime', su.regAno], ['Receita líquida anual em regime', su.rlAno], ['VPL total', su.vpl], ['VPL TC', su.vplTC], ['VPL RM', su.vplRM]);
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sS), 'SUS (fora do modelo)'); }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sS), 'SUS'); }
     var loc = [['Locação D no prazo de ' + c.D.n + ' meses · ' + locTxt().base + ' · ' + locTxt().manut], ['Item', 'Base', 'Cotação VMI R$/mês/un.', 'Valor de compra', 'Queda a.a.', 'Residual %', 'Residual R$', 'Aluguel (com tributos)', 'dos quais tributos', 'Manutenção média', 'Custo mensal', '% do valor/mês', 'Taxa implícita a.a.']];
     c.D.loc.linhas.forEach(function (x) { loc.push([x.nome, x.fonte === 'vmi' ? 'VMI · ' + x.cotModelo : 'composição', x.cotUnit || '', x.V, x.dep, x.rvPct, x.RV, x.fin, x.trib, x.man, x.aluguel, x.pctMes, x.taxaImpl == null ? '' : x.taxaImpl]); });
     loc.push(['Pacote', '', '', c.D.loc.V, '', c.D.loc.RV / c.D.loc.V, c.D.loc.RV, c.D.loc.fin, c.D.loc.trib, c.D.loc.man, c.D.loc.aluguel, c.D.loc.pctMes, '']);

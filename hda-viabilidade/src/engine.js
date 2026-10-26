@@ -35,19 +35,25 @@ var Engine = (function () {
      Sem opex, a própria sai sem manutenção nem aluguel: é a base que o fluxo usa,
      somando depois a manutenção ou o aluguel mês a mês (garantia, início da operação). */
   function dreMensal(m, fator, tipo, anoProj, opex) {
-    var b = m.base, p = m.propria, c = m.cenario;
+    var b = m.base, p = m.propria, c = m.cenario, su = m.sus || {}, g = num(b.glosa_pct);
     var reaj = reajAno(m, anoProj);
     var exames = num(b.exames) / num(b.meses) * fator;
-    var rb = exames * num(b.ticket) * reaj;
-    var glosa = rb * num(b.glosa_pct);
+    var rbConv = exames * num(b.ticket) * reaj;
+    /* SUS (chave sus.modo): o atual entra nos dois modelos; o SUS a mais (TC do Agora Tem Especialistas, na capacidade ociosa) só na imagem própria */
+    var exS = susAtualOn(m) ? num(su.atual_mes) * fator : 0, rbS = exS * num(su.atual_ticket) * reaj;
+    var exA = tipo !== 'emg' && susAteOn(m) ? num(su.tc_mes) : 0, rbA = exA * num(su.tc_valor) * reaj;
+    var rb = rbConv + rbS + rbA;
+    var glosa = rb * g;
     var rl = rb - glosa;
-    var d = { exames: exames, rb: rb, glosa: glosa, rl: rl };
+    var d = { exames: exames, exSus: exS, exSusMais: exA, rbConv: rbConv, rbSus: rbS, rbSusMais: rbA, rlSus: rbS * (1 - g), rlSusMais: rbA * (1 - g), rb: rb, glosa: glosa, rl: rl };
     if (tipo === 'emg') {
+      /* nos exames SUS atuais a EMG recebe os mesmos percentuais (sus.atual_emg = "mesmo") ou nada além do contrato ("nada") */
+      var rlRep = rl - (su.atual_emg === 'nada' ? d.rlSus : 0);
       d.matmed = rl * num(b.matmed_pct);
-      d.rep_med = rl * num(b.rep_med_pct);
-      d.rep_mat = rl * num(b.rep_mat_pct);
-      d.rep_bio = rl * num(b.rep_bio_pct);
-      d.rep_sala = rl * num(b.rep_sala_pct);
+      d.rep_med = rlRep * num(b.rep_med_pct);
+      d.rep_mat = rlRep * num(b.rep_mat_pct);
+      d.rep_bio = rlRep * num(b.rep_bio_pct);
+      d.rep_sala = rlRep * num(b.rep_sala_pct);
       d.manut = 0; d.aluguel = 0; d.rispacs = 0;
     } else {
       d.matmed = rl * num(p.matmed_pct);
@@ -57,7 +63,7 @@ var Engine = (function () {
       d.rep_sala = num(p.sala_elimina) ? 0 : rl * num(b.rep_sala_pct);
       d.manut = num(opex && opex.manut) * reaj;
       d.aluguel = num(opex && opex.aluguel) * reaj;
-      var v = m.volumes || {}, exPacs = (num(v.rx26) + num(v.tc26) + num(v.us26)) * fator; /* PACS: todos os exames, todos os pagadores */
+      var exPacs = exames + exS + exA; /* PACS: os exames que estão no modelo (convênio e particular; o SUS só quando a chave o inclui) */
       d.exPacs = exPacs; d.ris = num(p.rispacs_mes) * reaj; d.pacs = pacsEx(m) * exPacs * reaj;
       d.rispacs = d.ris + d.pacs;
     }
@@ -110,17 +116,22 @@ var Engine = (function () {
   function pacsOn(m) { return ((m && m.propria) || {}).pacs_incluir !== 'nao'; }
   function pacsEx(m) { return pacsOn(m) ? num(m.propria && m.propria.pacs_exame) : 0; }
   function pacsImpl(m) { return pacsOn(m) ? num(m.propria && m.propria.pacs_impl) : 0; }
+  /* SUS: chave sus.modo — "fora" (padrão; decisão do CEO de 20/10/2026), "atual" (o SUS que o hospital já atende, nos dois modelos)
+     ou "ate" (o atual mais o SUS a mais do Agora Tem Especialistas: TC na capacidade ociosa e, com RM, RM; só com equipamento próprio). */
+  function susModo(m) { var v = (m && m.sus && m.sus.modo) || 'fora'; return v === 'atual' || v === 'ate' ? v : 'fora'; }
+  function susAtualOn(m) { return susModo(m) !== 'fora'; }
+  function susAteOn(m) { return susModo(m) === 'ate'; }
   function obraRM(m) { return rmOn(m) ? num(m.rm && m.rm.obra) : 0; }
-  function capacidadeRM(m) { var r = m.rm || {}, cap = 2 * (num(r.horas_dia) || 12) * 26, ex = num(r.exames_mes); return { cap: cap, exames: ex, ocup: cap ? ex / cap : null }; }
+  function capacidadeRM(m) { var r = m.rm || {}, cap = 2 * (num(r.horas_dia) || 12) * 26, sus = susAteOn(m) ? num((m.sus || {}).rm_mes) : 0, ex = num(r.exames_mes) + sus; return { cap: cap, exames: ex, conv: num(r.exames_mes), sus: sus, ocup: cap ? ex / cap : null }; }
   /* DRE mensal da RM no ano-projeto t; rampa opcional (1 = regime) */
   function rmMensal(m, t, rampa) {
     var r = m.rm || {}, reaj = reajAno(m, t), k = rampa == null ? rampaRM(m, t) : rampa;
-    var exC = num(r.exames_mes) * k, exS = 0; /* SUS fora do modelo (CEO, 20/10): ver susUpside */
-    var rb = exC * num(r.ticket) * reaj, glosa = rb * num(m.base.glosa_pct), rl = rb - glosa;
+    var exC = num(r.exames_mes) * k, exS = susAteOn(m) ? num((m.sus || {}).rm_mes) : 0; /* SUS só com a chave em "ate" (fila SUS: sem rampa) */
+    var rbC = exC * num(r.ticket) * reaj, rbS = exS * num((m.sus || {}).rm_valor) * reaj, rb = rbC + rbS, glosa = rb * num(m.base.glosa_pct), rl = rb - glosa;
     var matmed = rl * num(r.matmed_pct), laudo = rl * num(r.rep_med_pct), mc = rl - matmed - laudo;
     var equipe = num(r.equipe_mes) * reaj, energia = num(r.energia_mes) * reaj, outros = num(r.outros_mes) * reaj, fixos = equipe + energia + outros;
     var pacs = pacsEx(m) * (exC + exS) * reaj; /* PACS cobrado por exame também na RM */
-    return { exames: exC + exS, exConv: exC, exSus: exS, rampa: k, rb: rb, glosa: glosa, rl: rl, matmed: matmed, laudo: laudo, mc: mc, equipe: equipe, energia: energia, outros: outros, fixos: fixos, pacs: pacs, ebitda: mc - fixos - pacs };
+    return { exames: exC + exS, exConv: exC, exSus: exS, rampa: k, rbConv: rbC, rbSus: rbS, rb: rb, glosa: glosa, rl: rl, matmed: matmed, laudo: laudo, mc: mc, equipe: equipe, energia: energia, outros: outros, fixos: fixos, pacs: pacs, ebitda: mc - fixos - pacs };
   }
   /* RM no ano-projeto t: valores mensais × meses de operação no ano */
   function rmAno(m, t) {
@@ -362,6 +373,18 @@ var Engine = (function () {
     return (lo + hi) / 2;
   }
 
+  /* Memória do Motor dentro de um cálculo: os cenários (RM, PACS, SUS, FIIS, sensibilidades) repetem o mesmo caso de crédito.
+     Zerada a cada cálculo completo; resultados só de leitura. */
+  var AV = { motor: null, base: null, map: {}, n: 0 };
+  function avaliarMemo(Motor, caso, BASE) {
+    if (AV.motor !== Motor || AV.base !== BASE) AV = { motor: Motor, base: BASE, map: {}, n: 0 };
+    var k = JSON.stringify(caso), v = AV.map[k];
+    if (v) return v;
+    if (AV.n >= 200) { AV.map = {}; AV.n = 0; }
+    v = Motor.avaliar(caso, BASE); AV.map[k] = v; AV.n++;
+    return v;
+  }
+
   /* ---------- Alternativa C: pacote VMI financiado pelo Motor (ferramenta Financiamento VMI) ---------- */
   function altC(m, Motor, BASE) {
     var todosC = ativos(m, m.equip.C), cx = capexDe(todosC), ac = m.altC, cl = m.cliente;
@@ -370,7 +393,7 @@ var Engine = (function () {
     var caso = { cliente: { natureza: cl.natureza, uf: cl.uf, rob: num(cl.rob) || null, porte_decl: cl.porte_decl || null, sus_creditos_12m: num(cl.sus_creditos_12m) || null, sus_mac_outros: cl.sus_mac_outros || '', sus_mac_parcelas: num(cl.sus_mac_parcelas) },
       operacao: { valor_equip: cx0.financiavel, valor_obra: num(ac.valor_obra), valor_financiar: ac.valor_financiar === '' || ac.valor_financiar == null ? null : num(ac.valor_financiar), prazo: num(ac.prazo) || 120, carencia: num(ac.carencia) || 0, inicio: ac.inicio || (num(m.fin.ano_inicio) + '-03'), sistema: ac.sistema || 'SAC', carModo: ac.carModo || 'pagos', equipamento: { cfi: cfiInfo.todos ? (cfiInfo.prev > 0 ? 'previsto' : 'informado') : (num(ac.cfi_presumido) ? 'presumido' : ''), cfi_previsao: cfiInfo.prev > 0 ? 'dez/2026' : null, origem: 'nacional' } },
       flags: clone(cl.flags || {}), honorario_pct: num(ac.honorario_pct) * 100 }; /* premissa em fração (0,02); o motor usa % (2) */
-    var av = Motor.avaliar(caso, BASE);
+    var av = avaliarMemo(Motor, caso, BASE);
     var escolha = null;
     if (ac.linha && ac.linha !== 'auto') {
       var x = av.todas.filter(function (t) { return t.linha.id === ac.linha; })[0];
@@ -388,7 +411,7 @@ var Engine = (function () {
       if (cxRM.financiavel > 0) {
         var caso2 = clone(caso); caso2.operacao.valor_equip = cxRM.financiavel; caso2.operacao.valor_obra = 0; caso2.operacao.valor_financiar = null;
         caso2.operacao.inicio = mesRMStr(m); /* liberação na entrega da RM */ caso2.operacao.equipamento = { cfi: itensRM.every(function (i) { return /^\d+$/.test(String(i.cfi || '').trim()); }) ? 'informado' : (num(ac.cfi_presumido) ? 'presumido' : ''), origem: 'nacional' };
-        var av2 = Motor.avaliar(caso2, BASE), x2 = av2.todas.filter(function (t) { return t.linha.id === escolha.linha.id; })[0];
+        var av2 = avaliarMemo(Motor, caso2, BASE), x2 = av2.todas.filter(function (t) { return t.linha.id === escolha.linha.id; })[0];
         var sim2 = x2 && x2.sim ? (x2.alternativas || []).filter(function (a) { return a.custo === s.custo; })[0] || x2.sim : (av2.ranking[0] ? av2.ranking[0].sim : null);
         if (sim2) { s2 = sim2; out.rmFin = { sim: sim2, linha: x2 && x2.sim ? x2.linha : av2.ranking[0].linha, av: av2, inicio: caso2.operacao.inicio }; }
       }
@@ -449,13 +472,14 @@ var Engine = (function () {
   function capacidadeTC(m) {
     var v = m.volumes, p = m.propria;
     var cap = num(p.tc_exh) * num(p.tc_h) * num(p.tc_d);
-    var tc = num(v.tc26) * (1 + num(m.cenario.volume_var));
-    return { cap: cap, tc: tc, ocup: cap ? tc / cap : null };
+    var tc0 = num(v.tc26) * (1 + num(m.cenario.volume_var)), sus = susAteOn(m) ? num((m.sus || {}).tc_mes) : 0, tc = tc0 + sus;
+    return { cap: cap, tc: tc, tcHoje: tc0, sus: sus, ocup: cap ? tc / cap : null };
   }
 
   /* ---------- Cálculo completo ---------- */
   function calcular(m, Motor, BASE, opts) {
     IPCA_PATH = (BASE && BASE.macro && BASE.macro.focus && BASE.macro.focus.ipca) || null;
+    if (!(opts && opts.leve)) AV = { motor: Motor, base: BASE, map: {}, n: 0 }; /* cálculo completo: memória nova (a base pode ter mudado) */
     var B = altB(m), C = altC(m, Motor, BASE);
     B.manut = manutPacote(m, ativos(m, m.equip.B)); B.opex = opexManut(B.manut);
     C.manut = manutPacote(m, ativos(m, m.equip.C)); C.opex = opexManut(C.manut);
@@ -482,9 +506,31 @@ var Engine = (function () {
       out.cenRM = cenariosRM(m, Motor, BASE, out);
       out.cenPACS = cenariosPACS(m, Motor, BASE, out);
       out.cenFIIS = cenariosFIIS(m, Motor, BASE, out);
+      out.cenSUS = cenariosSUS(m, Motor, BASE, out);
       out.lcdAuto = lcdAutomatico(m, Motor, BASE, out);
     }
     return out;
+  }
+
+  /* SUS: as três posições da chave lado a lado (a RM e o PACS ficam como estão) */
+  function cenariosSUS(m, Motor, BASE, out) {
+    var modo = susModo(m), r = {};
+    ['fora', 'atual', 'ate'].forEach(function (k) {
+      var rr = out; if (k !== modo) { var m2 = clone(m); m2.sus = m2.sus || {}; m2.sus.modo = k; rr = calcular(m2, Motor, BASE, { leve: true }); }
+      var o = {}; ['B', 'C', 'D'].forEach(function (a) { var fl = rr['fl' + a]; o[a] = { vplEnt: fl.vplEnt, vpl: fl.vpl, tir: fl.tir, pb: fl.pb }; });
+      o.resultado = rr.cen.prop.resultado; o.resultadoEmg = rr.cen.emg.resultado; o.ganhoMes = rr.ganhoMes; o.rmReg = rr.rm.reg ? rr.rm.reg.ebitda : null; o.selId = rr.sel.id;
+      o.dscr = entidade(k === modo ? m : (function () { var m3 = clone(m); m3.sus = m3.sus || {}; m3.sus.modo = k; return m3; })(), rr.sel, rr.flSel).linhas.slice(0, 2).map(function (l) { return { ano: l.ano, v: l.dscrSem }; });
+      r[k] = o;
+    });
+    var d = function (a, b) { var o = {}; ['B', 'C', 'D'].forEach(function (k) { o[k] = r[a][k].vplEnt - r[b][k].vplEnt; }); return o; };
+    var su = m.sus || {}, f1 = reajAno(m, 2);
+    /* SUS atual com a outra hipótese de repasse à EMG (o efeito depende de como a EMG é paga no SUS hoje) */
+    var mo = clone(m); mo.sus = mo.sus || {}; mo.sus.modo = 'atual'; mo.sus.atual_emg = su.atual_emg === 'nada' ? 'mesmo' : 'nada';
+    var ro = calcular(mo, Motor, BASE, { leve: true }), outroEmg = {}; ['B', 'C', 'D'].forEach(function (a) { outroEmg[a] = ro['fl' + a].vplEnt - r.fora[a].vplEnt; });
+    /* SUS a mais da RM (vale com a RM ligada): soma ao delta da RM */
+    var mr = clone(m); mr.rm = mr.rm || {}; mr.rm.incluir = 'sim'; var upR = susUpside(mr);
+    return { modo: modo, v: r, dAtual: d('atual', 'fora'), dMais: d('ate', 'atual'), dTotal: d('ate', 'fora'), dAtualOutroEmg: outroEmg, vplRMsus: upR.vplRM, vplTCsus: upR.vplTC,
+      atual: { exames: num(su.atual_mes), ticket: num(su.atual_ticket), rlMes: num(su.atual_mes) * num(su.atual_ticket) * (1 - num(m.base.glosa_pct)) * f1, emg: su.atual_emg === 'nada' ? 'nada' : 'mesmo' } };
   }
 
   /* FIIS Saúde: só para proponentes da Chamada Pública 2025 (inscrição de 13/10 a 07/11/2025).
@@ -595,6 +641,6 @@ var Engine = (function () {
   }
 
   return { num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
-    mesesAno: mesesAno, mesesDesde: mesesDesde, rmOn: rmOn, pacsOn: pacsOn, pacsEx: pacsEx, pacsImpl: pacsImpl, isRM: isRM, ativos: ativos, rmMensal: rmMensal, rmAno: rmAno, capacidadeRM: capacidadeRM, iniRM: iniRM, aprovRM: aprovRM, anoRM: anoRM, anoEqRM: anoEqRM, mesRMStr: mesRMStr, susUpside: susUpside, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
+    mesesAno: mesesAno, mesesDesde: mesesDesde, rmOn: rmOn, pacsOn: pacsOn, susModo: susModo, susAtualOn: susAtualOn, susAteOn: susAteOn, pacsEx: pacsEx, pacsImpl: pacsImpl, isRM: isRM, ativos: ativos, rmMensal: rmMensal, rmAno: rmAno, capacidadeRM: capacidadeRM, iniRM: iniRM, aprovRM: aprovRM, anoRM: anoRM, anoEqRM: anoEqRM, mesRMStr: mesRMStr, susUpside: susUpside, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
