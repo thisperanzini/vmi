@@ -164,6 +164,65 @@ footer { color: var(--fg-3); font-size: 12px; padding-top: 10px; border-top: 1px
 .ver { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 8px 0; border-bottom: 1px solid var(--line-2); font-size: 13px; align-items: center; }
 .ver:last-child { border-bottom: 0; } .ver .meta { font-size: 11.5px; color: var(--fg-3); }
 @media (max-width: 640px) { .kpi .v { font-size: 21px; } h1 { font-size: 19px; } }
+
+/* apresentação (slides 1280×720 gerados do modelo; o .pptx sai das mesmas especificações) */
+.sem-rolagem { overflow: hidden; }
+.busy { position: fixed; inset: 0; background: rgba(10, 14, 13, .45); z-index: 120; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.busy > div { background: var(--surface); color: var(--fg); padding: 16px 20px; border-radius: 10px; box-shadow: var(--shadow); display: flex; gap: 12px; align-items: center; font-size: 14px; }
+.spin { width: 18px; height: 18px; border: 2.5px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: gira .8s linear infinite; flex: none; }
+@keyframes gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+.apres { position: fixed; inset: 0; z-index: 90; background: #0b0f0e; display: flex; flex-direction: column; }
+.apres-stage { position: relative; flex: 1; overflow: hidden; cursor: pointer; }
+.apres-slide { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform-origin: center center; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
+.apres-bar { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); background: #0b0f0e; color: #c9d3d0; font-size: 12px; }
+.apres-bar button { background: #1d2523; color: #e9efed; border-color: #34403d; }
+.apres-bar select { background: #1d2523; color: #e9efed; border-color: #34403d; max-width: 260px; }
+.apres-bar .apres-v { color: #8e9a96; }
+.apres-off { position: fixed; left: -30000px; top: 0; width: 1280px; height: 720px; pointer-events: none; }
+.sl, .apres-off {
+  --bg: #f3f5f4; --surface: #ffffff; --surface-2: #e9eeec; --line: #d4dbd8; --line-2: #e6ebe9;
+  --fg: #15201f; --fg-2: #52605c; --fg-3: #87938f;
+  --accent: #0e6b84; --accent-ink: #ffffff; --accent-soft: #dceef3; --accent-line: #9bc9d8;
+  --good: #0d8a0d; --warn: #a86f00; --bad: #c43535; --bad-soft: #fde8e8; --good-soft: #e4f6e4; --warn-soft: #fff1d6;
+  --s-a: #87938f; --s-b: #eb6834; --s-c: #0e6b84; --s-d: #1baf7a; --s-e: #2a78d6; --grid: #e3e8e6;
+  color-scheme: light;
+}
+.sl { position: relative; width: 1280px; height: 720px; background: #ffffff; color: var(--fg); font-family: var(--font); font-size: 16px; overflow: hidden; }
+.sl-k { position: absolute; left: 56px; top: 34px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.sl-t { position: absolute; left: 56px; top: 58px; width: 1168px; font-family: var(--font-cond); font-size: 29px; line-height: 1.18; font-weight: 600; color: var(--fg); margin: 0; }
+.sl.capa { background: linear-gradient(90deg, var(--accent) 0 16px, #ffffff 16px); }
+.sl.capa .sl-k { top: 120px; font-size: 15px; }
+.sl.capa .sl-t { top: 158px; width: 1000px; font-size: 48px; line-height: 1.1; }
+.sl-sub { position: absolute; left: 56px; top: 330px; width: 1000px; font-size: 23px; line-height: 1.4; color: var(--fg-2); margin: 0; }
+.sl-f { position: absolute; left: 56px; right: 56px; bottom: 16px; display: flex; justify-content: space-between; gap: 16px; font-size: 11px; color: var(--fg-3); border-top: 1px solid var(--line); padding-top: 8px; }
+.sb { position: absolute; }
+.sb-tit { font-size: 14px; font-weight: 600; margin-bottom: 6px; color: var(--fg); }
+.sb-txt h3 { font-size: 19px; margin: 0 0 10px; }
+.sb-txt ul { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 9px; line-height: 1.38; }
+.sb-txt p { margin: 0 0 8px; line-height: 1.45; }
+.sb-nota p { font-size: 11.5px; color: var(--fg-3); line-height: 1.45; margin: 0; }
+.sb-img img { width: 100%; height: 100%; object-fit: contain; }
+.sl-kpis { display: grid; gap: 12px; height: 100%; }
+.sl-kpi { position: relative; background: #f6f8f7; border: 1px solid var(--line-2); border-radius: 8px; padding: 10px 12px 10px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sl-kpi .stripe { position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 2px; background: var(--accent); }
+.sl-kpi .stripe.good { background: var(--good); } .sl-kpi .stripe.bad { background: var(--bad); } .sl-kpi .stripe.warn { background: var(--warn); }
+.sl-kpi .lab { font-size: 12.5px; color: var(--fg-2); }
+.sl-kpi .v { font: 500 24px/1.1 var(--mono); letter-spacing: -.02em; }
+.sl-kpi .sub { font-size: 11.5px; color: var(--fg-2); }
+.sl-tab { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.sl-tab th { font-size: .82em; text-transform: uppercase; letter-spacing: .05em; color: var(--fg-3); background: var(--surface-2); padding: 6px 8px; text-align: left; font-weight: 600; white-space: normal; }
+.sl-tab th.c { text-align: center; } .sl-tab th.n { text-align: right; }
+.sl-tab td { padding: 5px 8px; border-bottom: 1px solid var(--line-2); white-space: normal; vertical-align: middle; line-height: 1.3; }
+.sl-tab td.c { text-align: center; } .sl-tab td.n { text-align: right; font-family: var(--mono); }
+.sl-tab tr.hl td { background: var(--accent-soft); }
+.sl-tab.dense th { padding: 4px 8px; } .sl-tab.dense td { padding: 3px 8px; line-height: 1.24; }
+.sl-tab tr.sec td { background: var(--surface-2); color: var(--fg-2); font-weight: 600; font-size: .94em; padding-top: 3.5px; padding-bottom: 3.5px; }
+.sl-tab tr.total td { font-weight: 600; background: #f3f6f5; border-top: 1px solid var(--line); }
+.sl-tab tr.sub td { color: var(--fg-2); }
+.sl .chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.sl .chart text { font-size: 13px; }
+.sl .legend { font-size: 13px; margin-top: 6px; }
 </style>
 
 <div class="wrap">
@@ -177,6 +236,7 @@ footer { color: var(--fg-3); font-size: 12px; padding-top: 10px; border-top: 1px
       <div class="sync"><span class="dot" id="syncDot"></span><span id="syncTxt">Carregando…</span></div>
       <div class="actions">
         <button class="ghost sm" id="btnDesfazer" hidden>Descartar alterações</button>
+        <button class="sm" id="btnApresentar" title="Slides em tela cheia para apresentar ao CEO, gerados das premissas atuais; baixa em .pptx">Apresentação</button>
         <button class="sm" id="btnSumario" title="Sumário executivo com os números atuais do modelo (.docx ou texto)">Sumário executivo</button>
         <button class="sm" id="btnXlsx" title="Planilha com premissas, DRE, fluxo e cronograma">Exportar .xlsx</button>
         <button class="primary sm" id="btnSalvar">Salvar agora</button>
@@ -210,6 +270,20 @@ footer { color: var(--fg-3); font-size: 12px; padding-top: 10px; border-top: 1px
   <footer id="foot">S&amp;S Partners · modelo construído sobre a planilha Viabilidade v2 da Controladoria do HDA, o Projeto Radiologia (Jaime) e a Reunião do Conselho de out/26 · motor de financiamento: ferramenta Financiamento VMI, base 2026-10-09.</footer>
 </div>
 <div id="toast" class="toast" hidden></div>
+<div id="apres" class="apres" hidden role="dialog" aria-modal="true" aria-label="Apresentação">
+  <div class="apres-stage" id="apStage"><div class="apres-slide" id="apSlide"></div></div>
+  <div class="apres-bar">
+    <button class="sm" id="apPrev" aria-label="Slide anterior">‹ Anterior</button>
+    <span id="apNum" class="mono"></span>
+    <button class="sm" id="apNext" aria-label="Próximo slide">Próximo ›</button>
+    <select id="apIr" aria-label="Ir para o slide"></select>
+    <span class="apres-v" id="apVer"></span>
+    <button class="sm" id="apPptx">Baixar .pptx</button>
+    <button class="sm" id="apSair">Sair (Esc)</button>
+  </div>
+</div>
+<div id="busy" class="busy" hidden role="status" aria-live="polite"><div><i class="spin"></i><span>Gerando…</span></div></div>
+
 <div id="sumOvl" class="ovl" hidden><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="sumTit"><div class="dlg-h"><b id="sumTit">Sumário executivo</b><div class="row"><button class="sm" id="sumCopiar">Copiar texto</button><button class="primary sm" id="sumDocx">Baixar .docx</button><button class="ghost sm" id="sumFechar" aria-label="Fechar">Fechar</button></div></div><div class="dlg-b" id="sumBody"></div></div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -2376,14 +2450,21 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
 
   /* ---------------- gráficos SVG ---------------- */
   function niceMax(v) { if (v <= 0) return 1; var p = Math.pow(10, Math.floor(Math.log10(v))); var f = v / p; var n = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10; return n * p; }
+  /* eixo com passos redondos (ex.: −100, 0, 100, 200), também quando há negativos */
+  function eixoY(mn, mx) {
+    var st = niceMax((mx - mn) / 4 || 1); mn = Math.floor(mn / st + 1e-9) * st; mx = Math.ceil(mx / st - 1e-9) * st; if (mx <= mn) mx = mn + st;
+    var t = []; for (var v = mn; v <= mx + st / 2; v += st) t.push(Math.abs(v) < st / 1e6 ? 0 : v);
+    return { mn: mn, mx: mx, t: t };
+  }
   function svgLines(opts) {
     /* opts: {cats:[], series:[{nome, vals:[], cor}], h, fmt, ref:{v,label}} */
     var W = 720, H = opts.h || 240, pl = 64, pr = 12, pt = 14, pb = 30, iw = W - pl - pr, ih = H - pt - pb;
     var all = []; opts.series.forEach(function (s) { all = all.concat(s.vals.filter(function (v) { return v != null; })); }); if (opts.ref) all.push(opts.ref.v);
     var mx = niceMax(Math.max.apply(null, all.concat([0]))), mn = Math.min.apply(null, all.concat([0])); mn = mn < 0 ? -niceMax(-mn) : 0;
+    var eY = eixoY(mn, mx); mn = eY.mn; mx = eY.mx;
     var y = function (v) { return pt + ih - (v - mn) / (mx - mn) * ih; }, x = function (i) { return pl + (opts.cats.length > 1 ? i / (opts.cats.length - 1) * iw : iw / 2); };
     var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(opts.aria || '') + '">';
-    var ticks = 4; for (var k = 0; k <= ticks; k++) { var v = mn + (mx - mn) * k / ticks; s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="var(--grid)"/><text x="' + (pl - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(opts.fmt(v)) + '</text>'; }
+    eY.t.forEach(function (v) { s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="var(--grid)"/><text x="' + (pl - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(opts.fmt(v)) + '</text>'; });
     if (mn < 0) s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="var(--fg-3)"/>';
     if (opts.ref) s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(opts.ref.v) + '" y2="' + y(opts.ref.v) + '" stroke="var(--bad)" stroke-dasharray="4 3"/><text x="' + (W - pr) + '" y="' + (y(opts.ref.v) - 4) + '" text-anchor="end" fill="var(--bad)">' + esc(opts.ref.label) + '</text>';
     opts.cats.forEach(function (c, i) { if (opts.cats.length > 12 && i % 2) return; s += '<text x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + esc(c) + '</text>'; });
@@ -2400,10 +2481,11 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     var W = 720, H = opts.h || 240, pl = 64, pr = 12, pt = 14, pb = 30, iw = W - pl - pr, ih = H - pt - pb;
     var all = []; opts.series.forEach(function (s) { all = all.concat(s.vals); });
     var mx = niceMax(Math.max.apply(null, all.concat([0]))), mn = Math.min.apply(null, all.concat([0])); mn = mn < 0 ? -niceMax(-mn) : 0;
+    var eY = eixoY(mn, mx); mn = eY.mn; mx = eY.mx;
     var y = function (v) { return pt + ih - (v - mn) / (mx - mn) * ih; };
     var n = opts.cats.length, gw = iw / n, bw = Math.min(42, gw * 0.7 / opts.series.length);
     var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(opts.aria || '') + '">';
-    for (var k = 0; k <= 4; k++) { var v = mn + (mx - mn) * k / 4; s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="var(--grid)"/><text x="' + (pl - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(opts.fmt(v)) + '</text>'; }
+    eY.t.forEach(function (v) { s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="var(--grid)"/><text x="' + (pl - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(opts.fmt(v)) + '</text>'; });
     s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="var(--fg-3)"/>';
     opts.cats.forEach(function (c, i) {
       var cx = pl + gw * i + gw / 2, tot = opts.series.length * bw, x0 = cx - tot / 2;
@@ -2482,7 +2564,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     /* gates */
     h += '<div class="card"><div class="card-h"><h2>Sequência de decisão</h2><span class="muted small">cada etapa libera a seguinte</span></div><div class="gates">' +
       '<div class="gate now"><div class="gh"><b>Gate 0</b><span>agora</span></div><ul><li>Aprovar a tese e o perímetro (TC, 2 US, RX móvel, RX digital, placa DR); decidir se o RX digital é fixo (Apolo, proposta VMI) ou portátil (pacote GE)</li><li>Formalizar a proposta VMI (preços de 15/10/2026), cotação de manutenção da Pulsar, do Apolo e do Invictus, CFI do Invictus e da placa DR; na locação (tabela de 16/10/2026, manutenção inclusa), confirmar se o RX digital é o Aquila D ou o Apolo D e cotar ultrassons e placa DR; acompanhar o credenciamento CFI da Pulsar (previsto até dez/2026)</li><li>Premissas fechadas com o CEO em 20/10: linha da sala, material, laudo (radiologistas de dia, telelaudo à noite), equipe técnica, contrato EMG e sala da TC reaproveitada. Falta detalhar a folha de R$ 184 mil/mês e cotar o RIS (Touch Health) e o PACS (Sectra Standard)</li><li>Ressonância, decisão à parte: HDA negociar com as operadoras a volta da RM aos pacotes de reembolso (os planos a retiraram recentemente); demanda (RMs pedidas hoje para fora), ticket dos convênios, preço da Cignus 600 (referências de R$ 4,33 a 4,9 mi), cotação de manutenção e de locação, projeto de pré-instalação e CFI da versão sem hélio</li></ul></div>' +
-      '<div class="gate"><div class="gh"><b>Gate 1</b><span>dez/26 – 1T27</span></div><ul><li>TDC emitido e negociação iniciada</li><li>CFI da Pulsar publicado no Catálogo (previsto dez/2026): condição para o FINAME do pacote</li><li>Protocolar o FINAME (agente) com o kit de documentos</li><li>Responder as perguntas do FGTS-Saúde (CEBAS 60% SUS, créditos SUS de 12 meses, contratos no Teto MAC) e confirmar o Agora Tem Especialistas; se couber, protocolar também na Caixa ou no BB</li></ul></div>' +
+      '<div class="gate"><div class="gh"><b>Gate 1</b><span>dez/26 – 1T27</span></div><ul><li>TDC emitido e negociação iniciada</li><li>CFI da Pulsar publicado no Catálogo (previsto dez/2026): condição para o FINAME do pacote</li><li>Protocolar o FINAME (agente) com o kit de documentos</li>' + (fgtsEstado().st === 'cond' ? '<li>Responder as perguntas do FGTS-Saúde (CEBAS 60% SUS, créditos SUS de 12 meses, contratos no Teto MAC) e confirmar o Agora Tem Especialistas; se couber, protocolar também na Caixa ou no BB</li>' : '') + '</ul></div>' +
       '<div class="gate"><div class="gh"><b>Gate 2</b><span>2T27</span></div><ul><li>Contratação do financiamento e pedido de compra, ou assinatura da locação</li><li>Aviso de 90 dias à EMG ~3 meses antes da instalação, sem multa e sem sobreposição de custos</li><li>Contratar manutenção (início após a garantia), RIS e PACS</li></ul></div>' +
       '<div class="gate"><div class="gh"><b>Gate 3</b><span>operação</span></div><ul><li>Imagem própria em regime</li><li>Indicadores do Jaime: exames, tempo de espera, repetição, disponibilidade, custo por exame</li><li>Revisar premissas e esta página a cada trimestre</li></ul></div>' +
       '</div></div>';
@@ -2925,7 +3007,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     } else {
       h += '<p class="small muted">Informe os créditos SUS dos últimos 12 meses para calcular a margem: a parcela não pode passar de 35% da média mensal, menos o que outros contratos já descontam do Teto MAC (Manual, item 5.1.2).' + (s ? ' Com ' + mi(calc.C.av.ctx.fin) + ' em ' + s.n + ' meses, a maior parcela seria ' + R(s.rows.reduce(function (a, r) { return Math.max(a, r.parcela); }, 0)) + ', o que pede pelo menos ' + R((s.rows.reduce(function (a, r) { return Math.max(a, r.parcela); }, 0)) / 0.35 * 12) + ' de créditos SUS em 12 meses, sem outros descontos.' : '') + '</p>';
     }
-    h += '</div></div><p class="small muted" style="margin-top:10px">Outros requisitos (Manual, 5.5.1): CNES ativo, CRF do FGTS, CND, sem restrição no CADIN, anuência do gestor local do SUS e termo de cessão dos créditos (Portaria GM/MS 2.182/2015). Hoje o SUS responde por cerca de 20% do HDA, o que torna o CEBAS na modalidade de 60% ao SUS improvável' + (calc.C.escolha && calc.C.escolha.linha.id === 'fgts-saude' ? '; confirme a resposta antes de protocolar, porque o plano está usando o FGTS-Saúde.' : ': por isso o plano usa o FINAME até a resposta.') + ' A <b>modalidade II</b> (reestruturação financeira, até 15 anos, com plano de trabalho) não financia equipamento, mas pode alongar a dívida atual; ver Capacidade de crédito.</p></div>';
+    h += '</div></div><p class="small muted" style="margin-top:10px">Outros requisitos (Manual, 5.5.1): CNES ativo, CRF do FGTS, CND, sem restrição no CADIN, anuência do gestor local do SUS e termo de cessão dos créditos (Portaria GM/MS 2.182/2015). Hoje o SUS responde por cerca de 20% do HDA, o que torna o CEBAS na modalidade de 60% ao SUS improvável' + (calc.C.escolha && calc.C.escolha.linha.id === 'fgts-saude' ? '; confirme a resposta antes de protocolar, porque o plano está usando o FGTS-Saúde.' : fgtsEstado().st === 'fora' ? '. Com as respostas informadas, a linha está fora e o plano usa ' + linhaCurta(calc.C.escolha && calc.C.escolha.linha) + '.' : ': por isso o plano usa o FINAME até a resposta.') + ' A <b>modalidade II</b> (reestruturação financeira, até 15 anos, com plano de trabalho) não financia equipamento, mas pode alongar a dívida atual; ver Capacidade de crédito.</p></div>';
     return h;
   }
   function bindFgts(root) {
@@ -3011,12 +3093,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     $$('#levers [data-lever]').forEach(function (r) { r.addEventListener('input', function () { var l = LEVERS[+this.dataset.lever]; var v = +this.value; simSet(l.id, l.id === 'fin.horizonte' || l.id === 'altC.prazo' || l.id === 'altC.carencia' || l.id === 'altD.prazo' || /^rm\.(exames|horas)/.test(l.id) ? Math.round(v) : v); $('#lv' + this.dataset.lever).textContent = l.fmt(v); recomputeSim(); renderSimResults(); }); });
     $$('#levers [data-seg]').forEach(function (b) { b.addEventListener('click', function () { var l = LEVERS[+this.dataset.seg]; var v = this.dataset.v; simSet(l.id, isNaN(+v) ? v : +v); recomputeSim(); renderLevers(); renderSimResults(); }); });
   }
-  function renderSimResults() {
-    var s = simCalc, fl = s.flSel, b = calc.flSel;
-    function d(v, ref, fmt) { var dv = v - ref; return fmt(v) + ' <span class="small ' + sinal(dv) + '">' + (dv >= 0 ? '+' : '−') + fmt(Math.abs(dv)).replace('−', '') + '</span>'; }
-    $('#simKpis').innerHTML = kpi('VPL do projeto', d(fl.vpl, b.vpl, mi), 'vs. premissas salvas', fl.vpl > 0 ? 'good' : 'bad', true) + kpi('TIR', fl.tir == null ? '—' : P(fl.tir, 0), 'payback ' + anos(fl.pb), '', true) + kpi('Resultado mensal própria', R(s.cen.prop.resultado), (s.sel.id === 'D' ? 'com aluguel' : 'com manutenção, antes das parcelas') + ' · EMG ' + R(s.cen.emg.resultado), sinal(s.cen.prop.resultado) === 'pos' ? 'good' : 'bad', true) + kpi(s.sel.id === 'D' ? 'Aluguel' : 'Após a parcela', s.sel.id === 'D' ? R(s.D.aluguel) : R(s.ganhoMesComParcela + s.cen.emg.resultado), s.sel.id === 'D' ? s.D.n + ' meses · equilíbrio com C ' + R(s.D.equilibrioC) : 'parcela ' + R(s.sel.parcela) + ' · ' + (s.sel.id === 'C' && s.C.escolha ? esc(s.C.escolha.linha.nome.split(' – ')[0]) : 'HFS'), '', true) + kpi('VPL para o hospital', d(fl.vplEnt, b.vplEnt, mi), 'após parcelas ou aluguel · B ' + mi(s.flB.vplEnt) + ' · C ' + mi(s.flC.vplEnt) + ' · D ' + mi(s.flD.vplEnt), '', true) + kpi('Caixa acumulado', d(fl.acumEnt, b.acumEnt, mi), 'após parcelas ou aluguel, ' + sim.fin.horizonte + ' anos', '', true) + kpi('DSCR hospital ' + s.ent.linhas[0].ano, X(s.ent.linhas[0].dscrSem) + ' · ' + X(s.ent.linhas[0].dscrCom), 'sem TDC · com TDC', '', true) + (s.cenPACS ? kpi('PACS: com − sem', mi(s.cenPACS.delta[s.sel.id]), 'VPL para o hospital (' + s.sel.id + ') · cenário ' + (s.cenPACS.on ? 'com PACS' : 'sem PACS'), 'bad', true) : '') + (s.cenRM ? kpi('RM: com − sem', mi(s.cenRM.eq[s.sel.id].delta), 'VPL para o hospital (' + s.sel.id + ') · empata com ' + N(s.cenRM.eq[s.sel.id].volume) + ' exames/mês', s.cenRM.eq[s.sel.id].delta >= 0 ? 'good' : 'bad', true) : '');
-    var n = Math.max(fl.anos.length, b.anos.length), cats = []; for (var i = 0; i < n; i++) cats.push(String(+model.fin.ano_inicio + i));
-    $('#simChart').innerHTML = svgLines({ cats: cats, series: [{ nome: 'Premissas salvas', vals: cats.map(function (c, i) { return b.anos[i] ? b.anos[i].acumE : null; }), cor: 'var(--s-a)', dash: true }, { nome: 'Simulação', vals: cats.map(function (c, i) { return fl.anos[i] ? fl.anos[i].acumE : null; }), cor: 'var(--s-c)' }], fmt: function (v) { return mi(v); }, h: 230, aria: 'Simulação' });
+  function alavancasSens(sm) {
     var al = [
       { nome: 'Volume', set: function (mm, v) { mm.cenario.volume_var = v; }, lo: -0.2, hi: 0.3, loTxt: '−20%', hiTxt: '+30%' },
       { nome: 'Repasse médico', set: function (mm, v) { mm.propria.rep_med_pct = v; }, lo: 0.26, hi: 0.18, loTxt: '26%', hiTxt: '18%' },
@@ -3025,13 +3102,22 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       { nome: 'Preço do pacote', set: function (mm, v) { mm.equip.C.forEach(function (it) { it.preco *= v; }); mm.equip.B.forEach(function (it) { it.preco *= v; }); }, lo: 1.15, hi: 0.85, loTxt: '+15%', hiTxt: '−15%' },
       { nome: 'Taxa de desconto', set: function (mm, v) { mm.fin.desconto = v; }, lo: 0.20, hi: 0.10, loTxt: '20%', hiTxt: '10%' }
     ];
-    if (E.pacsOn(sim)) al.push({ nome: 'PACS por exame', set: function (mm, v) { mm.propria.pacs_exame = v; }, lo: 10.58, hi: 6.94, loTxt: 'R$ 10,58', hiTxt: 'R$ 6,94' });
-    if (sim.fin.alternativa === 'D') al.push({ nome: 'Prêmio do locador', set: function (mm, v) { mm.altD.premio = v; }, lo: 0.07, hi: 0.01, loTxt: '7 p.p.', hiTxt: '1 p.p.' }, { nome: 'Prazo da locação', set: function (mm, v) { mm.altD.prazo = v; }, lo: 36, hi: 84, loTxt: '36 m', hiTxt: '84 m' }, { nome: 'Manutenção na cotação VMI', set: function (mm, v) { mm.altD.vmi_manut = v ? 'sim' : 'nao'; }, lo: 0, hi: 1, loTxt: 'à parte', hiTxt: 'inclusa' });
-    if (E.rmOn(sim)) { var rr = sim.rm, rmP = function (mm, f) { ['B', 'C'].forEach(function (k) { (mm.equip[k] || []).forEach(function (it) { if (E.isRM(it)) it.preco *= f; }); }); };
+    if (E.pacsOn(sm)) al.push({ nome: 'PACS por exame', set: function (mm, v) { mm.propria.pacs_exame = v; }, lo: 10.58, hi: 6.94, loTxt: 'R$ 10,58', hiTxt: 'R$ 6,94' });
+    if (sm.fin.alternativa === 'D') al.push({ nome: 'Prêmio do locador', set: function (mm, v) { mm.altD.premio = v; }, lo: 0.07, hi: 0.01, loTxt: '7 p.p.', hiTxt: '1 p.p.' }, { nome: 'Prazo da locação', set: function (mm, v) { mm.altD.prazo = v; }, lo: 36, hi: 84, loTxt: '36 m', hiTxt: '84 m' }, { nome: 'Manutenção na cotação VMI', set: function (mm, v) { mm.altD.vmi_manut = v ? 'sim' : 'nao'; }, lo: 0, hi: 1, loTxt: 'à parte', hiTxt: 'inclusa' });
+    if (E.rmOn(sm)) { var rr = sm.rm, rmP = function (mm, f) { ['B', 'C'].forEach(function (k) { (mm.equip[k] || []).forEach(function (it) { if (E.isRM(it)) it.preco *= f; }); }); };
       al.push({ nome: 'RM: volume', set: function (mm, v) { mm.rm.exames_mes = v; }, lo: Math.round(+rr.exames_mes * 0.7), hi: Math.round(+rr.exames_mes * 1.3), loTxt: '−30%', hiTxt: '+30%' },
         { nome: 'RM: ticket', set: function (mm, v) { mm.rm.ticket = v; }, lo: +rr.ticket * 0.8, hi: +rr.ticket * 1.2, loTxt: '−20%', hiTxt: '+20%' },
         { nome: 'RM: preço do equipamento', set: function (mm, v) { rmP(mm, v); }, lo: 1.15, hi: 0.85, loTxt: '+15%', hiTxt: '−15%' },
         { nome: 'RM: sala', set: function (mm, v) { mm.rm.obra = v; }, lo: +rr.obra * 1.5, hi: +rr.obra * 0.6, loTxt: '+50%', hiTxt: '−40%' }); }
+    return al;
+  }
+  function renderSimResults() {
+    var s = simCalc, fl = s.flSel, b = calc.flSel;
+    function d(v, ref, fmt) { var dv = v - ref; return fmt(v) + ' <span class="small ' + sinal(dv) + '">' + (dv >= 0 ? '+' : '−') + fmt(Math.abs(dv)).replace('−', '') + '</span>'; }
+    $('#simKpis').innerHTML = kpi('VPL do projeto', d(fl.vpl, b.vpl, mi), 'vs. premissas salvas', fl.vpl > 0 ? 'good' : 'bad', true) + kpi('TIR', fl.tir == null ? '—' : P(fl.tir, 0), 'payback ' + anos(fl.pb), '', true) + kpi('Resultado mensal própria', R(s.cen.prop.resultado), (s.sel.id === 'D' ? 'com aluguel' : 'com manutenção, antes das parcelas') + ' · EMG ' + R(s.cen.emg.resultado), sinal(s.cen.prop.resultado) === 'pos' ? 'good' : 'bad', true) + kpi(s.sel.id === 'D' ? 'Aluguel' : 'Após a parcela', s.sel.id === 'D' ? R(s.D.aluguel) : R(s.ganhoMesComParcela + s.cen.emg.resultado), s.sel.id === 'D' ? s.D.n + ' meses · equilíbrio com C ' + R(s.D.equilibrioC) : 'parcela ' + R(s.sel.parcela) + ' · ' + (s.sel.id === 'C' && s.C.escolha ? esc(s.C.escolha.linha.nome.split(' – ')[0]) : 'HFS'), '', true) + kpi('VPL para o hospital', d(fl.vplEnt, b.vplEnt, mi), 'após parcelas ou aluguel · B ' + mi(s.flB.vplEnt) + ' · C ' + mi(s.flC.vplEnt) + ' · D ' + mi(s.flD.vplEnt), '', true) + kpi('Caixa acumulado', d(fl.acumEnt, b.acumEnt, mi), 'após parcelas ou aluguel, ' + sim.fin.horizonte + ' anos', '', true) + kpi('DSCR hospital ' + s.ent.linhas[0].ano, X(s.ent.linhas[0].dscrSem) + ' · ' + X(s.ent.linhas[0].dscrCom), 'sem TDC · com TDC', '', true) + (s.cenPACS ? kpi('PACS: com − sem', mi(s.cenPACS.delta[s.sel.id]), 'VPL para o hospital (' + s.sel.id + ') · cenário ' + (s.cenPACS.on ? 'com PACS' : 'sem PACS'), 'bad', true) : '') + (s.cenRM ? kpi('RM: com − sem', mi(s.cenRM.eq[s.sel.id].delta), 'VPL para o hospital (' + s.sel.id + ') · empata com ' + N(s.cenRM.eq[s.sel.id].volume) + ' exames/mês', s.cenRM.eq[s.sel.id].delta >= 0 ? 'good' : 'bad', true) : '');
+    var n = Math.max(fl.anos.length, b.anos.length), cats = []; for (var i = 0; i < n; i++) cats.push(String(+model.fin.ano_inicio + i));
+    $('#simChart').innerHTML = svgLines({ cats: cats, series: [{ nome: 'Premissas salvas', vals: cats.map(function (c, i) { return b.anos[i] ? b.anos[i].acumE : null; }), cor: 'var(--s-a)', dash: true }, { nome: 'Simulação', vals: cats.map(function (c, i) { return fl.anos[i] ? fl.anos[i].acumE : null; }), cor: 'var(--s-c)' }], fmt: function (v) { return mi(v); }, h: 230, aria: 'Simulação' });
+    var al = alavancasSens(sim);
     var base = clone(sim); delete base._precoC;
     var sens = E.sensibilidade(base, M, BASE, al);
     $('#tornado').innerHTML = svgTornado(sens.itens, function (v) { return mi(v); }) + '<p class="small muted" style="margin-top:6px">VPL base da simulação: ' + mi(sens.base) + '. Barras vermelhas reduzem o VPL; verdes aumentam.</p>';
@@ -3148,6 +3234,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     renderTese(); renderDiagnostico(); renderAlternativas(); renderNumeros(); renderInvest(); renderCredito(); renderPremissas(); renderMetodo();
     if (tab === 'simulador') { sim = clone(model); recomputeSim(); renderSimulador(); }
     renderSync();
+    if (typeof apAtualizar === 'function') apAtualizar();
   }
   function showTab(id) {
     tab = id; $$('#tabs .tab').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.tab === id ? 'true' : 'false'); });
@@ -3214,6 +3301,23 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
   function goLive() { return mesIdxStr(+model.fin.inicio_op_mes || 0); }
   function fmtMes(s) { var mm = /^(\d{4})-(\d{2})/.exec(String(s || '')); return mm ? ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][+mm[2] - 1] + '/' + mm[1] : String(s || ''); }
   function linhaCurta(l) { if (!l) return 'linha de fomento'; if (/^finame/.test(l.id)) return 'o FINAME'; if (/^fgts/.test(l.id)) return 'o FGTS-Saúde'; return l.nome.split(' – ')[0]; }
+  function origemTxt() {
+    var vv = vendoVersao ? versoes.filter(function (x) { return x.id === vendoVersao; })[0] : null;
+    return vendoVersao ? 'versão congelada "' + ((vv && vv.nome) || vendoVersao) + '"' : dirty ? 'premissas em edição (não salvas)' : 'premissas salvas' + (ultimoSalvoEm ? ' em ' + new Date(ultimoSalvoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
+  }
+  /* FGTS-Saúde: situação pelas respostas do caso (elegível, depende de confirmação ou fora) */
+  function fgtsEstado() {
+    var fg = calc.C.av.todas.filter(function (x) { return x.linha.id === 'fgts-saude'; })[0], fl = (model.cliente && model.cliente.flags) || {};
+    if (!fg) return { st: 'na', txt: '' };
+    if (fg.el.ok) return { st: 'ok', fg: fg, txt: 'elegível com as respostas informadas' };
+    if (fg.condicional) return { st: 'cond', fg: fg, txt: 'depende de confirmar CEBAS na modalidade de 60% ao SUS e os créditos SUS de 12 meses' };
+    var mot = [];
+    if (model.cliente.natureza !== 'filantropica') mot.push('linha só para filantrópicas');
+    if (fl.cebas_sus60 === 'nao') mot.push('sem CEBAS na modalidade de 60% ao SUS');
+    if (!Number(fl.sus_complementar)) mot.push('fora do Agora Tem Especialistas');
+    if (!mot.length) mot = fg.el.bloqueios.slice(0, 2);
+    return { st: 'fora', fg: fg, txt: 'fora: ' + mot.join('; ') };
+  }
   function sumarioExecutivo() {
     var c = calc, m = model, H = +m.fin.horizonte, emg = c.cen.emg, prop = c.cen.prop, lt = locTxt();
     var alts = [{ id: 'B', nome: 'B · comprar o pacote GE (HFS 60x)', fl: c.flB, alt: c.B }, { id: 'C', nome: 'C · comprar o pacote VMI com ' + linhaCurta(c.C.escolha && c.C.escolha.linha), fl: c.flC, alt: c.C }, { id: 'D', nome: 'D · alugar o pacote VMI (' + c.D.n + ' meses)', fl: c.flD, alt: c.D }];
@@ -3222,8 +3326,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     var e27 = function (id) { var e = c.entAlt && c.entAlt[id]; return e && e.linhas[0] ? e.linhas[0].dscrSem : null; };
     var l1 = c.ent.linhas[0], fg = c.C.av.todas.filter(function (x) { return x.linha.id === 'fgts-saude'; })[0];
     var quando = new Date(), dt = quando.toLocaleDateString('pt-BR') + ' ' + quando.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    var vv = vendoVersao ? versoes.filter(function (x) { return x.id === vendoVersao; })[0] : null;
-    var origem = vendoVersao ? 'versão congelada "' + ((vv && vv.nome) || vendoVersao) + '"' : dirty ? 'premissas em edição (não salvas)' : 'premissas salvas' + (ultimoSalvoEm ? ' em ' + new Date(ultimoSalvoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
+    var origem = origemTxt();
     function vplCom(f, id) { var mm = clone(model); f(mm); var r = E.calcular(mm, M, BASE, { leve: true }); return (id === 'B' ? r.flB : id === 'D' ? r.flD : id === 'C' ? r.flC : r.flSel).vplEnt; }
     var S = { titulo: 'Internalização do serviço de imagem do Hospital Dom Alvarenga', sub: 'Sumário executivo · gerado em ' + dt + ' · ' + origem + ' · ' + H + ' anos a ' + P(m.fin.desconto, 0) + ' a.a.', secoes: [] };
     /* 1. recomendação */
@@ -3309,7 +3412,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     (function () { var on = pacsOn(), lo = vplCom(function (mm) { mm.propria.pacs_incluir = 'sim'; mm.propria.pacs_exame = 10.58; }), hi = vplCom(function (mm) { mm.propria.pacs_incluir = 'sim'; mm.propria.pacs_exame = 6.94; }), sem = c.cenPACS ? c.cenPACS.sem[selId].vplEnt : null; pend.push('RIS e PACS: cotar Touch Health (RIS) e Sectra PACS Standard. O PACS (R$ ' + NF2.format(+m.propria.pacs_exame || 0) + ' por exame, ' + mi(+m.propria.pacs_impl || 0) + ' de implantação) é estimativa S&S, não cotação, e está ' + (on ? 'incluído' : 'fora do modelo') + '. De R$ 6,94 a 10,58 por exame, o VPL de ' + selId + ' vai de ' + mi(hi) + ' a ' + mi(lo) + '; sem PACS, ' + mi(sem) + '. A S&S representa a Sectra.'); })();
     pend.push('Locação: cotar ultrassons e placa DR (hoje estimados) e confirmar se o RX digital locado é o Aquila D ou o Apolo D.');
     if (semCfi.length) pend.push('CFI de ' + semCfi.join(' e ') + ' (ou trocar o ultrassom pelo Dominus L1, credenciado)' + (prevCfi.length ? ', e publicação do CFI da Pulsar' : '') + '.');
-    pend.push('FGTS-Saúde: CEBAS na modalidade de 60% ao SUS, créditos SUS de 12 meses e contratos no Teto MAC.');
+    if (fgtsEstado().st === 'cond') pend.push('FGTS-Saúde: CEBAS na modalidade de 60% ao SUS, créditos SUS de 12 meses e contratos no Teto MAC.');
     (function () { var cf = c.cenFIIS; if (!cf || cf.emUso) return; var p = cf.pedido, v = cf.vinte; pend.push('FIIS Saúde: só entra se o HDA tiver proposta inscrita e habilitada na Chamada Pública de 2025 (Transferegov, 13/10 a 07/11/2025); a janela de 2026 também fechou.' + (p ? ' Se tiver, o pacote C sai a CET de ' + Pp(p.cet) + ' em ' + p.n + ' meses e o VPL de C vai a ' + mi(p.vplC) + ' (' + (p.delta >= 0 ? '+' : '') + mi(p.delta) + ')' + (v && v.n > p.n ? '; com CEBAS, ' + v.n + ' meses e ' + mi(v.vplC) : '') + '.' : '') + ' O FIIS financia equipamento para uso no SUS (hoje cerca de 20% do HDA). Confirmar com o hospital.'); })();
     (function () { var la = c.lcdAuto; if (!la || la.emUso) return; pend.push('Sobretaxa da Taxa LCD (BNDES Automático): o modelo usa ' + Pp(la.sob) + ' como premissa. A Taxa LCD só fica mais barata que a linha em uso (' + la.refLinha + ', ' + rotCusto(la.refCusto) + ') com sobretaxa abaixo de ' + Pp(la.empate) + ', e expõe a parcela à Selic. Pedir a vigente ao agente; o Automático serve se entrar obra ou instalação no financiamento.'); })();
     pend.push('Perímetro do RX digital: fixo (Apolo D, proposta VMI) ou portátil (como no pacote GE).');
@@ -3458,6 +3561,531 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     else { try { var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([out])); a.download = nome; a.click(); } catch (e) { toast('Download indisponível nesta visualização.'); } }
   }
   $('#btnXlsx').addEventListener('click', exportarXlsx);
+
+  /* =====================================================================
+     APRESENTAÇÃO AO CEO: slides 1280×720 gerados do modelo atual (os mesmos
+     cálculos e textos da página e do sumário). O .pptx sai das MESMAS
+     especificações de slide: nada é digitado à parte.
+     Blocos: kpis · txt (bullets/parágrafos, **negrito**) · tab · g (gráfico) · nota · img
+     ===================================================================== */
+  var COR_TXT = { good: 'var(--good)', bad: 'var(--bad)', warn: 'var(--warn)', acc: 'var(--accent)', muted: 'var(--fg-2)' };
+  var ALT_COR = { A: 'var(--s-a)', B: 'var(--s-b)', C: 'var(--s-c)', D: 'var(--s-d)' };
+  var MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  function semMd(s) { return String(s == null ? '' : s).replace(/\*\*(.+?)\*\*/g, '$1'); }
+  function kR(v) { if (v == null || !isFinite(v)) return '—'; if (Math.abs(v) < 500) return '–'; return v < 0 ? '(' + NF0.format(-v / 1e3) + ')' : NF0.format(v / 1e3); }
+  function nbsp(t) { return String(t == null ? '' : t).replace(/(R\$|−R\$) /g, '$1\u00a0').replace(/ (mi|mil)\b/g, '\u00a0$1'); }
+  function sgnMi(v) { return v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '') + mi(v); }
+  function sch(id) { return SCHEMA.filter(function (s) { return s.id === id; })[0] || {}; }
+  function cenarioTxt() {
+    return 'Cenário: alternativa ' + calc.sel.id + ' · ' + (calc.cenRM ? (rmOn() ? 'com ressonância' : 'sem ressonância') + ' · ' : '') + (pacsOn() ? 'com PACS Sectra (estimativa S&S)' : 'sem PACS') + ' · ' + susNome(E.susModo(model)) + ' · ' + model.fin.horizonte + ' anos a ' + P(model.fin.desconto, 0) + ' a.a.';
+  }
+  function pendentesN() { return SCHEMA.filter(function (s) { return s.origem === 'pendente'; }).length; }
+  /* sensibilidade (a mesma do Simulador), guardada por cálculo: as alavancas de preço refazem o financiamento */
+  var sensMemo = { calc: null, v: null };
+  function sensDeck() {
+    if (sensMemo.calc === calc && sensMemo.v) return sensMemo.v;
+    var base = clone(model); sensMemo = { calc: calc, v: E.sensibilidade(base, M, BASE, alavancasSens(base)) };
+    return sensMemo.v;
+  }
+  function svgHBars(itens, fmt, W) {
+    W = W || 720; var rowH = 54, pl = Math.min(170, W * 0.36), pr = 120, H = itens.length * rowH + 10, iw = W - pl - pr;
+    var mx = 0, mn = 0; itens.forEach(function (i) { mx = Math.max(mx, i.v); mn = Math.min(mn, i.v); });
+    var span = (mx - mn) || 1, x = function (v) { return pl + (v - mn) / span * iw; };
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Comparação">';
+    if (mn < 0) s += '<line x1="' + x(0) + '" x2="' + x(0) + '" y1="4" y2="' + (H - 4) + '" stroke="var(--fg-3)"/>';
+    itens.forEach(function (it, k) {
+      var yy = 6 + k * rowH, cy = yy + rowH / 2 + 5;
+      s += '<text x="' + (pl - 10) + '" y="' + cy + '" text-anchor="end" fill="var(--fg)">' + esc(it.nome) + '</text>';
+      s += '<rect x="' + Math.min(x(0), x(it.v)) + '" y="' + (yy + 9) + '" width="' + Math.max(1, Math.abs(x(it.v) - x(0))) + '" height="' + (rowH - 18) + '" fill="' + it.cor + '" rx="3"/>';
+      s += '<text x="' + (Math.max(x(0), x(it.v)) + 8) + '" y="' + cy + '" fill="var(--fg)" font-weight="600">' + esc(fmt(it.v)) + '</text>';
+    });
+    return s + '</svg>';
+  }
+
+  function deckSlides() {
+    var c = calc, m = model, H = +m.fin.horizonte, sel = c.sel, sid = sel.id, emg = c.cen.emg, prop = c.cen.prop, l1 = c.ent.linhas[0], isD = sid === 'D';
+    var S = sumarioExecutivo(), secao = function (h) { return S.secoes.filter(function (x) { return x.h === h; })[0] || { b: [] }; };
+    var fl = function (k) { return c['fl' + k]; }, alts = ['B', 'C', 'D'];
+    var ord = alts.slice().sort(function (a, b) { return fl(b).vplEnt - fl(a).vplEnt; }), best = ord[0], gap = fl(ord[0]).vplEnt - fl(ord[1]).vplEnt, perto = gap < 0.05 * Math.abs(fl(ord[0]).vplEnt);
+    var lC = c.C.escolha && c.C.escolha.linha, linhaC = lC ? lC.nome : 'linha de fomento';
+    var nomeAlt = { B: 'compra do pacote GE (HFS em 60 parcelas)', C: 'compra do pacote VMI com ' + linhaCurta(lC), D: 'locação do pacote VMI (' + c.D.n + ' meses)' };
+    var curtoAlt = { B: 'compra GE (B)', C: 'compra VMI (C)', D: 'locação VMI (D)' };
+    var qR = c.cenRM, qP = c.cenPACS, qS = c.cenSUS, rmLig = rmOn(), eqR = qR ? qR.eq[sid] : null;
+    var hoje = new Date(), mesAno = MESES[hoje.getMonth()] + ' de ' + hoje.getFullYear();
+    var e1 = function (k) { var e = c.entAlt && c.entAlt[k]; return e && e.linhas[0] ? e.linhas[0].dscrSem : null; };
+    var lista = [];
+
+    /* 1 · capa */
+    lista.push({ capa: true, nav: 'Capa', k: 'Hospital Dom Alvarenga · ABENSENA · diagnóstico por imagem', t: 'Internalização do serviço de imagem com equipamentos VMI',
+      sub: 'Decisão pedida: internalizar o serviço pela ' + nomeAlt[best] + (best === 'D' ? ', assinando a locação junto com o aviso de 90 dias à EMG' : ', contratando depois da emissão do TDC') + (qR ? ', e decidir a ressonância à parte' : '') + '.',
+      b: [{ tipo: 'img', x: 1080, y: 40, w: 136, h: 88, src: LOGO.navy },
+        { tipo: 'txt', x: 56, y: 480, w: 1060, paras: ['Apresentação ao CEO · ' + mesAno + ' · S&S Partners', cenarioTxt(), 'Gerado da página "Viabilidade da internalização com equipamentos VMI" (' + origemTxt() + '). Os números mudam só na página; esta apresentação é refeita a cada abertura.'], tam: 15, cor: 'muted' }] });
+
+    /* 2 · recomendação */
+    var rec = [
+      '**Internalizar.** Hoje o serviço perde ' + mi(-emg.resultado * 12) + ' por ano; com a mesma receita, a imagem própria fecha em ' + R(prop.resultado) + ' por mês em regime.',
+      '**A ' + nomeAlt[best] + ' tem o maior valor:** ' + mi(fl(best).vplEnt) + ' para o hospital em ' + H + ' anos, contra ' + ord.slice(1).map(function (k) { return mi(fl(k).vplEnt) + ' na ' + curtoAlt[k]; }).join(' e ') + '.' + (perto ? ' A diferença para a ' + curtoAlt[ord[1]] + ' é pequena (' + mi(gap) + '): decidem as pendências, não o VPL.' : '') + (best !== sid ? ' O plano em números está montado sobre a ' + curtoAlt[sid] + '.' : ''),
+      '**A restrição é o crédito do hospital, não o projeto.** Em ' + l1.ano + ' o hospital cobre ' + X(l1.dscrSemProj) + ' do serviço da dívida; com o projeto, ' + X(l1.dscrSem) + '; com o TDC, ' + X(l1.dscrCom) + '. Contratar depois da emissão do TDC.'
+    ];
+    if (qR) rec.push('**Ressonância, decisão à parte.** ' + (rmLig ? 'Está no número: ' : 'Fora do número: ') + 'com as hipóteses atuais ela ' + (eqR.delta >= 0 ? 'soma ' : 'tira ') + mi(Math.abs(eqR.delta)) + ' na ' + curtoAlt[sid] + ' e empata com ' + N(eqR.volume) + ' exames de convênio por mês; depende de os planos voltarem a incluir a RM nos pacotes do HDA.');
+    rec.push('**Cenário:** ' + (pacsOn() ? 'PACS Sectra pela estimativa S&S (sem cotação)' : 'sem o PACS, que ainda não tem cotação (número otimista)') + '; ' + susNome(E.susModo(m)) + (E.susModo(m) === 'fora' ? ', como decidiu o CEO' : '') + '. As chaves estão no slide de cenários.');
+    lista.push({ nav: 'Recomendação', k: 'Recomendação', t: 'Internalizar vale ' + mi(fl(best).vplEnt) + ' para o hospital em ' + H + ' anos, pela ' + nomeAlt[best] + (perto ? ', quase empatada com a ' + curtoAlt[ord[1]] : ''), b: [
+      { tipo: 'kpis', x: 56, y: 150, w: 1168, h: 118, cols: 6, vtam: 20, itens: [
+        { lab: 'Resultado hoje, com a EMG', v: R(emg.resultado), sub: 'por mês · ' + mi(emg.resultado * 12) + ' por ano', cls: 'bad' },
+        { lab: 'Com imagem própria', v: R(prop.resultado), sub: 'por mês em regime, ' + (isD ? 'com o aluguel' : 'antes das parcelas'), cls: 'good' },
+        { lab: 'Ganho operacional', v: mi(c.ganhoMes * 12), sub: 'por ano · ' + R(c.ganhoMes) + ' por mês', cls: 'good' },
+        { lab: 'VPL para o hospital (' + sid + ')', v: mi(fl(sid).vplEnt), sub: H + ' anos a ' + P(m.fin.desconto, 0) + ', após as parcelas', cls: fl(sid).vplEnt > 0 ? 'good' : 'bad' },
+        { lab: 'TIR · payback (' + sid + ')', v: (fl(sid).tir == null ? '—' : P(fl(sid).tir, 0)) + ' · ' + (fl(sid).pb == null ? '—' : N(fl(sid).pb, 1) + ' a'), sub: 'do projeto', cls: '' },
+        { lab: 'Cobertura da dívida em ' + l1.ano, v: X(l1.dscrSemProj) + ' → ' + X(l1.dscrSem), sub: 'sem → com o projeto · com TDC ' + X(l1.dscrCom), cls: l1.dscrSem != null && l1.dscrSem < 1.3 ? 'warn' : 'good' }] },
+      { tipo: 'txt', x: 56, y: 296, w: 1168, bullets: rec, tam: 16.5 },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: pendentesN() + ' premissas ainda estão "a validar" com o hospital (slide de pendências). ' + cenarioTxt() + '.' }] });
+
+    /* 3 · situação atual */
+    var vol = m.volumes || {};
+    lista.push({ nav: 'Situação atual', k: 'Situação atual · EMG', t: 'Hoje o serviço dá prejuízo de ' + mi(-emg.resultado * 12) + ' por ano: a EMG fica com ' + P(emg.repasse / emg.rl, 0) + ' da receita e o hospital paga a estrutura', b: [
+      { tipo: 'g', x: 56, y: 150, w: 720, tit: 'Para onde vai a receita líquida hoje (R$ por mês)', f: function (el) { el.innerHTML = svgBars({ cats: ['Médicos', 'Material', 'Biópsias', 'Sala', 'Mat/Med', 'Fixos', 'Indiretos', 'Resultado'], series: [{ nome: 'Repasses à EMG: médicos, material, biópsias e médicos que usam a sala · custos do hospital: Mat/Med, fixos diretos e indiretos', vals: [emg.rep_med, emg.rep_mat, emg.rep_bio, emg.rep_sala, emg.matmed, emg.cf_dir, emg.cf_ind, emg.resultado], cor: 'var(--s-c)' }], fmt: function (v) { return mi(v); }, h: 330, labels: true, aria: 'Destino da receita' }); } },
+      { tipo: 'txt', x: 820, y: 150, w: 404, tam: 15, bullets: [
+        'Receita líquida de **' + R(emg.rl) + '** por mês: ' + N(emg.exames) + ' exames de convênio e particular a ' + R(m.base.ticket) + (emg.rbSus ? ', mais o SUS atual' : '') + '.',
+        'Repasses à EMG de **' + R(emg.repasse) + '** por mês: médicos ' + R(emg.rep_med) + ', médicos que usam a sala ' + R(emg.rep_sala) + ', material ' + R(emg.rep_mat) + ' e biópsias ' + R(emg.rep_bio) + '.',
+        'O hospital já paga a estrutura: ' + R(emg.cf_dir) + ' de equipe e fixos diretos e ' + R(emg.cf_ind) + ' de rateio por mês, que continuam em qualquer alternativa.',
+        'Volume de 2026: ' + N(+vol.rx26 + +vol.tc26 + +vol.us26) + ' exames por mês, todos os pagadores; a TC faz ' + N(c.tc.tcHoje) + ' por mês, ' + P(c.tc.tcHoje / c.tc.cap, 0) + ' da capacidade de uma TC nova.'] },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Base: DRE por unidade de negócio de jan–jun/2026 (Controladoria) em regime, preços do ano 2; volumes do Projeto Radiologia (Jaime).' }] });
+
+    /* 4 · DRE EMG × própria */
+    var dreL = [
+      ['Receita líquida', emg.rl, prop.rl, 'total'], ['(−) Mat/Med', -emg.matmed, -prop.matmed], ['(−) Repasse: médicos e laudo', -emg.rep_med, -prop.rep_med], ['(−) Repasse: material EMG', -emg.rep_mat, -prop.rep_mat], ['(−) Repasse: biópsias', -emg.rep_bio, -prop.rep_bio], ['(−) Médicos que usam a sala', -emg.rep_sala, -prop.rep_sala],
+      ['Margem de contribuição', emg.mc, prop.mc, 'total'], ['(−) Equipe e fixos diretos', -emg.cf_dir, -prop.cf_dir], [isD ? '(−) Aluguel dos equipamentos' : '(−) Manutenção pós-garantia', -(emg.manut + emg.aluguel), -(prop.manut + prop.aluguel)], ['(−) RIS (Touch Health)', -(emg.ris || 0), -(prop.ris || 0)], ['(−) PACS Sectra' + (pacsOn() ? ', por exame' : ' (fora)'), -(emg.pacs || 0), -(prop.pacs || 0)],
+      ['Margem direta', emg.margem_direta, prop.margem_direta, 'total'], ['(−) Custos indiretos (rateio)', -emg.cf_ind, -prop.cf_ind], ['Resultado (EBITDA)', emg.resultado, prop.resultado, 'total']];
+    var dreB = [
+      'Saem os repasses à EMG de material, biópsias e "médicos que usam a sala": **' + R(emg.rep_mat + emg.rep_bio + emg.rep_sala - prop.rep_mat - prop.rep_bio - prop.rep_sala) + '** por mês.',
+      'Fica o laudo: ' + P(m.propria.rep_med_pct, 1) + ' da receita para os radiologistas de dia e o telelaudo à noite (CEO, 20/10).',
+      'Entram ' + (isD ? 'o aluguel dos equipamentos (' + R(prop.aluguel) + ', ' + locTxt().manut + ')' : 'a manutenção pós-garantia (' + R(prop.manut) + ', plano ' + (sel.manut.plano === 'prata' ? 'Prata' : 'Ouro') + ')') + ', o RIS (' + R(prop.ris) + ')' + (pacsOn() ? ' e o PACS Sectra (' + R(prop.pacs) + ', estimativa S&S)' : '; o PACS está fora do número') + '.',
+      'Ganho de **' + R(c.ganhoMes) + '** por mês, ' + mi(c.ganhoMes * 12) + ' por ano, antes das parcelas.'];
+    if (prop.rbSus || prop.rbSusMais) dreB.push('Inclui o ' + susNome(E.susModo(m)) + ': ' + R((prop.rbSus || 0) + (prop.rbSusMais || 0)) + ' de receita bruta SUS por mês na imagem própria.');
+    lista.push({ nav: 'DRE: EMG × própria', k: 'Por que internalizar', t: 'Com a mesma receita, o resultado mensal passa de ' + R(emg.resultado) + ' com a EMG para ' + R(prop.resultado) + ' com imagem própria', b: [
+      { tipo: 'tab', x: 56, y: 150, w: 740, tam: 14, denso: true, cab: ['R$ por mês, em regime', 'EMG', 'Própria (' + sid + ')', 'Diferença'], larg: [0.43, 0.19, 0.19, 0.19], al: ['', 'n', 'n', 'n'],
+        rc: dreL.map(function (r) { return r[3] || ''; }), linhas: dreL.map(function (r) { var d = r[2] - r[1]; return [{ t: r[0] }, { t: R(r[1]), n: true }, { t: R(r[2]), n: true }, { t: (d >= 0 ? '+' : '') + R(d), n: true, cor: Math.abs(d) < 1 ? '' : d > 0 ? 'good' : 'bad' }]; }) },
+      { tipo: 'txt', x: 830, y: 150, w: 394, tam: 15, bullets: dreB },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Ano 2 de operação, preços corrigidos pelo IPCA (Focus). Custos fixos e indiretos iguais nos dois modelos: o hospital já os paga.' }] });
+
+    /* 5 · alternativas */
+    var linhaAlt = function (lab, f, rc) { return [{ t: lab }].concat(alts.map(function (k) { var v = f(k); return typeof v === 'object' ? v : { t: v, n: true }; })); };
+    var altRows = [
+      linhaAlt('Investimento em equipamentos', function (k) { return k === 'D' ? 'zero' : mi(c[k].capex); }),
+      linhaAlt('Dívida nova', function (k) { return k === 'D' ? 'nenhuma' : mi(c[k].capexFin) + (k === 'B' ? ' (fornecedor)' : ''); }),
+      linhaAlt('Custo do dinheiro ou aluguel', function (k) { return k === 'D' ? R(c.D.aluguel) + '/mês' : k === 'B' ? Pp(c.B.cetAno) + ' a.a. implícito' : 'CET ' + Pp(c.C.cetAno) + ' a.a.'; }),
+      linhaAlt('Prazo', function (k) { return k === 'B' ? c.B.n + ' meses' : k === 'C' ? (c.C.n || '—') + ' m, ' + (c.C.c || 0) + ' de carência' : c.D.n + ' meses'; }),
+      linhaAlt('Gasto mensal em ' + (+m.fin.ano_inicio), function (k) { return R(mediaMes(fl(k), 1)); }),
+      linhaAlt('Gasto mensal no 3º ano', function (k) { return R(mediaMes(fl(k), 3)); }),
+      linhaAlt('Cobertura do hospital em ' + l1.ano, function (k) { return X(e1(k)); }),
+      linhaAlt('Câmbio', function (k) { return k === 'B' ? 'TC em dólar' : 'nenhum'; }),
+      linhaAlt('VPL para o hospital, ' + H + ' anos', function (k) { return { t: mi(fl(k).vplEnt), n: true, b: true, cor: k === best ? 'good' : '' }; }),
+      linhaAlt('Caixa acumulado, ' + H + ' anos', function (k) { return mi(fl(k).acumEnt); })];
+    lista.push({ nav: 'Alternativas', k: 'Alternativas', t: 'A ' + nomeAlt[best] + ' tem o maior valor para o hospital: ' + mi(fl(best).vplEnt) + ' em ' + H + ' anos, ' + mi(gap) + ' acima da ' + curtoAlt[ord[1]], b: [
+      { tipo: 'tab', x: 56, y: 150, w: 790, tam: 14, cab: ['', 'B · GE, compra', 'C · VMI, compra', 'D · VMI, locação'], larg: [0.34, 0.22, 0.22, 0.22], al: ['', 'n', 'n', 'n'], rc: altRows.map(function (r, i) { return i === 8 ? 'total' : ''; }), linhas: altRows },
+      { tipo: 'g', x: 880, y: 150, w: 344, tit: 'VPL para o hospital, ' + H + ' anos', f: function (el) { el.innerHTML = svgHBars(alts.map(function (k) { return { nome: k + ' · ' + { B: 'GE', C: 'VMI compra', D: 'VMI locação' }[k], v: fl(k).vplEnt, cor: ALT_COR[k] }; }), function (v) { return mi(v); }, 344); } },
+      { tipo: 'txt', x: 880, y: 360, w: 344, tam: 14, bullets: [
+        'A locação dispensa investimento e dívida nova e traz a manutenção no aluguel, mas cobra desde a instalação e troca o equipamento a cada ' + c.D.n + ' meses.',
+        'Para empatar com a compra C, o aluguel teria de ser ' + R(c.D.equilibrioC) + ' por mês (hoje ' + R(c.D.aluguel) + ').'] },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Gasto mensal = parcelas + manutenção (compra) ou aluguel (locação); ' + (+m.fin.ano_inicio) + ' em média de 12 meses, com a operação a partir de ' + fmtMes(goLive()) + '.' + (qR ? (rmLig ? ' Com a ressonância.' : ' Sem a ressonância.') : '') }] });
+
+    /* 6 · caixa acumulado */
+    var anosCat = fl(sid).anos.map(function (a) { return String(a.ano); });
+    var pos = fl(sid).anos.filter(function (a) { return a.acumE >= 0; })[0];
+    lista.push({ nav: 'Caixa acumulado', k: 'Retorno', t: 'Na ' + curtoAlt[sid] + ', o caixa do hospital ' + (pos ? 'fica positivo em ' + pos.ano : 'não fica positivo no horizonte') + ' e acumula ' + mi(fl(sid).acumEnt) + ' em ' + H + ' anos, já descontadas as parcelas', b: [
+      { tipo: 'g', x: 56, y: 150, w: 820, tit: 'Caixa acumulado para o hospital (R$, nominal)', f: function (el) { el.innerHTML = svgLines({ cats: anosCat, series: alts.map(function (k) { return { nome: { B: 'B · compra GE', C: 'C · compra VMI', D: 'D · locação VMI' }[k], vals: fl(k).anos.map(function (a) { return a.acumE; }), cor: ALT_COR[k], dash: k !== sid }; }), fmt: function (v) { return mi(v); }, h: 380, aria: 'Caixa acumulado' }); } },
+      { tipo: 'txt', x: 910, y: 150, w: 314, tam: 15, bullets: alts.map(function (k) { var f = fl(k); return '**' + k + '** · ' + mi(f.acumEnt) + ' acumulados em ' + H + ' anos; VPL ' + mi(f.vplEnt) + (k !== 'D' && f.tir != null ? '; TIR do projeto ' + P(f.tir, 0) : '') + '; gasto com equipamentos de ' + R(mediaMes(f, 1)) + ' por mês em ' + f.anos[0].ano + '.'; }).concat(['O investimento inicial com caixa (RIS, PACS' + (rmLig ? ', sala da RM' : '') + ') é de ' + mi(-fl(sid).ent[0]) + ' na ' + curtoAlt[sid] + '.']) },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Fluxo do hospital = ganho operacional sobre a EMG − manutenção ou aluguel − parcelas − investimento com caixa. IPCA do Focus em todos os caminhos; parcelas nominais.' }] });
+
+    /* 7 · plano em números */
+    var A = fl(sid).anos, temTrib = A.some(function (a) { return Math.abs(a.trib) > 1; }), temRM = rmLig && A.some(function (a) { return Math.abs(a.rmEbitda) > 1; });
+    var pl = [['Ganho operacional sobre a EMG', function (a) { return a.incBase; }]];
+    if (temRM) pl.push(['Ressonância (EBITDA)', function (a) { return a.rmEbitda; }]);
+    pl.push([isD ? '(−) Aluguel' : '(−) Manutenção pós-garantia', function (a) { return -a.opex; }], ['EBITDA incremental', function (a) { return a.inc; }, 'total']);
+    if (temTrib) pl.push(['(−) Tributos', function (a) { return -a.trib; }]);
+    if (!isD) pl.push(['(−) Parcelas do financiamento', function (a) { return -a.servico; }]);
+    if (A.some(function (a) { return Math.abs(a.invRMHosp) > 1; })) pl.push(['(−) Investimento com caixa', function (a) { return -a.invRMHosp; }]);
+    pl.push(['Caixa do hospital no ano', function (a) { return a.fce; }, 'total'], ['Caixa acumulado', function (a) { return a.acumE; }]);
+    if (!isD) pl.push(['Cobertura do projeto (EBITDA ÷ parcelas)', function (a) { return a.dscr; }, '', true]);
+    var wY = 0.66 / A.length;
+    lista.push({ nav: 'Plano em números', k: 'Plano em números · ' + curtoAlt[sid], t: 'Ano a ano, a ' + nomeAlt[sid] + ' soma ' + mi(A.reduce(function (s, a) { return s + a.inc; }, 0)) + ' de EBITDA incremental em ' + H + ' anos', b: [
+      { tipo: 'tab', x: 56, y: 150, w: 1168, tam: 12.5, denso: true, cab: ['R$ mil'].concat(A.map(function (a) { return String(a.ano); })), larg: [0.34].concat(A.map(function () { return wY; })), al: [''].concat(A.map(function () { return 'n'; })),
+        rc: pl.map(function (r) { return r[2] || ''; }), linhas: pl.map(function (r) { return [{ t: r[0] }].concat(A.map(function (a) { var v = r[1](a); return { t: r[3] ? (v == null ? '—' : X(v, 1)) : kR(v), n: true }; })); }) },
+      { tipo: 'nota', x: 56, y: 620, w: 1168, texto: 'Ano ' + A[0].ano + ' com a operação a partir de ' + fmtMes(goLive()) + ' (meses anteriores ainda com a EMG). Investimento inicial com caixa no ano 0: ' + mi(-fl(sid).ent[0]) + '. Valores nominais, IPCA do Focus; negativos entre parênteses.' }] });
+
+    /* 8 · financiamento */
+    var av = c.C.av, fe = fgtsEstado(), cf = c.cenFIIS, la = c.lcdAuto, sC = c.C.escolha;
+    if (sC) {
+      var rk = av.ranking.slice(0, 5).map(function (x) { var s = x.sim; return [{ t: String(x.rank), c: true }, { t: x.linha.nome, b: x.linha.id === sC.linha.id }, { t: rotCusto(s.custo) }, { t: Pp(s.cet), n: true }, { t: Pp(s.custoTotal), n: true }, { t: s.n + ' · ' + s.c, c: true }]; });
+      rk.push([{ t: 'B', c: true }, { t: 'Financiamento dos fornecedores (HFS/GE)' }, { t: 'implícito' }, { t: Pp(c.B.cetAno), n: true }, { t: '—', n: true }, { t: c.B.n + ' · 0', c: true }]);
+      var finB = [];
+      finB.push('**FGTS-Saúde:** ' + (fe.st === 'na' ? 'não se aplica' : fe.txt) + '.');
+      if (cf && cf.pedido) finB.push('**FIIS Saúde:** ' + (cf.emUso ? 'em uso no plano.' : 'só para proponentes da Chamada Pública de 2025; se o HDA tiver proposta habilitada, o VPL de C muda ' + sgnMi(cf.pedido.delta) + '.'));
+      if (la && !la.emUso) finB.push('**BNDES Automático:** a Taxa LCD só fica mais barata que a linha em uso com sobretaxa abaixo de ' + Pp(la.empate) + '; serve se entrar obra ou instalação.');
+      if (+m.altC.prazo > (c.C.n || 0) || +m.altC.carencia > (c.C.c || 0)) finB.push('**Prazo pedido de ' + m.altC.prazo + ' meses e ' + m.altC.carencia + ' de carência:** a linha em uso vai até ' + c.C.n + ' e ' + c.C.c + '; prazos maiores só no Automático, a custo maior.');
+      if (c.C.cfi && (c.C.cfi.sem > 0 || c.C.cfi.prev > 0)) finB.push('**Código FINAME (CFI):** ' + [c.C.cfi.prevItens.length ? c.C.cfi.prevItens.join(', ') + ' com código previsto' : '', c.C.cfi.semItens.length ? c.C.cfi.semItens.join(' e ') + ' fora do catálogo' : ''].filter(Boolean).join('; ') + '.');
+      lista.push({ nav: 'Financiamento', k: 'Financiamento da compra VMI (C)', t: 'O pacote VMI se financia pelo ' + linhaC + ' a ' + Pp(c.C.cetAno) + ' ao ano, em ' + c.C.n + ' meses com ' + (c.C.c || 0) + ' de carência', b: [
+        { tipo: 'kpis', x: 56, y: 150, w: 1168, h: 100, cols: 5, vtam: 20, itens: [
+          { lab: 'Valor financiado', v: mi(c.C.capexFin), sub: rmLig && c.C.rmFin ? 'pacote ' + mi(c.C.capexFin - c.C.capexFinRM) + ' + RM ' + mi(c.C.capexFinRM) : 'pacote VMI', cls: '' },
+          { lab: 'Custo efetivo (CET)', v: Pp(c.C.cetAno), sub: 'ao ano · ' + rotCusto(sC.sim.custo), cls: 'good' },
+          { lab: 'Prazo · carência', v: c.C.n + ' · ' + (c.C.c || 0) + ' m', sub: 'pedido: ' + m.altC.prazo + ' · ' + m.altC.carencia + ' meses', cls: '' },
+          { lab: 'Parcela', v: R(c.C.parcela), sub: 'depois da carência · ' + R(c.C.primeira) + ' na carência', cls: '' },
+          { lab: 'Taxa de êxito S&S', v: R(c.C.honor), sub: P(+m.altC.honorario_pct, 2) + ' do captado, tributos inclusos', cls: '' }] },
+        { tipo: 'tab', x: 56, y: 276, w: 760, tam: 13, denso: true, cab: ['#', 'Linha', 'Custo financeiro', 'CET a.a.', 'Custo total', 'Prazo · car.'], larg: [0.05, 0.43, 0.14, 0.12, 0.13, 0.13], al: ['c', '', '', 'n', 'n', 'c'], hl: rk.map(function (r) { return r[1].b; }), linhas: rk },
+        { tipo: 'txt', x: 846, y: 276, w: 378, tam: 13.5, bullets: finB },
+        { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Motor da ferramenta Financiamento VMI, base de linhas ' + BASE.versao + '. Custo total inclui IOF, tarifas e a taxa de êxito; ranking das linhas elegíveis para o HDA.' }] });
+    }
+
+    /* 9 · crédito do hospital */
+    var L = c.ent.linhas, catsC = L.slice(0, Math.min(L.length, 6)).map(function (l) { return String(l.ano); });
+    lista.push({ nav: 'Crédito do hospital', k: 'Capacidade de crédito', t: 'O projeto se paga; a questão do banco é a dívida atual: em ' + l1.ano + ' o hospital cobre ' + X(l1.dscrSemProj) + ' do serviço, ' + X(l1.dscrSem) + ' com o projeto e ' + X(l1.dscrCom) + ' com o TDC', b: [
+      { tipo: 'g', x: 56, y: 150, w: 720, tit: 'Cobertura do serviço da dívida (EBITDA ÷ parcelas do ano)', f: function (el) { el.innerHTML = svgLines({ cats: catsC, series: [{ nome: 'Sem o projeto', vals: L.slice(0, catsC.length).map(function (l) { return l.dscrSemProj == null ? null : Math.min(l.dscrSemProj, 6); }), cor: 'var(--s-a)', dash: true }, { nome: 'Com o projeto, sem TDC', vals: L.slice(0, catsC.length).map(function (l) { return l.dscrSem == null ? null : Math.min(l.dscrSem, 6); }), cor: 'var(--s-b)' }, { nome: 'Com o projeto e o TDC', vals: L.slice(0, catsC.length).map(function (l) { return l.dscrCom == null ? null : Math.min(l.dscrCom, 6); }), cor: 'var(--s-c)' }], fmt: function (v) { return X(v, 1); }, ref: { v: 1.3, label: 'referência dos agentes 1,3x' }, h: 340, aria: 'DSCR' }); } },
+      { tipo: 'kpis', x: 810, y: 150, w: 414, h: 190, cols: 2, vtam: 19, itens: [
+        { lab: 'Dívida líquida', v: mi(c.ent.dl), sub: X(c.ent.dlEbitda) + ' o EBITDA', cls: c.ent.dlEbitda > 3 ? 'bad' : 'warn' },
+        { lab: 'EBITDA anualizado', v: mi(c.ent.ebitdaBase), sub: 'DRE gerencial jan–ago/26', cls: '' },
+        { lab: 'TDC', v: mi(m.entidade.tdc_min), sub: 'em ' + m.entidade.tdc_mes + ' · liquida ' + P(m.entidade.tdc_liquida, 0) + ' da dívida', cls: 'good' },
+        { lab: 'Dívida líquida após o TDC', v: mi(c.ent.dlAposTdc), sub: 'o financiamento vira a única dívida longa', cls: 'good' }] },
+      { tipo: 'txt', x: 810, y: 364, w: 414, tam: 14.5, bullets: [
+        'O projeto soma ' + mi(l1.inc) + ' de EBITDA no 1º ano e pede ' + mi(l1.servNovo) + ' de parcelas: melhora a cobertura mesmo sem o TDC.',
+        'O agente vai olhar o TDC, a garantia real (imóvel) ou o FGI antes de aprovar.',
+        'Sequência: protocolar com o TDC emitido e desembolsar na entrega dos equipamentos.'] },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Entidade: mapa de empréstimos de dez/2025 e balanço de ago/2026 (deck do Conselho). Valores acima de 6x cortados no gráfico.' }] });
+
+    /* 10 · ressonância */
+    if (qR) {
+      var rr = m.rm, dsc = function (x, i) { return X(x.dscr[i].v); }, rmS = rmSusDelta(sid), ri = c.rm.isolada;
+      var rmRows = [
+        [{ t: 'VPL para o hospital, sem RM' }].concat(alts.map(function (k) { return { t: mi(qR.sem[k].vplEnt), n: true }; })),
+        [{ t: 'VPL para o hospital, com RM' }].concat(alts.map(function (k) { return { t: mi(qR.com[k].vplEnt), n: true }; })),
+        [{ t: 'Diferença', b: true }].concat(alts.map(function (k) { var d = qR.eq[k].delta; return { t: sgnMi(d), n: true, b: true, cor: d >= 0 ? 'good' : 'bad' }; })),
+        [{ t: 'Cobertura em ' + qR.sem.C.dscr[1].ano + ', sem → com RM' }].concat(alts.map(function (k) { return { t: dsc(qR.sem[k], 1) + ' → ' + dsc(qR.com[k], 1), n: true }; })),
+        [{ t: 'Dívida nova com a RM' }].concat(alts.map(function (k) { return { t: k === 'D' ? 'nenhuma' : mi(qR.com[k].fin), n: true }; })),
+        [{ t: 'Equilíbrio (exames de convênio/mês)' }].concat(alts.map(function (k) { return { t: N(qR.eq[k].volume), n: true }; }))];
+      var rmB = [
+        'Premissas (hipóteses S&S a validar): ' + N(rr.exames_mes) + ' exames de convênio e particular por mês a ' + R(rr.ticket) + ', ' + P(rr.rampa1, 0) + ' no 1º ano e ' + P(rr.rampa2, 0) + ' no 2º; aprovação em ' + fmtMes(rr.aprovacao) + ', operação em ' + fmtMes(E.mesRMStr(m)) + '.',
+        'Em ' + sid + ', a RM empata com ' + N(eqR.volume) + ' exames por mês, ou ticket de ' + R(eqR.ticket) + ', ou preço de ' + mi(eqR.preco) + ' (informado: ' + mi(qR.p0) + '; referências de R$ 4,33 a 4,9 mi).'];
+      if (rmS) rmB.push('Com ' + N((m.sus || {}).rm_mes) + ' RMs por mês do SUS pelo Agora Tem Especialistas (R$ ' + NF2.format(+(m.sus || {}).rm_valor || 0) + '), a RM passa de ' + sgnMi(rmS.sem) + ' para ' + sgnMi(rmS.com) + ' em ' + sid + '.');
+      rmB.push('Condição: o HDA negociar com os planos de saúde a volta da RM aos pacotes de reembolso, de onde ela saiu recentemente.');
+      lista.push({ nav: 'Ressonância', k: 'Ressonância magnética · Cignus 600 sem hélio', t: 'Com as hipóteses atuais, a ressonância ' + (eqR.delta >= 0 ? 'soma ' : 'tira ') + mi(Math.abs(eqR.delta)) + ' do valor da ' + curtoAlt[sid] + ' e só empata com ' + N(eqR.volume) + ' exames por mês: decisão à parte', b: [
+        { tipo: 'tab', x: 56, y: 150, w: 720, tam: 14, cab: ['', 'B · GE', 'C · VMI compra', 'D · VMI locação'], larg: [0.37, 0.21, 0.21, 0.21], al: ['', 'n', 'n', 'n'], rc: ['', '', 'total', '', '', ''], linhas: rmRows },
+        { tipo: 'txt', x: 810, y: 150, w: 414, tam: 14.5, bullets: rmB },
+        { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Cenário ' + (rmLig ? 'com' : 'sem') + ' RM na página. Na compra, a RM entra num segundo contrato da mesma linha, liberado na entrega; na locação, o aluguel segue o proxy da TC.' + (ri ? ' Sozinha, sem financiamento: VPL de ' + mi(ri.vpl) + '.' : '') }] });
+    }
+
+    /* 11 · chaves de cenário */
+    var melhor = function (o) { return alts.slice().sort(function (a, b) { return o[b].vplEnt - o[a].vplEnt; })[0]; };
+    var chRows = [], chRc = [], chHl = [], melhores = [], grupo = null, muda = [];
+    var linhaCh = function (lab, o, atual) { var bst = melhor(o); melhores.push(bst); if (bst !== best && muda.filter(function (x) { return x.g === grupo; }).length === 0) muda.push({ g: grupo, lab: lab, bst: bst }); chRows.push([{ t: lab + (atual ? ' (atual)' : ''), b: atual }].concat(alts.map(function (k) { return { t: mi(o[k].vplEnt), n: true, b: k === bst }; })).concat([{ t: bst + ' · ' + { B: 'GE', C: 'VMI compra', D: 'VMI locação' }[bst], c: true }])); chRc.push(''); chHl.push(!!atual); };
+    var secCh = function (t, g) { grupo = g; chRows.push([{ t: t }]); chRc.push('sec'); chHl.push(false); };
+    if (qP) { secCh('PACS Sectra (estimativa S&S, sem cotação)', 'o PACS'); linhaCh('Com PACS', qP.com, qP.on); linhaCh('Sem PACS', qP.sem, !qP.on); }
+    if (qS) { secCh('SUS', 'o SUS'); linhaCh('Fora (decisão do CEO)', qS.v.fora, qS.modo === 'fora'); linhaCh('SUS atual', qS.v.atual, qS.modo === 'atual'); linhaCh('SUS atual + Agora Tem Especialistas', qS.v.ate, qS.modo === 'ate'); }
+    if (qR) { secCh('Ressonância', 'a ressonância'); linhaCh('Sem RM', qR.sem, !rmLig); linhaCh('Com RM', qR.com, rmLig); }
+    var gruposTodos = [qP ? 'o PACS' : null, qS ? 'o SUS' : null, qR ? 'a ressonância' : null].filter(Boolean), gruposMuda = muda.map(function (x) { return x.g; });
+    var listaE = function (a) { return a.length > 1 ? a.slice(0, -1).join(', ') + ' e ' + a[a.length - 1] : a[0]; }, cap = function (t) { return t.charAt(0).toUpperCase() + t.slice(1); };
+    var tCh = !muda.length ? cap(listaE(gruposTodos)) + ' mudam o tamanho do ganho, não a escolha: a ' + curtoAlt[best] + ' fica à frente em todos os cenários'
+      : cap(listaE(gruposMuda)) + ' ' + (gruposMuda.length > 1 ? 'mudam' : 'muda') + ' a escolha: ' + muda.map(function (x) { return x.lab.charAt(0).toLowerCase() + x.lab.slice(1) + ', a melhor passa a ser a ' + curtoAlt[x.bst]; }).join('; ') + (gruposTodos.length > gruposMuda.length ? '. ' + cap(listaE(gruposTodos.filter(function (g) { return gruposMuda.indexOf(g) < 0; }))) + ' só ' + (gruposTodos.length - gruposMuda.length > 1 ? 'mudam' : 'muda') + ' o tamanho do ganho' : '');
+    lista.push({ nav: 'Cenários', k: 'Chaves de cenário', t: tCh, b: [
+      { tipo: 'tab', x: 56, y: 150, w: 1168, tam: 14.5, cab: ['VPL para o hospital, ' + H + ' anos', 'B · GE, compra', 'C · VMI, compra', 'D · VMI, locação', 'Melhor'], larg: [0.36, 0.16, 0.16, 0.16, 0.16], al: ['', 'n', 'n', 'n', 'c'], rc: chRc, hl: chHl, linhas: chRows },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Cada linha muda uma chave e mantém as outras como no cenário atual (destacado). As chaves ficam na Tese e em Premissas.' }] });
+
+    /* 12 · sensibilidade */
+    var sens = sensDeck(), top = sens.itens.slice(0, 3);
+    lista.push({ nav: 'Sensibilidade', k: 'Sensibilidade', t: 'O que mais move o valor do projeto é ' + (top[0] ? top[0].nome.toLowerCase() : 'o volume') + (top[1] ? ', seguido de ' + top[1].nome.toLowerCase() : ''), b: [
+      { tipo: 'g', x: 56, y: 150, w: 860, f: function (el) { el.innerHTML = svgTornado(sens.itens, function (v) { return mi(v); }); } },
+      { tipo: 'txt', x: 950, y: 150, w: 274, tam: 14.5, bullets: top.map(function (it) { return '**' + it.nome + '** (' + it.loTxt + ' → ' + it.hiTxt + '): de ' + sgnMi(it.lo) + ' a ' + sgnMi(it.hi) + '.'; }) },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'VPL do projeto (' + sid + ') de ' + mi(sens.base) + '. Cada barra move uma premissa por vez, mantendo as demais; vermelho reduz, verde aumenta.' }] });
+
+    /* 13 · premissas-chave */
+    var pr = [
+      ['base.exames', 'Exames por mês, convênio e particular', N(+m.base.exames / +m.base.meses)],
+      ['base.ticket', 'Ticket médio', R(m.base.ticket)],
+      ['cenario.volume_var', 'Variação de volume no cenário', (m.cenario.volume_var >= 0 ? '+' : '') + P(m.cenario.volume_var, 0)],
+      ['propria.rep_med_pct', 'Laudo na imagem própria (% da receita)', P(m.propria.rep_med_pct, 1)],
+      ['base.cf_dir_mes', 'Equipe técnica e fixos diretos', R(m.base.cf_dir_mes) + '/mês'],
+      ['manut.plano', 'Manutenção pós-garantia (C)', (c.C.manut.plano === 'prata' ? 'Prata' : 'Ouro') + ', ' + R(c.C.manut.mes) + '/mês'],
+      ['propria.rispacs_mes', 'RIS (Touch Health)', R(m.propria.rispacs_mes) + '/mês + ' + mi(+m.propria.rispacs_impl || 0)],
+      ['propria.pacs_exame', 'PACS Sectra Standard', pacsOn() ? 'R$ ' + NF2.format(+m.propria.pacs_exame || 0) + '/exame + ' + mi(+m.propria.pacs_impl || 0) : 'fora do modelo'],
+      ['fin.inicio_op_mes', 'Início da operação própria', fmtMes(goLive())],
+      ['altC.prazo', 'Financiamento pedido (C)', m.altC.prazo + ' meses, ' + m.altC.carencia + ' de carência'],
+      ['altD.prazo', 'Locação (D)', c.D.n + ' meses'],
+      ['fin.desconto', 'Taxa de desconto e horizonte', P(m.fin.desconto, 0) + ' a.a., ' + H + ' anos'],
+      ['cenario.reajuste_modo', 'Inflação nos fluxos', (m.cenario.reajuste_modo || 'ipca') === 'ipca' ? 'IPCA do Focus' : 'taxa fixa'],
+      ['sus.modo', 'SUS no modelo', susNome(E.susModo(m))],
+      ['entidade.tdc_min', 'TDC', mi(m.entidade.tdc_min) + ' em ' + m.entidade.tdc_mes]];
+    if (qR) pr.push(['rm.exames_mes', 'Ressonância', (rmLig ? 'incluída: ' : 'fora: ') + N(m.rm.exames_mes) + ' exames/mês a ' + R(m.rm.ticket)]);
+    var prRows = pr.map(function (r) { var s0 = sch(r[0]); return [{ t: r[1] }, { t: r[2], n: true }, { t: ORIG[s0.origem] || s0.origem || '—', c: true, cor: s0.origem === 'pendente' ? 'bad' : '' }]; });
+    lista.push({ nav: 'Premissas-chave', k: 'Premissas', t: 'Premissas-chave e de onde vêm: ' + pendentesN() + ' das ' + SCHEMA.length + ' premissas do modelo ainda estão a validar com o hospital', b: [
+      { tipo: 'tab', x: 56, y: 150, w: 1000, tam: 13.5, denso: true, cab: ['Premissa', 'Valor', 'Origem'], larg: [0.44, 0.36, 0.2], al: ['', 'n', 'c'], linhas: prRows },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Origem: Controladoria (planilha Viabilidade v2), Jaime (Projeto Radiologia), Conselho (deck de out/26), CEO (reunião de 20/10), VMI, fontes públicas e premissas S&S. Lista completa na aba Premissas.' }] });
+
+    /* 14 · riscos */
+    var rk2 = [
+      '**Janela sem TC na troca.** O contrato com a EMG pede 90 dias de aviso. Enviar o aviso só com o financiamento aprovado e a entrega firme (go-live em ' + fmtMes(goLive()) + ').',
+      pacsOn() ? '**PACS é estimativa, não cotação.** R$ ' + NF2.format(+m.propria.pacs_exame || 0) + ' por exame e ' + mi(+m.propria.pacs_impl || 0) + ' de implantação; tira ' + mi(qP ? -qP.delta[sid] : 0) + ' do VPL. Cotar a Sectra (a S&S representa a Sectra: declarado).' : '**PACS fora do número.** O hospital vai precisar de um PACS: com a estimativa S&S, o VPL cai ' + mi(qP ? -qP.delta[sid] : 0) + '. Trocar pela cotação assim que sair.',
+      '**Código FINAME da Pulsar.** O modelo assume o credenciamento até dez/2026. Se atrasar, a TC sai do FINAME' + (fe.st === 'fora' ? ' e vai para recurso próprio ou o BNDES Automático' : ' e vai para o FGTS-Saúde, se couber, ou recurso próprio') + '.',
+      '**Crédito antes do TDC.** Sem o TDC, a cobertura de ' + l1.ano + ' fica em ' + X(l1.dscrSem) + ' e o banco pode pedir garantia real ou adiar.'];
+    if (qR) rk2.push('**Ressonância depende de volume.** Empata com ' + N(eqR.volume) + ' exames por mês; validar a demanda e a volta da RM aos pacotes dos planos antes de comprar.');
+    if (best === 'B' || sid === 'B') rk2.push('**Câmbio no pacote GE.** A TC GE tem preço em dólar a R$ 5,1604 até o contrato.');
+    lista.push({ nav: 'Riscos', k: 'Riscos', t: 'O que pode dar errado e como evitar', b: [{ tipo: 'txt', x: 56, y: 156, w: 1168, tam: 18, bullets: rk2 }] });
+
+    /* 15+ · pendências que mudam o número (paginadas) */
+    var pend = (secao('Pendências que mudam o número').b || []).filter(function (p) { return !/^Fechadas com o CEO/.test(p); }), fech = (secao('Pendências que mudam o número').b || []).filter(function (p) { return /^Fechadas com o CEO/.test(p); })[0];
+    var totC = pend.reduce(function (a, p) { return a + semMd(p).length; }, 0), nPag = Math.max(1, Math.ceil(totC / 1700), Math.ceil(pend.length / 7)), porPag = Math.ceil(pend.length / nPag), pags = [];
+    for (var pi = 0; pi < pend.length; pi += porPag) pags.push(pend.slice(pi, pi + porPag));
+    pags.forEach(function (pg, i) {
+      lista.push({ nav: 'Pendências' + (pags.length > 1 ? ' (' + (i + 1) + '/' + pags.length + ')' : ''), k: 'Pendências que mudam o número' + (pags.length > 1 ? ' · ' + (i + 1) + ' de ' + pags.length : ''), t: i === 0 ? pend.length + ' pendências ainda mudam o número; cada uma com o efeito medido no modelo' : 'Pendências que mudam o número (continuação)', b: [
+        { tipo: 'txt', x: 56, y: 150, w: 1168, tam: 15, bullets: pg }].concat(i === pags.length - 1 && fech ? [{ tipo: 'nota', x: 56, y: 640, w: 1168, texto: fech }] : []) });
+    });
+
+    /* gates */
+    var gates = [
+      { t: 'Gate 0 · agora', itens: ['Aprovar a tese e o perímetro (TC, 2 ultrassons, RX móvel, RX digital, placa DR)', 'Formalizar as propostas VMI de compra e de locação; cotar RIS (Touch Health) e PACS (Sectra Standard)', 'Detalhar a folha da equipe técnica e confirmar o telelaudo'].concat(qR ? ['Ressonância à parte: planos de saúde, demanda, preço e projeto da sala'] : []) },
+      { t: 'Gate 1 · dez/26 a 1T27', itens: ['TDC emitido e negociação iniciada', 'Código FINAME da Pulsar publicado', 'Protocolar o FINAME com o kit de documentos (ou fechar a locação)'].concat(fe.st === 'cond' ? ['Responder as perguntas do FGTS-Saúde'] : []).concat(cf && cf.pedido && !cf.marcado ? ['Confirmar se há proposta na Chamada FIIS 2025'] : []) },
+      { t: 'Gate 2 · 2T27', itens: ['Contratar o financiamento e o pedido de compra, ou assinar a locação', 'Aviso de 90 dias à EMG casado com a entrega', 'Contratar manutenção, RIS e PACS'].concat(rmLig ? ['RM aprovada em ' + fmtMes(m.rm.aprovacao) + ', operação em ' + fmtMes(E.mesRMStr(m))] : []) },
+      { t: 'Gate 3 · operação', itens: ['Imagem própria em regime a partir de ' + fmtMes(goLive()), 'Indicadores: exames, espera, repetição, disponibilidade, custo por exame', 'Revisar as premissas a cada trimestre'] }];
+    var gw = (1168 - 3 * 18) / 4;
+    lista.push({ nav: 'Próximos passos', k: 'Próximos passos', t: 'Decisão em gates: aprovar agora só o Gate 0; cada etapa libera a seguinte', b: gates.map(function (g, i) { return { tipo: 'txt', x: 56 + i * (gw + 18), y: 150, w: gw, titulo: g.t, cor: i === 0 ? 'acc' : '', tam: 14.5, bullets: g.itens }; }).concat([{ tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Pedido de hoje: aprovar a tese e o Gate 0. A contratação (Gate 2) só depois do TDC e das cotações.' }]) });
+
+    /* fontes e método */
+    lista.push({ nav: 'Método e fontes', k: 'Método e fontes', t: 'Como o número foi feito', b: [
+      { tipo: 'txt', x: 56, y: 150, w: 560, titulo: 'Método', tam: 14.5, bullets: [
+        'Incremental: imagem própria menos o modelo atual com a EMG, com a mesma receita; custos fixos e indiretos iguais nos dois.',
+        'VPL para o hospital = fluxo depois de manutenção ou aluguel, parcelas e investimento com caixa, em ' + H + ' anos a ' + P(m.fin.desconto, 0) + ' a.a.',
+        'Inflação: IPCA do Focus em receitas, custos e aluguel; parcelas do financiamento nominais.',
+        'Financiamento: motor da ferramenta Financiamento VMI (base de linhas ' + BASE.versao + '), com IOF, tarifas e a taxa de êxito da S&S.',
+        'Cobertura da dívida do hospital: EBITDA anualizado ÷ parcelas do ano, com e sem o TDC.'] },
+      { tipo: 'txt', x: 664, y: 150, w: 560, titulo: 'Fontes', tam: 14.5, bullets: [
+        'Controladoria: DRE por unidade de negócio, jan–jun/2026 (planilha Viabilidade v2).',
+        'Projeto Radiologia e Proposta Estratégica (Jaime); deck da Reunião do Conselho de out/2026.',
+        'Respostas do CEO na reunião de 20/10/2026.',
+        'VMI: preços de 15/10/2026 e tabela de locação de 16/10/2026' + (qR ? '; Cignus 600 em 19/10/2026' : '') + '.',
+        'BNDES (Catálogo CFI, linhas e taxas), Manual de Fomento FGTS Saúde v002, Manual da Chamada FIIS Saúde 2025, Banco Central (Focus).'] },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Gerado em ' + hoje.toLocaleDateString('pt-BR') + ' da página "Viabilidade da internalização com equipamentos VMI" (S&S Partners), ' + origemTxt() + '. Para mudar um número, altere na página e abra a apresentação de novo.' }] });
+    return lista;
+  }
+
+  /* ---------- montagem de um slide ---------- */
+  function tabHtml(b) {
+    var r0 = b.linhas[0] || [], al = function (i) { if (b.al) return b.al[i] || ''; var c = r0[i] || {}; return c.n ? 'n' : (c.c ? 'c' : ''); };
+    var cel = function (c) { var t = esc(c.t == null ? '' : c.t).replace(/\n/g, '<br>'); return c.b ? '<b>' + t + '</b>' : t; };
+    var h = '<table class="sl-tab' + (b.denso ? ' dense' : '') + '" style="font-size:' + b.tam + 'px"><colgroup>' + b.larg.map(function (f) { return '<col style="width:' + (f * 100).toFixed(1) + '%">'; }).join('') + '</colgroup><thead><tr>' + b.cab.map(function (c, i) { return '<th class="' + al(i) + '">' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>';
+    b.linhas.forEach(function (ln, i) {
+      var rc = (b.rc && b.rc[i]) || '';
+      if (rc === 'sec') { h += '<tr class="sec"><td colspan="' + b.larg.length + '">' + esc(ln[0].t) + '</td></tr>'; return; }
+      h += '<tr class="' + ((b.hl && b.hl[i] ? 'hl ' : '') + rc).trim() + '">' + ln.map(function (c, k) { return '<td class="' + al(k) + '"' + (c.cor ? ' style="color:' + COR_TXT[c.cor] + '"' : '') + '>' + cel(c) + '</td>'; }).join('') + '</tr>';
+    });
+    return h + '</tbody></table>';
+  }
+  function txtHtml(b) {
+    return (b.titulo ? '<h3' + (b.cor && COR_TXT[b.cor] ? ' style="color:' + COR_TXT[b.cor] + '"' : '') + '>' + esc(b.titulo) + '</h3>' : '') + (b.bullets ? '<ul style="font-size:' + b.tam + 'px">' + b.bullets.map(function (x) { return '<li>' + mdInline(nbsp(x), true) + '</li>'; }).join('') + '</ul>' : '') + (b.paras || []).map(function (p) { return '<p style="font-size:' + b.tam + 'px' + (b.cor === 'muted' ? ';color:var(--fg-2)' : '') + '">' + mdInline(p, true) + '</p>'; }).join('');
+  }
+  function montarSlide(cont, s, i, n) {
+    cont.innerHTML = '';
+    var root = document.createElement('div'); root.className = 'sl' + (s.capa ? ' capa' : '');
+    root.innerHTML = '<div class="sl-k">' + esc(s.k || '') + '</div><h1 class="sl-t">' + esc(nbsp(s.t)) + '</h1>' + (s.sub ? '<p class="sl-sub">' + esc(s.sub) + '</p>' : '') + '<div class="sl-f"><span>Internalização da imagem · Hospital Dom Alvarenga · S&amp;S Partners</span><span>' + esc(origemTxt()) + '</span><span>' + (i + 1) + ' / ' + n + '</span></div>';
+    cont.appendChild(root);
+    var nos = [];
+    s.b.forEach(function (b) {
+      var d = document.createElement('div'); d.className = 'sb sb-' + b.tipo; d.style.cssText = 'left:' + b.x + 'px;top:' + b.y + 'px;width:' + b.w + 'px;' + (b.h ? 'height:' + b.h + 'px;' : '');
+      root.appendChild(d); nos.push(d);
+      if (b.tipo === 'g') { d.innerHTML = (b.tit ? '<div class="sb-tit">' + esc(b.tit) + '</div>' : '') + '<div class="chart"></div>'; b.f(d.querySelector('.chart')); }
+      else if (b.tipo === 'txt') d.innerHTML = txtHtml(b);
+      else if (b.tipo === 'kpis') d.innerHTML = '<div class="sl-kpis" style="grid-template-columns:repeat(' + b.cols + ',minmax(0,1fr))">' + b.itens.map(function (k) { return '<div class="sl-kpi"><span class="stripe ' + (k.cls || '') + '"></span><span class="lab">' + esc(k.lab) + '</span><span class="v"' + (b.vtam ? ' style="font-size:' + b.vtam + 'px"' : '') + '>' + esc(k.v) + '</span>' + (k.sub ? '<span class="sub">' + esc(k.sub) + '</span>' : '') + '</div>'; }).join('') + '</div>';
+      else if (b.tipo === 'tab') d.innerHTML = tabHtml(b);
+      else if (b.tipo === 'nota') d.innerHTML = '<p>' + esc(semMd(b.texto)) + '</p>';
+      else if (b.tipo === 'img') d.innerHTML = '<img alt="" src="' + b.src + '">';
+    });
+    return { root: root, nos: nos };
+  }
+
+  /* ---------- modo apresentação ---------- */
+  var ap = { lista: null, i: 0 };
+  function apAberta() { return !$('#apres').hidden; }
+  function apEscala() { var st = $('#apStage'), sl = $('#apSlide'); if (!st || !sl) return; var k = Math.min(st.clientWidth / 1280, st.clientHeight / 720); sl.style.transform = 'translate(-50%, -50%) scale(' + k + ')'; }
+  function apMostrar(i) {
+    ap.i = Math.max(0, Math.min(ap.lista.length - 1, i));
+    montarSlide($('#apSlide'), ap.lista[ap.i], ap.i, ap.lista.length);
+    $('#apNum').textContent = (ap.i + 1) + ' / ' + ap.lista.length; $('#apPrev').disabled = ap.i === 0; $('#apNext').disabled = ap.i === ap.lista.length - 1; $('#apIr').value = String(ap.i);
+    apEscala();
+  }
+  function apMontarLista() {
+    ap.lista = deckSlides();
+    $('#apIr').innerHTML = ap.lista.map(function (s, i) { return '<option value="' + i + '">' + (i + 1) + ' · ' + esc(s.nav || s.k) + '</option>'; }).join('');
+    $('#apVer').textContent = origemTxt();
+  }
+  function busy(msg) { var b = $('#busy'); if (msg) { b.querySelector('span').textContent = msg; b.hidden = false; } else b.hidden = true; }
+  function abrirApresentacao() {
+    if (!calc) return;
+    busy('Montando a apresentação com os números atuais…');
+    setTimeout(function () {
+      try { apMontarLista(); } catch (e) { busy(null); toast('Não consegui montar a apresentação: ' + (e && e.message || e)); return; }
+      busy(null);
+      var o = $('#apres'); o.hidden = false; document.body.classList.add('sem-rolagem');
+      apMostrar(0); $('#apNext').focus();
+      try { if (o.requestFullscreen && !document.fullscreenElement) o.requestFullscreen().catch(function () { }); } catch (e) { }
+      registrarUso('apresentacao');
+    }, 30);
+  }
+  function fecharApresentacao() { $('#apres').hidden = true; document.body.classList.remove('sem-rolagem'); try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () { }); } catch (e) { } }
+  /* números mudaram com a apresentação aberta (outra pessoa salvou, versão trocada): refaz no mesmo slide */
+  function apAtualizar() { if (!apAberta() || !ap.lista) return; try { apMontarLista(); apMostrar(ap.i); } catch (e) { } }
+  $('#btnApresentar').addEventListener('click', abrirApresentacao);
+  $('#apPrev').addEventListener('click', function () { apMostrar(ap.i - 1); });
+  $('#apNext').addEventListener('click', function () { apMostrar(ap.i + 1); });
+  $('#apIr').addEventListener('change', function () { apMostrar(+this.value); });
+  $('#apSair').addEventListener('click', fecharApresentacao);
+  $('#apPptx').addEventListener('click', function () { baixarPptx(); });
+  $('#apStage').addEventListener('click', function (e) { if (e.target.closest('a')) return; var r = $('#apStage').getBoundingClientRect(); apMostrar(ap.i + (e.clientX - r.left < r.width / 3 ? -1 : 1)); });
+  document.addEventListener('keydown', function (e) {
+    if (!apAberta()) return;
+    if (e.target && e.target.id === 'apIr') return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); apMostrar(ap.i + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); apMostrar(ap.i - 1); }
+    else if (e.key === 'Home') apMostrar(0); else if (e.key === 'End') apMostrar(ap.lista.length - 1);
+    else if (e.key === 'Escape') fecharApresentacao();
+  });
+  var toqueX = null;
+  $('#apStage').addEventListener('touchstart', function (e) { toqueX = e.touches[0].clientX; }, { passive: true });
+  $('#apStage').addEventListener('touchend', function (e) { if (toqueX == null) return; var dx = e.changedTouches[0].clientX - toqueX; toqueX = null; if (Math.abs(dx) > 40) { e.preventDefault(); apMostrar(ap.i + (dx < 0 ? 1 : -1)); } });
+  window.addEventListener('resize', function () { if (apAberta()) apEscala(); });
+  document.addEventListener('fullscreenchange', function () { setTimeout(apEscala, 60); });
+
+  /* ---------- PowerPoint (.pptx), das mesmas especificações ---------- */
+  var PX = 1 / 96, FONTE = 'Calibri', libsP = {}, ocupado = false;
+  function carregarLib(nome, global, urls) {
+    if (window[global]) return Promise.resolve(window[global]);
+    if (libsP[nome]) return libsP[nome];
+    libsP[nome] = new Promise(function (ok, fail) {
+      var i = 0;
+      (function prox() {
+        if (window[global]) { ok(window[global]); return; }
+        if (i >= urls.length) { libsP[nome] = null; fail(new Error('não consegui carregar ' + nome)); return; }
+        var s = document.createElement('script'); s.src = urls[i++]; s.onload = function () { if (window[global]) ok(window[global]); else prox(); }; s.onerror = prox; document.head.appendChild(s);
+      })();
+    });
+    return libsP[nome];
+  }
+  function carregarPptx() { return carregarLib('PptxGenJS', 'PptxGenJS', ['https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', 'https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js']); }
+  function corHex(v) { v = String(v || '').trim(); if (/^#[0-9a-f]{6}$/i.test(v)) return v.slice(1).toUpperCase(); if (/^#[0-9a-f]{3}$/i.test(v)) return v.slice(1).split('').map(function (c) { return c + c; }).join('').toUpperCase(); var mm = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(v); if (mm) return [mm[1], mm[2], mm[3]].map(function (x) { return (+x).toString(16).padStart(2, '0'); }).join('').toUpperCase(); return '15201F'; }
+  function corDe(v, cs) { var mm = /var\((--[\w-]+)\)/.exec(String(v || '')); return corHex(mm ? cs.getPropertyValue(mm[1]) : v); }
+  /* SVG → PNG: resolve as variáveis de cor e grava fonte e cor do texto (o CSS da página não vai junto) */
+  async function svgPng(svg, escala) {
+    var r = svg.getBoundingClientRect(), w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height)), cs = getComputedStyle(svg);
+    var cl = svg.cloneNode(true), orig = [svg].concat(Array.prototype.slice.call(svg.querySelectorAll('*'))), todos = [cl].concat(Array.prototype.slice.call(cl.querySelectorAll('*')));
+    todos.forEach(function (e, k) {
+      for (var a = 0; a < e.attributes.length; a++) { var at = e.attributes[a]; if (at.value.indexOf('var(') >= 0) e.setAttribute(at.name, at.value.replace(/var\((--[\w-]+)\)/g, function (m0, nm) { return cs.getPropertyValue(nm).trim() || '#15201f'; })); }
+      if (e.tagName && e.tagName.toLowerCase() === 'text' && orig[k]) { var st = getComputedStyle(orig[k]); e.setAttribute('font-family', 'Arial, Helvetica, sans-serif'); e.setAttribute('font-size', st.fontSize); if (!e.getAttribute('fill')) e.setAttribute('fill', st.fill); }
+    });
+    /* rótulos que passam da caixa do gráfico (eixo à esquerda, último ano à direita) aparecem na página, mas seriam cortados no PNG: amplia o viewBox até o conteúdo */
+    try {
+      var vb = svg.viewBox && svg.viewBox.baseVal;
+      if (vb && vb.width && vb.height) {
+        var bb = svg.getBBox(), sx = w / vb.width, sy = h / vb.height, pd = 3;
+        var x0 = Math.min(vb.x, bb.x - pd), y0 = Math.min(vb.y, bb.y - pd), x1 = Math.max(vb.x + vb.width, bb.x + bb.width + pd), y1 = Math.max(vb.y + vb.height, bb.y + bb.height + pd);
+        if (x0 < vb.x || y0 < vb.y || x1 > vb.x + vb.width || y1 > vb.y + vb.height) {
+          cl.setAttribute('viewBox', [x0, y0, x1 - x0, y1 - y0].join(' '));
+          w = Math.max(1, Math.round((x1 - x0) * sx)); h = Math.max(1, Math.round((y1 - y0) * sy));
+        }
+      }
+    } catch (e) { /* sem getBBox: mantém o tamanho da página */ }
+    cl.setAttribute('width', w); cl.setAttribute('height', h); cl.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    var img = new Image(), src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(cl));
+    await new Promise(function (ok, fail) { img.onload = ok; img.onerror = function () { fail(new Error('falha ao converter gráfico')); }; img.src = src; });
+    var cv = document.createElement('canvas'); cv.width = Math.round(w * escala); cv.height = Math.round(h * escala);
+    var ctx = cv.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height); ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    return { data: cv.toDataURL('image/png'), w: w, h: h };
+  }
+  function runsMd(t, base) { return String(t).split(/(\*\*.+?\*\*)/).filter(Boolean).map(function (p) { var bold = /^\*\*.+\*\*$/.test(p); return { text: bold ? p.slice(2, -2) : p, options: Object.assign({}, base, bold ? { bold: true } : {}) }; }); }
+  async function gerarPptx(so) {
+    var Pptx = await carregarPptx();
+    var pptx = new Pptx(); pptx.layout = 'LAYOUT_WIDE'; pptx.title = 'Internalização da imagem · Hospital Dom Alvarenga'; pptx.company = 'S&amp;S Partners'; /* o PptxGenJS 3.12 não escapa este campo */ pptx.subject = origemTxt();
+    var off = document.createElement('div'); off.className = 'apres-off'; document.body.appendChild(off);
+    var cs = getComputedStyle(off), cor = function (nm) { return corHex(cs.getPropertyValue(nm)); };
+    var C = { fg: cor('--fg'), fg2: cor('--fg-2'), fg3: cor('--fg-3'), acc: cor('--accent'), line: cor('--line'), s2: cor('--surface-2'), good: cor('--good'), bad: cor('--bad'), warn: cor('--warn'), soft: cor('--accent-soft') };
+    var vt = origemTxt();
+    pptx.defineSlideMaster({ title: 'HDA', background: { color: 'FFFFFF' }, objects: [
+      { line: { x: 56 * PX, y: 686 * PX, w: 1168 * PX, h: 0, line: { color: C.line, width: 0.75 } } },
+      { text: { text: 'Internalização da imagem · HDA · S&S Partners · gerado da página (' + vt + ') · não edite este arquivo: altere na página e gere de novo', options: { x: 56 * PX, y: 690 * PX, w: 1060 * PX, h: 22 * PX, fontSize: 8, color: C.fg3, fontFace: FONTE } } }
+    ], slideNumber: { x: 1160 * PX, y: 690 * PX, w: 64 * PX, h: 22 * PX, fontSize: 8, color: C.fg3, fontFace: FONTE, align: 'right' } });
+    var lista = deckSlides();
+    if (so) lista = lista.filter(function (x, k) { return so.indexOf(k) >= 0; }); /* só para testes */
+    try {
+      for (var i = 0; i < lista.length; i++) {
+        busy('Gerando o PowerPoint… slide ' + (i + 1) + ' de ' + lista.length);
+        var s = lista[i], mt = montarSlide(off, s, i, lista.length), sl = pptx.addSlide({ masterName: 'HDA' });
+        if (s.capa) {
+          sl.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.18, h: 7.5, fill: { color: C.acc }, line: { color: C.acc } });
+          sl.addText(s.k.toUpperCase(), { x: 56 * PX, y: 120 * PX, w: 1000 * PX, h: 28 * PX, fontSize: 11, color: C.acc, bold: true, fontFace: FONTE, charSpacing: 1 });
+          sl.addText(s.t, { x: 56 * PX, y: 160 * PX, w: 1000 * PX, h: 150 * PX, fontSize: 36, bold: true, color: C.fg, fontFace: FONTE, valign: 'top' });
+          sl.addText(s.sub, { x: 56 * PX, y: 330 * PX, w: 1000 * PX, h: 110 * PX, fontSize: 18, color: C.fg2, fontFace: FONTE, valign: 'top' });
+        } else {
+          sl.addText((s.k || '').toUpperCase(), { x: 56 * PX, y: 36 * PX, w: 1168 * PX, h: 24 * PX, fontSize: 10, color: C.acc, bold: true, fontFace: FONTE, charSpacing: 1 });
+          sl.addText(s.t, { x: 56 * PX, y: 60 * PX, w: 1168 * PX, h: 78 * PX, fontSize: 22, bold: true, color: C.fg, fontFace: FONTE, valign: 'top', fit: 'shrink' });
+        }
+        for (var j = 0; j < s.b.length; j++) {
+          var b = s.b[j], no = mt.nos[j], x = b.x * PX, y = b.y * PX, w = b.w * PX;
+          if (b.tipo === 'img') { sl.addImage({ data: b.src, x: x, y: y, w: w, h: b.h * PX, sizing: { type: 'contain', w: w, h: b.h * PX } }); }
+          else if (b.tipo === 'g') {
+            var yy = y;
+            if (b.tit) { sl.addText(b.tit, { x: x, y: y, w: w, h: 22 * PX, fontSize: 11, bold: true, color: C.fg, fontFace: FONTE }); yy = y + 26 * PX; }
+            var svg = no.querySelector('svg'); if (!svg) continue;
+            var leg = Array.prototype.slice.call(no.querySelectorAll('.legend span')), legH = leg.length ? 24 * PX : 0;
+            var png = await svgPng(svg, 2), iw = w, ih = png.h / png.w * w, maxH = (640 * PX) - yy - legH;
+            if (ih > maxH) { ih = maxH; iw = png.w / png.h * ih; }
+            sl.addImage({ data: png.data, x: x + (w - iw) / 2, y: yy, w: iw, h: ih });
+            if (leg.length) {
+              var lr = []; leg.forEach(function (sp, q) { var ic = sp.querySelector('i'); lr.push({ text: '■ ', options: { color: corDe(ic ? ic.style.background : '', cs), fontSize: 10 } }); lr.push({ text: sp.textContent + (q < leg.length - 1 ? '     ' : ''), options: { color: C.fg2, fontSize: 9 } }); });
+              sl.addText(lr, { x: x, y: yy + ih + 4 * PX, w: w, h: 20 * PX, fontFace: FONTE, valign: 'top', margin: 0 });
+            }
+          } else if (b.tipo === 'txt') {
+            var runs = [], fsz = Math.round(b.tam * 0.75);
+            if (b.titulo) runs.push({ text: b.titulo, options: { bold: true, fontSize: 14, color: b.cor && C[b.cor] ? C[b.cor] : (b.cor === 'acc' ? C.acc : C.fg), breakLine: true, paraSpaceAfter: 6 } });
+            (b.bullets || []).forEach(function (t) { var rs = runsMd(t, { fontSize: fsz, color: C.fg }); rs[0].options.bullet = { indent: 14 }; rs[0].options.paraSpaceAfter = 6; rs[rs.length - 1].options.breakLine = true; runs = runs.concat(rs); });
+            (b.paras || []).forEach(function (t) { var rs = runsMd(t, { fontSize: fsz, color: b.cor === 'muted' ? C.fg2 : C.fg }); rs[rs.length - 1].options.breakLine = true; rs[0].options.paraSpaceAfter = 6; runs = runs.concat(rs); });
+            var hh = Math.max(40, no.getBoundingClientRect().height) * PX + 0.1;
+            sl.addText(runs, { x: x, y: y, w: w, h: Math.min(hh, (680 - b.y) * PX), fontFace: FONTE, valign: 'top', margin: 2, fit: 'shrink' });
+          } else if (b.tipo === 'kpis') {
+            var gap = 12, cols = b.cols, nl = Math.ceil(b.itens.length / cols), cw = (b.w - gap * (cols - 1)) / cols, chh = (b.h - gap * (nl - 1)) / nl;
+            b.itens.forEach(function (k, q) {
+              var cx = (b.x + (q % cols) * (cw + gap)) * PX, cy = (b.y + Math.floor(q / cols) * (chh + gap)) * PX, cwi = cw * PX, chi = chh * PX;
+              sl.addShape(pptx.ShapeType.rect, { x: cx, y: cy, w: cwi, h: chi, fill: { color: 'F6F8F7' }, line: { color: 'E6EBE9', width: 0.75 } });
+              sl.addShape(pptx.ShapeType.rect, { x: cx, y: cy + 0.1, w: 0.04, h: chi - 0.2, fill: { color: C[k.cls] || C.acc }, line: { color: C[k.cls] || C.acc } });
+              sl.addText([{ text: k.lab, options: { fontSize: 9, color: C.fg2, breakLine: true } }, { text: k.v, options: { fontSize: 16, bold: true, color: C.fg, breakLine: true } }, { text: k.sub || '', options: { fontSize: 8, color: C.fg2 } }], { x: cx + 0.1, y: cy + 0.04, w: cwi - 0.16, h: chi - 0.08, fontFace: FONTE, valign: 'top', margin: 2, fit: 'shrink' });
+            });
+          } else if (b.tipo === 'tab') {
+            var fs = Math.max(7, Math.round(b.tam * 0.72 * 10) / 10), ncol = b.larg.length, r0 = b.linhas[0] || [];
+            var alin = function (q, c0) { var a = b.al ? b.al[q] : (c0 && c0.n ? 'n' : (c0 && c0.c ? 'c' : '')); return a === 'n' ? 'right' : (a === 'c' ? 'center' : 'left'); };
+            var mv = b.denso ? 2 : 3, mg = function (al) { return al === 'right' ? [mv, 6, mv, 2] : [mv, 3, mv, 5]; };
+            var rows = [b.cab.map(function (c0, q) { var al0 = alin(q, r0[q]); return { text: c0, options: { bold: true, color: C.fg2, fill: { color: 'E9EEEC' }, align: al0, fontSize: fs, margin: mg(al0) } }; })];
+            b.linhas.forEach(function (ln, q) {
+              var rc = (b.rc && b.rc[q]) || '';
+              if (rc === 'sec') { rows.push([{ text: ln[0].t, options: { colspan: ncol, bold: true, color: C.fg2, fill: { color: 'EEF2F1' }, align: 'left', valign: 'middle', fontSize: fs, margin: mg('left') } }]); return; }
+              rows.push(ln.map(function (c0, k) {
+                var o = { fontSize: fs, color: C.fg, bold: !!c0.b || rc === 'total', align: alin(k, c0), valign: 'middle' };
+                o.margin = mg(o.align);
+                if (rc === 'sub') o.color = C.fg2;
+                if (rc === 'total') o.fill = { color: 'F3F6F5' };
+                if (b.hl && b.hl[q]) o.fill = { color: C.soft };
+                if (c0.cor && C[c0.cor]) o.color = C[c0.cor];
+                return { text: c0.t == null ? '' : String(c0.t), options: o };
+              }));
+            });
+            sl.addTable(rows, { x: x, y: y, w: w, colW: b.larg.map(function (f) { return f * w; }), fontFace: FONTE, border: { type: 'solid', pt: 0.5, color: 'E6EBE9' }, margin: [mv, 3, mv, 5], autoPage: false });
+          } else if (b.tipo === 'nota') {
+            sl.addText(semMd(b.texto), { x: x, y: y, w: w, h: 34 * PX, fontSize: 8.5, color: C.fg3, fontFace: FONTE, valign: 'top', margin: 1 });
+          }
+        }
+      }
+    } finally { off.remove(); }
+    return pptx.write({ outputType: 'blob' });
+  }
+  async function baixarPptx() {
+    if (ocupado) return; ocupado = true; busy('Carregando o gerador de PowerPoint…');
+    try { var blob = await gerarPptx(); busy(null); salvarArquivo('HDA_apresentacao_CEO_' + new Date().toISOString().slice(0, 10) + '.pptx', blob, 'Apresentação salva (' + origemTxt() + ').'); registrarUso('export', { doc: 'pptx' }); }
+    catch (err) { busy(null); toast('Não consegui gerar o PowerPoint: ' + ((err && (err.message || err.code)) || 'erro')); }
+    finally { ocupado = false; }
+  }
+  window.HDA_DECK = { slides: function () { return deckSlides(); }, abrir: abrirApresentacao, pptx: gerarPptx };
 
   /* ================= boot ================= */
   $('#logoTopo').src = LOGO.navy;

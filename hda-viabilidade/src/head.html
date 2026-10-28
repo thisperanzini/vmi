@@ -153,6 +153,65 @@ footer { color: var(--fg-3); font-size: 12px; padding-top: 10px; border-top: 1px
 .ver { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 8px 0; border-bottom: 1px solid var(--line-2); font-size: 13px; align-items: center; }
 .ver:last-child { border-bottom: 0; } .ver .meta { font-size: 11.5px; color: var(--fg-3); }
 @media (max-width: 640px) { .kpi .v { font-size: 21px; } h1 { font-size: 19px; } }
+
+/* apresentação (slides 1280×720 gerados do modelo; o .pptx sai das mesmas especificações) */
+.sem-rolagem { overflow: hidden; }
+.busy { position: fixed; inset: 0; background: rgba(10, 14, 13, .45); z-index: 120; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.busy > div { background: var(--surface); color: var(--fg); padding: 16px 20px; border-radius: 10px; box-shadow: var(--shadow); display: flex; gap: 12px; align-items: center; font-size: 14px; }
+.spin { width: 18px; height: 18px; border: 2.5px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: gira .8s linear infinite; flex: none; }
+@keyframes gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+.apres { position: fixed; inset: 0; z-index: 90; background: #0b0f0e; display: flex; flex-direction: column; }
+.apres-stage { position: relative; flex: 1; overflow: hidden; cursor: pointer; }
+.apres-slide { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform-origin: center center; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
+.apres-bar { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); background: #0b0f0e; color: #c9d3d0; font-size: 12px; }
+.apres-bar button { background: #1d2523; color: #e9efed; border-color: #34403d; }
+.apres-bar select { background: #1d2523; color: #e9efed; border-color: #34403d; max-width: 260px; }
+.apres-bar .apres-v { color: #8e9a96; }
+.apres-off { position: fixed; left: -30000px; top: 0; width: 1280px; height: 720px; pointer-events: none; }
+.sl, .apres-off {
+  --bg: #f3f5f4; --surface: #ffffff; --surface-2: #e9eeec; --line: #d4dbd8; --line-2: #e6ebe9;
+  --fg: #15201f; --fg-2: #52605c; --fg-3: #87938f;
+  --accent: #0e6b84; --accent-ink: #ffffff; --accent-soft: #dceef3; --accent-line: #9bc9d8;
+  --good: #0d8a0d; --warn: #a86f00; --bad: #c43535; --bad-soft: #fde8e8; --good-soft: #e4f6e4; --warn-soft: #fff1d6;
+  --s-a: #87938f; --s-b: #eb6834; --s-c: #0e6b84; --s-d: #1baf7a; --s-e: #2a78d6; --grid: #e3e8e6;
+  color-scheme: light;
+}
+.sl { position: relative; width: 1280px; height: 720px; background: #ffffff; color: var(--fg); font-family: var(--font); font-size: 16px; overflow: hidden; }
+.sl-k { position: absolute; left: 56px; top: 34px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.sl-t { position: absolute; left: 56px; top: 58px; width: 1168px; font-family: var(--font-cond); font-size: 29px; line-height: 1.18; font-weight: 600; color: var(--fg); margin: 0; }
+.sl.capa { background: linear-gradient(90deg, var(--accent) 0 16px, #ffffff 16px); }
+.sl.capa .sl-k { top: 120px; font-size: 15px; }
+.sl.capa .sl-t { top: 158px; width: 1000px; font-size: 48px; line-height: 1.1; }
+.sl-sub { position: absolute; left: 56px; top: 330px; width: 1000px; font-size: 23px; line-height: 1.4; color: var(--fg-2); margin: 0; }
+.sl-f { position: absolute; left: 56px; right: 56px; bottom: 16px; display: flex; justify-content: space-between; gap: 16px; font-size: 11px; color: var(--fg-3); border-top: 1px solid var(--line); padding-top: 8px; }
+.sb { position: absolute; }
+.sb-tit { font-size: 14px; font-weight: 600; margin-bottom: 6px; color: var(--fg); }
+.sb-txt h3 { font-size: 19px; margin: 0 0 10px; }
+.sb-txt ul { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 9px; line-height: 1.38; }
+.sb-txt p { margin: 0 0 8px; line-height: 1.45; }
+.sb-nota p { font-size: 11.5px; color: var(--fg-3); line-height: 1.45; margin: 0; }
+.sb-img img { width: 100%; height: 100%; object-fit: contain; }
+.sl-kpis { display: grid; gap: 12px; height: 100%; }
+.sl-kpi { position: relative; background: #f6f8f7; border: 1px solid var(--line-2); border-radius: 8px; padding: 10px 12px 10px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sl-kpi .stripe { position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 2px; background: var(--accent); }
+.sl-kpi .stripe.good { background: var(--good); } .sl-kpi .stripe.bad { background: var(--bad); } .sl-kpi .stripe.warn { background: var(--warn); }
+.sl-kpi .lab { font-size: 12.5px; color: var(--fg-2); }
+.sl-kpi .v { font: 500 24px/1.1 var(--mono); letter-spacing: -.02em; }
+.sl-kpi .sub { font-size: 11.5px; color: var(--fg-2); }
+.sl-tab { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.sl-tab th { font-size: .82em; text-transform: uppercase; letter-spacing: .05em; color: var(--fg-3); background: var(--surface-2); padding: 6px 8px; text-align: left; font-weight: 600; white-space: normal; }
+.sl-tab th.c { text-align: center; } .sl-tab th.n { text-align: right; }
+.sl-tab td { padding: 5px 8px; border-bottom: 1px solid var(--line-2); white-space: normal; vertical-align: middle; line-height: 1.3; }
+.sl-tab td.c { text-align: center; } .sl-tab td.n { text-align: right; font-family: var(--mono); }
+.sl-tab tr.hl td { background: var(--accent-soft); }
+.sl-tab.dense th { padding: 4px 8px; } .sl-tab.dense td { padding: 3px 8px; line-height: 1.24; }
+.sl-tab tr.sec td { background: var(--surface-2); color: var(--fg-2); font-weight: 600; font-size: .94em; padding-top: 3.5px; padding-bottom: 3.5px; }
+.sl-tab tr.total td { font-weight: 600; background: #f3f6f5; border-top: 1px solid var(--line); }
+.sl-tab tr.sub td { color: var(--fg-2); }
+.sl .chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.sl .chart text { font-size: 13px; }
+.sl .legend { font-size: 13px; margin-top: 6px; }
 </style>
 
 <div class="wrap">
@@ -166,6 +225,7 @@ footer { color: var(--fg-3); font-size: 12px; padding-top: 10px; border-top: 1px
       <div class="sync"><span class="dot" id="syncDot"></span><span id="syncTxt">Carregando…</span></div>
       <div class="actions">
         <button class="ghost sm" id="btnDesfazer" hidden>Descartar alterações</button>
+        <button class="sm" id="btnApresentar" title="Slides em tela cheia para apresentar ao CEO, gerados das premissas atuais; baixa em .pptx">Apresentação</button>
         <button class="sm" id="btnSumario" title="Sumário executivo com os números atuais do modelo (.docx ou texto)">Sumário executivo</button>
         <button class="sm" id="btnXlsx" title="Planilha com premissas, DRE, fluxo e cronograma">Exportar .xlsx</button>
         <button class="primary sm" id="btnSalvar">Salvar agora</button>
@@ -199,5 +259,19 @@ footer { color: var(--fg-3); font-size: 12px; padding-top: 10px; border-top: 1px
   <footer id="foot">S&amp;S Partners · modelo construído sobre a planilha Viabilidade v2 da Controladoria do HDA, o Projeto Radiologia (Jaime) e a Reunião do Conselho de out/26 · motor de financiamento: ferramenta Financiamento VMI, base 2026-10-09.</footer>
 </div>
 <div id="toast" class="toast" hidden></div>
+<div id="apres" class="apres" hidden role="dialog" aria-modal="true" aria-label="Apresentação">
+  <div class="apres-stage" id="apStage"><div class="apres-slide" id="apSlide"></div></div>
+  <div class="apres-bar">
+    <button class="sm" id="apPrev" aria-label="Slide anterior">‹ Anterior</button>
+    <span id="apNum" class="mono"></span>
+    <button class="sm" id="apNext" aria-label="Próximo slide">Próximo ›</button>
+    <select id="apIr" aria-label="Ir para o slide"></select>
+    <span class="apres-v" id="apVer"></span>
+    <button class="sm" id="apPptx">Baixar .pptx</button>
+    <button class="sm" id="apSair">Sair (Esc)</button>
+  </div>
+</div>
+<div id="busy" class="busy" hidden role="status" aria-live="polite"><div><i class="spin"></i><span>Gerando…</span></div></div>
+
 <div id="sumOvl" class="ovl" hidden><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="sumTit"><div class="dlg-h"><b id="sumTit">Sumário executivo</b><div class="row"><button class="sm" id="sumCopiar">Copiar texto</button><button class="primary sm" id="sumDocx">Baixar .docx</button><button class="ghost sm" id="sumFechar" aria-label="Fechar">Fechar</button></div></div><div class="dlg-b" id="sumBody"></div></div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
