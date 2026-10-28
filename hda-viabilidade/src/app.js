@@ -18,6 +18,9 @@
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   var NF0 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
   var NF2 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var NF4 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  function FXr(v) { return v == null || !isFinite(v) ? '—' : 'R$ ' + NF4.format(v); }
+  function FX2(v) { return v == null || !isFinite(v) ? '—' : 'R$ ' + NF2.format(v); }
   function R(v) { if (v == null || !isFinite(v)) return '—'; return (v < 0 ? '−' : '') + 'R$ ' + NF0.format(Math.abs(Math.round(v))); }
   function Rm(v) { if (v == null || !isFinite(v)) return '—'; return (v < 0 ? '−' : '') + 'R$ ' + NF0.format(Math.abs(Math.round(v))) ; }
   function mi(v) { if (v == null || !isFinite(v)) return '—'; var a = Math.abs(v); var s = a >= 1e6 ? NF2.format(a / 1e6) + ' mi' : a >= 1e3 ? NF0.format(a / 1e3) + ' mil' : NF0.format(a); return (v < 0 ? '−' : '') + 'R$ ' + s; }
@@ -67,6 +70,7 @@
     var W = 720, H = opts.h || 240, pl = 64, pr = 12, pt = 14, pb = 30, iw = W - pl - pr, ih = H - pt - pb;
     var all = []; opts.series.forEach(function (s) { all = all.concat(s.vals.filter(function (v) { return v != null; })); }); if (opts.ref) all.push(opts.ref.v);
     var mx = niceMax(Math.max.apply(null, all.concat([0]))), mn = Math.min.apply(null, all.concat([0])); mn = mn < 0 ? -niceMax(-mn) : 0;
+    if (opts.zoom) { var lo0 = Math.min.apply(null, all), hi0 = Math.max.apply(null, all), pd = (hi0 - lo0) * 0.12 || Math.abs(hi0) * 0.05 || 1; mn = lo0 - pd; mx = hi0 + pd; } /* eixo sem o zero, para diferenças pequenas */
     var eY = eixoY(mn, mx); mn = eY.mn; mx = eY.mx;
     var y = function (v) { return pt + ih - (v - mn) / (mx - mn) * ih; }, x = function (i) { return pl + (opts.cats.length > 1 ? i / (opts.cats.length - 1) * iw : iw / 2); };
     var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(opts.aria || '') + '">';
@@ -157,7 +161,7 @@
     h += '<div class="grid two"><div class="card"><div class="card-h"><h2>Por que equipamento nacional</h2></div><div class="grid" style="gap:12px">' +
       '<div class="tile"><h3>FINAME exige CFI, e o catálogo decide item a item</h3><p>Verificado no Catálogo CFI do BNDES em 14 e 15/10/2026: RX móvel Aquila 320 S (03538400) e RX digital Apolo D (03538246) constam; o ultrassom Invictus e a placa DR da VMI não aparecem (só o FGTS-Saúde, que não exige CFI, os financia, ou pedir o credenciamento); <b>a TC Pulsar ainda não consta</b>; a VMI prevê o credenciamento até dez/2026 (premissa de 15/10/2026), antes da contratação em 2027, e o modelo já a trata como credenciada. GE (CT Ascend, Aspire), Siemens, Philips, Canon e Imex têm TCs credenciadas. Validade dos códigos VMI usados: Aquila 320 S e Apolo D até mar/2030.</p><p class="src"><a href="https://ws.bndes.gov.br/cfi_catalogo/" target="_blank" rel="noopener">Catálogo CFI do BNDES</a></p></div>' +
       '<div class="tile"><h3>FGTS-Saúde: só a modalidade I está regulamentada</h3><p>Até 60 meses, sem carência, TR + 8,66% + até 3% de risco, pela Caixa, BB ou BNDES. Exige CEBAS na modalidade de 60% ao SUS e participação no Agora Tem Especialistas, e a parcela tem de caber em 35% da média mensal dos créditos SUS. A modalidade de investimento (20 anos, 12 de carência) ainda não foi regulamentada. ' + (calc.C.escolha && calc.C.escolha.linha.id === 'fgts-saude' ? 'Com as respostas informadas, é a linha em uso.' : 'Sem as respostas, o plano usa o FINAME.') + '</p><p class="src">Manual de Fomento FGTS Saúde v002 (Caixa, ago/2026); Res. CCFGTS 1.152/2026</p></div>' +
-      '<div class="tile"><h3>Sem câmbio</h3><p>A proposta GE fixa o preço em dólar a R$ 5,1604; o pacote VMI é cotado em reais. Entre a proposta e o contrato o risco é do hospital.</p></div>' +
+      '<div class="tile"><h3>Câmbio só no pacote GE</h3><p>O pacote VMI (C e D) é cotado em reais. ' + esc(fxFrase()) + ' Entre a proposta e o contrato o risco é do hospital.</p></div>' +
       '<div class="tile"><h3>SUS paga mais por TC no privado e no filantrópico</h3><p>A Portaria SAES/MS 4.282/2026 (Agora Tem Especialistas) leva a TC a cerca de R$ 300 por exame para quem adere. ' + (E.susAteOn(model) ? 'Receita incluída no número (chave "SUS no modelo").' : 'Receita fora do caso-base; entra pela chave "SUS no modelo".') + '</p><p class="src"><a href="https://www.conass.org.br/?p=57841" target="_blank" rel="noopener">Conass, Portaria 4.282</a></p></div>' +
       '</div></div>' +
       '<div class="card"><div class="card-h"><h2>O que pode dar errado</h2></div><div class="grid" style="gap:12px">' +
@@ -266,6 +270,51 @@
   }
   function rmSegHtml(id) { var on = rmOn(); return '<span class="seg" id="' + id + '"><button data-rm="sim" class="' + (on ? 'on' : '') + '">Com RM</button><button data-rm="nao" class="' + (!on ? 'on' : '') + '">Sem RM</button></span>'; }
   function bindRmSeg(id) { var el = document.getElementById(id); if (!el) return; $$('button[data-rm]', el).forEach(function (b) { b.addEventListener('click', function () { if (model.rm.incluir === this.dataset.rm) return; model.rm.incluir = this.dataset.rm; afterEdit(); }); }); }
+  /* ---------- câmbio do pacote B (GE) ---------- */
+  var FX_ITENS_TXT = { tc: 'a TC GE', ge: 'a TC e os ultrassons GE', ge_rm: 'a TC, os ultrassons e a RM' };
+  function fxInfo() {
+    var q = calc.cenCambio, fx = calc.B.fx, modo = fx.dolar ? 'dolar' : 'fixas', outro = fx.dolar ? 'fixas' : 'dolar';
+    var ref = q ? q.linhas.filter(function (l) { return l.proposta; })[0] : null, rr = q ? q.r[modo] : null, ro = q ? q.r[outro] : null;
+    var melhorCD = Math.max(calc.flC.vplEnt, calc.flD.vplEnt), quem = calc.flC.vplEnt >= calc.flD.vplEnt ? 'C' : 'D';
+    return { q: q, fx: fx, modo: modo, outro: outro, rr: rr, ro: ro, dPreco: fx.precoModelo - fx.precoProposta, dParcela: fx.parcelaDolar - fx.parcelaProposta,
+      dVpl: ref ? calc.flB.vplEnt - ref[modo].vplEnt : 0, itensTxt: FX_ITENS_TXT[fx.itens] || 'a TC GE', tem: !!(fx.ids && fx.ids.length), melhorCD: melhorCD, quem: quem };
+  }
+  /* câmbio em que B empata com a alternativa k (C ou D), em texto */
+  function fxEmpateTxt(v, k, vB, vK) {
+    if (v == null || !isFinite(v)) return 'o câmbio não muda a posição de B frente a ' + k;
+    if (v < 3) return 'B não alcança ' + k + ' em nenhum câmbio plausível (empate a ' + FX2(Math.max(0, v)) + ')';
+    return vB < vK ? 'B só passa ' + k + ' com o dólar abaixo de ' + FX2(v) : 'B fica à frente de ' + k + ' até o dólar a ' + FX2(v);
+  }
+  function fxFrase() {
+    var f = fxInfo(), fx = f.fx; if (!f.tem || !f.rr) return 'Nenhum item do pacote B está em dólar.';
+    return 'No pacote GE, ' + f.itensTxt + ' ' + (fx.ids.length > 1 ? 'têm' : 'tem') + ' preço em dólar (US$ ' + NF0.format(Math.round(fx.usdTotal)) + ', proposta a ' + FXr(fx.ref) + '). A ' + FXr(fx.usd) + ', o pacote B custa ' + mi(Math.abs(f.dPreco)) + (f.dPreco >= 0 ? ' a mais' : ' a menos') + ' e o VPL de B ' + (f.dVpl <= 0 ? 'cai ' : 'sobe ') + mi(Math.abs(f.dVpl)) + ' frente à proposta; cada R$ 0,10 no dólar muda o VPL de B em ' + mi(Math.abs(f.rr.porDecimo)) + '. ' + fxEmpateTxt(f.rr.empateC, 'C', calc.flB.vplEnt, calc.flC.vplEnt) + ' (parcelas ' + (f.modo === 'dolar' ? 'atreladas ao dólar' : 'fixas em reais') + ').';
+  }
+  function cardCambio() {
+    var f = fxInfo(), q = f.q, fx = f.fx; if (!q) return '';
+    var m = model, vC = q.vC, vD = q.vD, mx = Math.max(vC, vD);
+    var tit = !f.tem ? 'Câmbio: nenhum item do pacote B está em dólar com a chave atual'
+      : 'Câmbio: a ' + FXr(fx.usd) + ', o pacote GE sai ' + (f.dPreco >= 0 ? mi(f.dPreco) + ' mais caro' : mi(-f.dPreco) + ' mais barato') + ' que na proposta e o VPL de B ' + (f.dVpl <= 0 ? 'cai ' : 'sobe ') + mi(Math.abs(f.dVpl));
+    var h = '<div class="card" id="cardCambio"><div class="card-h"><h2>' + tit + '</h2><span class="muted small">só o pacote B tem preço em dólar; C e D são cotações VMI em reais</span></div>';
+    h += '<div class="row" style="gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><label class="small">Câmbio na assinatura (R$/US$) <input class="n w-s" id="fxUsd" value="' + esc(NF4.format(fx.usd)) + '"></label>' +
+      '<span class="seg" id="segFxParc">' + [['fixas', 'Parcelas fixas em R$'], ['dolar', 'Atreladas ao dólar']].map(function (o) { return '<button data-v="' + o[0] + '" class="' + (f.modo === o[0] ? 'on' : '') + '">' + o[1] + '</button>'; }).join('') + '</span>' +
+      '<span class="seg" id="segFxItens">' + [['tc', 'Só a TC'], ['ge', 'TC e ultrassons'], ['ge_rm', 'TC, ultrassons e RM']].map(function (o) { return '<button data-v="' + o[0] + '" class="' + (fx.itens === o[0] ? 'on' : '') + '">' + o[1] + '</button>'; }).join('') + '</span></div>';
+    h += '<div class="tbl-wrap"><table><thead><tr><th>Câmbio (R$/US$)</th><th class="n">Itens em dólar (R$)</th><th class="n">Parcela do pacote B (R$/mês)</th><th class="n">VPL de B, parcelas fixas</th><th class="n">VPL de B, atreladas ao dólar</th><th class="n">B − melhor entre C e D (' + (f.modo === 'dolar' ? 'atreladas' : 'fixas') + ')</th></tr></thead><tbody>' +
+      q.linhas.map(function (l) { var d = l[f.modo].vplEnt - mx; return '<tr class="' + (l.atual ? 'hl' : '') + '"><td>' + FXr(l.usd) + (l.proposta ? ' <span class="tiny muted">proposta GE</span>' : '') + (l.atual ? ' <span class="tiny muted">premissa</span>' : '') + '</td><td class="n">' + R(fx.usdTotal * l.usd) + '</td><td class="n">' + R(l[f.modo].parcela) + '</td><td class="n">' + mi(l.fixas.vplEnt) + '</td><td class="n">' + mi(l.dolar.vplEnt) + '</td><td class="n ' + (d >= 0 ? 'pos' : 'neg') + '">' + (d >= 0 ? '+' : '') + mi(d) + '</td></tr>'; }).join('') +
+      '</tbody></table></div>';
+    var b = [];
+    if (f.tem) {
+      b.push('<b>Em dólar</b>: ' + f.itensTxt + ' (US$ ' + NF0.format(Math.round(fx.usdTotal)) + ' ao câmbio da proposta, ' + FXr(fx.ref) + '). ' + (fx.itens === 'tc' ? 'A proposta só declara o câmbio na TC; os ultrassons GE e uma RM cotada pela GE podem vir em dólar (chave acima). ' : '') + 'RX e placas em reais.');
+      b.push('<b>Sensibilidade</b>: cada R$ 0,10 no dólar muda a parcela do pacote B em ' + R(Math.abs(f.rr.parcelaPorDecimo)) + '/mês e o VPL de B em ' + mi(Math.abs(f.rr.porDecimo)) + '.' + (f.modo === 'dolar' ? ' Com as parcelas atreladas, a variação de ' + Pp(fx.va * 100) + ' a.a. soma ' + mi(f.rr.varCambio) + ' às parcelas em ' + calc.B.n + ' meses (dólar a ' + FXr(fx.usdUltima) + ' na última).' : ' Com as parcelas atreladas ao dólar (+' + Pp(fx.va * 100) + ' a.a.), o VPL de B ficaria em ' + mi(f.ro.vplAtual) + '.'));
+      b.push('<b>Empate</b>: ' + fxEmpateTxt(f.rr.empateC, 'C', calc.flB.vplEnt, vC) + '; ' + fxEmpateTxt(f.rr.empateD, 'D', calc.flB.vplEnt, vD) + '. Com as parcelas ' + (f.modo === 'dolar' ? 'fixas' : 'atreladas') + ': ' + FX2(f.ro.empateC) + ' (C) e ' + FX2(f.ro.empateD) + ' (D).' + (calc.flB.vplEnt < mx && f.rr.empateC < fx.usd && f.rr.empateD < fx.usd ? ' Acima desses níveis o câmbio só aumenta a vantagem da VMI: pesa no tamanho, não na escolha.' : ''));
+    }
+    b.push('<b>A confirmar com a GE</b>: quais itens vêm em dólar, se a parcela do HFS fica fixa em reais depois da assinatura (a proposta diz "sujeita a alterações decorrentes de câmbio e taxas de juros") e até quando vale o preço. C e D usam as cotações VMI em reais de 15 e 16/10/2026: confirmar a validade com a VMI.');
+    h += '<ul class="bullets" style="margin-top:10px">' + b.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul><p class="small muted" style="margin-top:8px">Referência: PTAX de venda de 28/10/2026 a R$ 5,3420, depois de passar de R$ 5,04 (23/10) a R$ 5,50 (26/10); Focus de 23/10/2026: R$ 5,05 no fim de 2026, R$ 5,15 em 2027 e R$ 5,28 em 2029. As premissas ficam em Premissas › Câmbio.</p></div>';
+    return h;
+  }
+  function bindCambio() {
+    var i = document.getElementById('fxUsd'); if (i) i.addEventListener('change', function () { var v = parseBR(this.value); if (!(v > 0)) { this.value = NF4.format(+model.cambio.usd); return; } model.cambio.usd = v; afterEdit(); });
+    [['segFxParc', 'parcelas'], ['segFxItens', 'itens']].forEach(function (p) { var el = document.getElementById(p[0]); if (!el) return; $$('button[data-v]', el).forEach(function (b) { b.addEventListener('click', function () { if (model.cambio[p[1]] === this.dataset.v) return; model.cambio[p[1]] = this.dataset.v; afterEdit(); }); }); });
+  }
   /* quadro com × sem RM: linhas por alternativa a partir de calc.cenRM */
   function rmTabela(ids, compacto) {
     var q = calc.cenRM; if (!q) return '';
@@ -299,7 +348,7 @@
     var resB = pb.resultado + rmR - B.manut.mes - B.parcela, resC = pb.resultado + rmR - C.manut.mes - (C.parcela || 0), resD = pb.resultado + rmR - D.aluguel;
     h += '<div class="cmp3">' +
       card('A', 'A · Manter a EMG', 'var(--s-a)', [['Investimento', R(0)], ['Resultado mensal', R(e.resultado), 'neg'], ['Resultado anual', R(e.resultado * 12), 'neg'], ['Equipamentos', 'da EMG, ultrapassados'], ['Câmbio', 'nenhum'], ['Caixa em ' + H + ' anos', 'referência (zero)']]) +
-      card('B', 'B · GE/CDK, compra, HFS 60x', 'var(--s-b)', [['Investimento', R(B.capex)], ['Financiado', R(B.capexFin) + ' (fornecedores)'], ['Prazo · carência', B.n + ' m · 0'], ['Custo implícito', Pp(B.cetAno) + ' a.a.'], ['Parcela', R(B.parcela) + '/mês'], ['Manutenção ' + planoTxt, R(B.manut.mes) + '/mês após a garantia'], ['Resultado mensal após parcela e manutenção', R(resB), sinal(resB)], ['Câmbio', 'TC em USD a 5,1604'], ['VPL para o hospital', mi(fB.vplEnt)], ['Caixa acumulado em ' + H + ' anos', mi(fB.acumEnt)]]) +
+      card('B', 'B · GE/CDK, compra, HFS 60x', 'var(--s-b)', [['Investimento', R(B.capex)], ['Financiado', R(B.capexFin) + ' (fornecedores)'], ['Prazo · carência', B.n + ' m · 0'], ['Custo implícito', Pp(B.cetAno) + ' a.a.'], ['Parcela', R(B.parcela) + '/mês'], ['Manutenção ' + planoTxt, R(B.manut.mes) + '/mês após a garantia'], ['Resultado mensal após parcela e manutenção', R(resB), sinal(resB)], ['Câmbio', calc.B.fx.ids.length ? 'US$ a ' + FXr(calc.B.fx.usd) + ' (' + (calc.B.fx.ids.length > 1 ? calc.B.fx.ids.length + ' itens' : 'TC') + ', parcelas ' + (calc.B.fx.dolar ? 'atreladas' : 'fixas') + ')' : 'nenhum'], ['VPL para o hospital', mi(fB.vplEnt)], ['Caixa acumulado em ' + H + ' anos', mi(fB.acumEnt)]]) +
       card('C', 'C · VMI, compra, ' + esc(linhaC), 'var(--s-c)', [['Investimento', R(C.capex)], ['Financiado', R(C.capexFin) + (lc ? ' (' + esc(lc.operador.split(/[ ,(]/)[0]) + ')' : '')], ['Prazo · carência', (C.n || '—') + ' m · ' + (C.c || 0)], ['CET', Pp(C.cetAno) + ' a.a.'], ['Parcela', R(C.primeira) + ' na carência · ' + R(C.parcela) + ' depois'], ['Manutenção ' + planoTxt, R(C.manut.mes) + '/mês após a garantia'], ['Resultado mensal após parcela e manutenção', R(resC), sinal(resC)], ['Câmbio', 'nenhum (preço em R$)'], ['VPL para o hospital', mi(fC.vplEnt)], ['Caixa acumulado em ' + H + ' anos', mi(fC.acumEnt)]]) +
       card('D', 'D · VMI, locação ' + D.n + ' meses', 'var(--s-d)', [['Investimento', R(0) + ' (só RIS e PACS' + (rmOn() ? ' e a sala da RM' : '') + ')'], ['Dívida nova', 'nenhuma'], [locTxt().sep ? 'Aluguel + manutenção' : 'Aluguel', R(D.aluguel) + '/mês desde a instalação'], ['Inclui', (locTxt().sep ? 'troca do equipamento a cada ' + D.n + ' meses; manutenção à parte (' + R(D.loc.manSep) + '/mês em média)' : 'manutenção total e troca do equipamento a cada ' + D.n + ' meses')], ['Custo ÷ valor do pacote', Pp(D.loc.pctMes * 100) + ' ao mês'], ['Base do aluguel', locTxt().vmi ? 'cotação VMI ' + R(D.loc.aluguelVmi) + (D.loc.nProxy ? ' + RM pelo proxy da TC ' + R(D.loc.aluguelProxy) : '') + ' + composição ' + R(D.loc.aluguelComp) : 'composição, taxa ' + Pp(D.loc.taxaAno * 100) + ' a.a.'], ['Resultado mensal após aluguel', R(resD), sinal(resD)], ['Câmbio', 'nenhum'], ['VPL para o hospital', mi(fD.vplEnt)], ['Caixa acumulado em ' + H + ' anos', mi(fD.acumEnt)]]) +
       '</div>';
@@ -335,11 +384,12 @@
       (c.rm.on ? linha('EBITDA da RM em regime, antes da manutenção (R$/mês)', ['—', rmR, rmR, rmR], R, 0) : '') +
       linha('Equipamento no fim do horizonte', ['da EMG', 'próprio, com ' + H + ' anos (residual 0)', 'próprio, com ' + H + ' anos (residual 0)', 'do locador; trocado a cada ' + D.n + ' meses'], null) +
       linha('Risco de quebra e de tubo', ['EMG', planoTxt === 'Ouro' ? 'contrato Ouro' : 'hospital (Prata)', planoTxt === 'Ouro' ? 'contrato Ouro' : 'hospital (Prata)', locTxt().sep ? (planoTxt === 'Ouro' ? 'contrato Ouro (a confirmar com a VMI)' : 'hospital (Prata; a confirmar)') : 'locador'], null) +
-      linha('Câmbio', ['—', 'TC em USD; peças importadas', 'não', 'não'], null) +
+      linha('Câmbio', ['—', (calc.B.fx.ids.length ? FX_ITENS_TXT[calc.B.fx.itens].replace(/^a /, '').replace(/^./, function (x) { return x.toUpperCase(); }) + ' em US$ a ' + FXr(calc.B.fx.usd) + ', parcelas ' + (calc.B.fx.dolar ? 'atreladas ao dólar' : 'fixas em R$') : 'nenhum item em US$') + '; peças importadas', 'não', 'não'], null) +
       '</tbody></table></div><p class="small muted" style="margin-top:8px">DSCR na coluna A: o hospital sem o projeto. Na locação o aluguel reduz o EBITDA e não entra como dívida; sob CPC 06 (R2)/IFRS 16 vira passivo de arrendamento, e agentes costumam olhar o EBITDAR. O modelo supõe renovação da locação ao mesmo aluguel, com equipamento novo, até o fim do horizonte.</p></div>';
     var cats = fB.anos.map(function (a) { return String(a.ano); });
     h += '<div class="grid two"><div class="card"><div class="card-h"><h2>Caixa acumulado para o hospital</h2><span class="muted small">ganho operacional menos parcelas, manutenção ou aluguel, vs. manter a EMG</span></div><div class="chart">' + svgLines({ cats: cats, series: [{ nome: 'B · GE/HFS', vals: fB.anos.map(function (a) { return a.acumE; }), cor: 'var(--s-b)' }, { nome: 'C · VMI compra', vals: fC.anos.map(function (a) { return a.acumE; }), cor: 'var(--s-c)' }, { nome: 'D · VMI locação', vals: fD.anos.map(function (a) { return a.acumE; }), cor: 'var(--s-d)' }], fmt: function (v) { return mi(v); }, h: 250, aria: 'Caixa acumulado por alternativa' }) + '</div></div>' +
       '<div class="card"><div class="card-h"><h2>Desembolso anual com os equipamentos</h2><span class="muted small">parcelas + manutenção (B, C) ou aluguel (D)</span></div><div class="chart">' + svgBars({ cats: cats, series: [{ nome: 'B · GE/HFS', vals: fB.anos.map(function (a) { return a.desembolso; }), cor: 'var(--s-b)' }, { nome: 'C · VMI compra', vals: fC.anos.map(function (a) { return a.desembolso; }), cor: 'var(--s-c)' }, { nome: 'D · VMI locação', vals: fD.anos.map(function (a) { return a.desembolso; }), cor: 'var(--s-d)' }], fmt: function (v) { return mi(v); }, h: 250, aria: 'Desembolso anual' }) + '</div></div></div>';
+    h += cardCambio();
     h += cardRM();
     /* leitura */
     var difCD = fC.vplEnt - fD.vplEnt, p60 = (c.prazosD || []).filter(function (x) { return x.n === D.n; })[0];
@@ -355,9 +405,9 @@
         var vb = (+bx.qtd || 0) * (+bx.preco || 0), vc = (+cx.qtd || 0) * (+cx.preco || 0), dTot = B.capex - C.capex, dRx = vb - vc;
         return '<li><b>Preço</b>: o pacote VMI sai por ' + mi(C.capex) + ' contra ' + mi(B.capex) + ' do GE (' + Psig(C.capex / B.capex - 1, 1) + ').' + (Math.abs(dTot) > 1 ? ' Do diferencial de ' + mi(dTot) + ', ' + mi(dRx) + ' vêm do RX digital: ' + esc(cx.modelo || '') + ', de ' + mi(vc) + ', no lugar do item GE “' + esc(bx.nome || '') + '”, de ' + mi(vb) + '.' : '') + ' O Apolo é fixo (sala) e o item do pacote GE é portátil (leito); se o hospital precisar do portátil, o Aquila 500 D volta ao pacote e a vantagem de preço diminui.</li>';
       })() +
-      '<li>Entre B e C a diferença segue no financiamento: ' + Pp(B.cetAno) + ' a.a. em 60 meses com câmbio, contra ' + Pp(C.cetAno) + ' a.a. em ' + (C.n || '—') + ' meses em reais' + (lc && lc.iof === 'zero' ? ', sem IOF' : '') + '. A Pulsar entra no FINAME com o CFI previsto para dez/2026 (premissa VMI); até a publicação, é condição suspensiva da contratação.</li></ul></div>';
+      '<li>Entre B e C a diferença segue no financiamento: ' + Pp(B.cetAno) + ' a.a. em 60 meses, com ' + FX_ITENS_TXT[calc.B.fx.itens] + ' em dólar a ' + FXr(calc.B.fx.usd) + ', contra ' + Pp(C.cetAno) + ' a.a. em ' + (C.n || '—') + ' meses em reais' + (lc && lc.iof === 'zero' ? ', sem IOF' : '') + '. A Pulsar entra no FINAME com o CFI previsto para dez/2026 (premissa VMI); até a publicação, é condição suspensiva da contratação.</li></ul></div>';
     $('#tab-alternativas').innerHTML = h;
-    bindRmSeg('segRmAlt');
+    bindRmSeg('segRmAlt'); bindCambio();
   }
 
   /* ---------- Ressonância: com × sem, DRE e equilíbrio ---------- */
@@ -426,18 +476,20 @@
 
   /* ================= INVESTIMENTO E FINANCIAMENTO ================= */
   function equipTable(key) {
-    var itens = model.equip[key], isB = key === 'B', cx = E.capexDe(itens), mt = calc[key].manut;
+    var itens = model.equip[key], isB = key === 'B', cx = E.capexDe(itens), mt = calc[key].manut, fxm = isB ? E.fxB(model) : null;
+    var fxNota = function (it, v) { return isB && E.emDolar(fxm, it) && Math.abs(fxm.f - 1) > 1e-9 ? '<div class="tiny muted">' + R(v * fxm.f) + ' a ' + FXr(fxm.usd) + '</div>' : ''; };
     var h = '<div class="tbl-wrap"><table class="ge"><thead><tr><th>Item</th><th>Modelo</th><th class="n">Qtd</th><th class="n">Preço unit. (R$)</th>' + (isB ? '<th class="n">Parcela unit. (R$)</th><th class="n">Taxa implícita</th>' : '<th>CFI</th>') + '<th>Financiável</th><th class="n">Manut. Prata (R$/mês/un.)</th><th class="n">Manut. Ouro (R$/mês/un.)</th><th>Observação</th><th></th></tr></thead><tbody>';
     itens.forEach(function (it, i) {
       var imp = isB ? calc.B.implic[i] : null, ehRM = E.isRM(it), fora = ehRM && !rmOn(), auto = isB && imp && imp.parcelaAuto != null;
-      h += '<tr' + (fora ? ' class="muted" title="Fora do cálculo no cenário sem RM"' : '') + '><td><input class="w-m" data-eq="' + key + '.' + i + '.nome" value="' + esc(it.nome) + '">' + (ehRM ? '<div class="tiny"><span class="pill ' + (fora ? '' : 'info') + '">' + (fora ? 'fora do cenário (sem RM)' : 'cenário com RM') + '</span></div>' : '') + '</td><td><input class="w-m" data-eq="' + key + '.' + i + '.modelo" value="' + esc(it.modelo) + '"></td><td class="n"><input class="n w-s" data-eq="' + key + '.' + i + '.qtd" value="' + esc(it.qtd) + '"></td><td class="n"><input class="n" data-eq="' + key + '.' + i + '.preco" value="' + esc(NF2.format(it.preco)) + '"></td>' +
-        (isB ? '<td class="n"><input class="n" data-eq="' + key + '.' + i + '.parcela" value="' + (auto ? '' : esc(NF2.format(it.parcela || 0))) + '"' + (auto ? ' placeholder="' + esc(NF2.format(imp.parcelaAuto)) + '" title="Calculada à taxa implícita dos demais itens; digite um valor para fixar"' : '') + '>' + (auto ? '<div class="tiny muted">calculada</div>' : '') + '</td><td class="n">' + (imp ? (imp.taxaAno == null ? '—' : Pp(imp.taxaAno)) + (imp.alerta ? ' <span class="pill bad">' + esc(imp.alerta) + '</span>' : '') : '') + '</td>' : '<td><input class="w-s" data-eq="' + key + '.' + i + '.cfi" value="' + esc(it.cfi || '') + '" placeholder="a informar"></td>') +
+      h += '<tr' + (fora ? ' class="muted" title="Fora do cálculo no cenário sem RM"' : '') + '><td><input class="w-m" data-eq="' + key + '.' + i + '.nome" value="' + esc(it.nome) + '">' + (ehRM ? '<div class="tiny"><span class="pill ' + (fora ? '' : 'info') + '">' + (fora ? 'fora do cenário (sem RM)' : 'cenário com RM') + '</span></div>' : '') + '</td><td><input class="w-m" data-eq="' + key + '.' + i + '.modelo" value="' + esc(it.modelo) + '"></td><td class="n"><input class="n w-s" data-eq="' + key + '.' + i + '.qtd" value="' + esc(it.qtd) + '"></td><td class="n"><input class="n" data-eq="' + key + '.' + i + '.preco" value="' + esc(NF2.format(it.preco)) + '">' + (isB && E.emDolar(fxm, it) ? '<div class="tiny muted">US$ ' + NF0.format(Math.round((+it.preco || 0) / fxm.ref)) + ' a ' + FXr(fxm.ref) + '</div>' : '') + fxNota(it, +it.preco || 0) + '</td>' +
+        (isB ? '<td class="n"><input class="n" data-eq="' + key + '.' + i + '.parcela" value="' + (auto ? '' : esc(NF2.format(it.parcela || 0))) + '"' + (auto ? ' placeholder="' + esc(NF2.format(imp.parcelaAuto)) + '" title="Calculada à taxa implícita dos demais itens; digite um valor para fixar"' : '') + '>' + (auto ? '<div class="tiny muted">calculada' + (E.emDolar(fxm, it) ? ' a ' + FXr(fxm.usd) : '') + '</div>' : fxNota(it, +it.parcela || 0)) + '</td><td class="n">' + (imp ? (imp.taxaAno == null ? '—' : Pp(imp.taxaAno)) + (imp.alerta ? ' <span class="pill bad">' + esc(imp.alerta) + '</span>' : '') : '') + '</td>' : '<td><input class="w-s" data-eq="' + key + '.' + i + '.cfi" value="' + esc(it.cfi || '') + '" placeholder="a informar"></td>') +
         '<td><input type="checkbox" data-eq="' + key + '.' + i + '.fin"' + (it.fin !== false ? ' checked' : '') + '></td>' +
         '<td class="n"><input class="n w-n" data-eq="' + key + '.' + i + '.m_prata" value="' + esc(NF2.format(it.m_prata || 0)) + '">' + (it.tubo ? '<div class="tiny muted">+ tubo ' + R(model.propria.tubo) + '</div>' : '') + '</td>' +
         '<td class="n"><input class="n w-n" data-eq="' + key + '.' + i + '.m_ouro" value="' + esc(NF2.format(it.m_ouro || 0)) + '"></td>' +
         '<td class="wrap small muted">' + esc(it.obs || '') + '</td><td><button class="sm ghost danger" data-eqdel="' + key + '.' + i + '" title="Remover">×</button></td></tr>';
     });
     h += '<tr class="total"><td>Total</td><td></td><td class="n">' + itens.reduce(function (s, i) { return s + (+i.qtd || 0); }, 0) + '</td><td class="n">' + R(cx.total) + '</td>' + (isB ? '<td class="n">' + R(cx.parcelaMes) + '/mês</td><td class="n">' + Pp(calc.B.cetAno) + '</td>' : '<td></td>') + '<td class="n">' + R(cx.financiavel) + '</td><td class="n">' + R(mt.prata) + '/mês</td><td class="n">' + R(mt.ouro) + '/mês</td><td></td><td></td></tr></tbody></table></div><div class="row" style="margin-top:8px"><button class="sm" data-eqadd="' + key + '">+ Item</button></div>';
+    if (isB && calc.B.fx.ids.length) { var bf = calc.B.fx; h += '<p class="small muted" style="margin-top:8px">Preços e parcelas da tabela no câmbio da proposta GE (' + FXr(bf.ref) + '). O modelo converte ' + esc(FX_ITENS_TXT[bf.itens]) + ' ao câmbio de ' + FXr(bf.usd) + ': pacote de ' + R(calc.B.capex) + ' e parcela de ' + R(calc.B.parcela) + '/mês (na proposta, ' + R(calc.B.capex - (bf.precoModelo - bf.precoProposta)) + ' e ' + R(calc.B.parcela - (bf.parcelaDolar - bf.parcelaProposta)) + '/mês), com as parcelas ' + (bf.dolar ? 'atreladas ao dólar (+' + Pp(bf.va * 100) + ' a.a.)' : 'fixas em reais') + '. Premissas em Premissas › Câmbio; efeito no VPL em Alternativas.</p>'; }
     return h;
   }
   /* ---------- manutenção pós-garantia ---------- */
@@ -535,7 +587,7 @@
         '<div class="rt"><span class="big">' + Pp(s.cet) + '</span><span class="small muted">CET a.a. · ' + (function () { var ft = s.faixaTotal || s.faixa, k = (s.opcoes || []).length; return 'custo total ' + Pp(s.custoTotal) + ' · faixa ' + Pp(ft.min) + (k > 1 ? ' (' + rotCusto(ft.custoMin) + ')' : '') + ' a ' + Pp(ft.max) + (k > 1 ? ' (' + rotCusto(ft.custoMax) + ')' : '') + (k > 1 ? ' entre ' + k + ' custos financeiros e os cenários de spread' : ' nos cenários de spread'); })() + '</span><span class="small">Parcela ' + R(s.parcelaPosCarencia) + ' · na carência ' + R(s.primeiraParcela) + '</span><span class="small">Total pago ' + R(s.pagos) + ' · juros ' + R(s.juros) + '</span></div></div>';
     });
     av.mercado.forEach(function (x) { var s = x.sim; h += '<div class="linha bloq"><div class="rank">ref</div><div><div class="nm">' + esc(x.linha.nome) + '</div><div class="op">' + esc(x.linha.obs) + '</div></div><div class="rt"><span class="big">' + Pp(s.cet) + '</span><span class="small muted">CET a.a. · ' + s.n + ' meses</span><span class="small">Parcela ' + R(s.parcelaPosCarencia) + '</span></div></div>'; });
-    h += '<div class="linha bloq"><div class="rank">B</div><div><div class="nm">Financiamento dos fornecedores (HFS/GE e demais), 60 meses</div><div class="op">Custo implícito nas parcelas informadas; TC com preço em dólar</div></div><div class="rt"><span class="big">' + Pp(c.B.cetAno) + '</span><span class="small muted">a.a. implícito</span><span class="small">Parcela ' + R(c.B.parcela) + '</span><span class="small">Total pago ' + R(c.B.pagos) + '</span></div></div>';
+    h += '<div class="linha bloq"><div class="rank">B</div><div><div class="nm">Financiamento dos fornecedores (HFS/GE e demais), 60 meses</div><div class="op">Custo implícito nas parcelas informadas; ' + esc(FX_ITENS_TXT[c.B.fx.itens]) + ' em dólar a ' + FXr(c.B.fx.usd) + '</div></div><div class="rt"><span class="big">' + Pp(c.B.cetAno) + '</span><span class="small muted">a.a. implícito</span><span class="small">Parcela ' + R(c.B.parcela) + '</span><span class="small">Total pago ' + R(c.B.pagos) + '</span></div></div>';
     (function () { var la = calc.lcdAuto; h += '</div><p class="small muted" style="margin-top:8px">' + (la ? '* Taxa LCD = Selic (Focus) + sobretaxa LCD de ' + Pp(la.sob) + (la.confirmado ? '' : ' a.a., premissa da ferramenta (a de out/2026 não foi obtida; faixa de ' + Pp(la.sobMin) + ' a ' + Pp(la.sobMax) + ')') + '. No Automático, a Taxa LCD dá ' + Pp(la.tot) + ' de custo total contra ' + Pp(la.ref) + ' do ' + esc(la.refLinha) + ' com ' + esc(rotCusto(la.refCusto)) + (la.empate != null ? '; empata com sobretaxa de ' + Pp(la.empate) : '') + '. ' : '') + 'TFB e Taxa LCD limitam prazo e carência (TFB até 120 meses e 12 de carência; Taxa LCD até 120 e 24): entre parênteses, o que o custo permite quando é menos que o pedido. O FINAME, na base da ferramenta, compara TLP e Pré FAT.</p>'; h += '<details style="margin-top:12px"><summary>Linhas não elegíveis e por quê</summary>'; })();
     h += '<ul class="src-list">' + av.todas.filter(function (x) { return !x.el.ok; }).map(function (x) { return '<li><b>' + esc(x.linha.nome) + '</b>: ' + esc(x.el.bloqueios.join('; ')) + '</li>'; }).join('') + '</ul></details></div>';
     h += cardFgts();
@@ -660,6 +712,8 @@
     { id: 'fin.desconto', nome: 'Taxa de desconto', min: 0.08, max: 0.25, step: 0.01, fmt: function (v) { return P(v, 0); }, hint: '' },
     { id: 'cenario.reajuste_modo', nome: 'Inflação nos fluxos', seg: [['ipca', 'IPCA (Focus)'], ['fixo', 'Taxa fixa / constante']], hint: 'IPCA em todos os caminhos, como nas parcelas do FINAME' },
     { id: 'fin.horizonte', nome: 'Horizonte', seg: [[5, '5 anos'], [10, '10 anos']], hint: '' },
+    { id: 'cambio.usd', nome: 'Câmbio do pacote GE (R$/US$)', min: 4.5, max: 7, step: 0.01, fmt: function (v) { return 'R$ ' + NF2.format(v); }, hint: 'proposta GE a R$ 5,16; premissa R$ 5,38; só muda o B' },
+    { id: 'cambio.parcelas', nome: 'Parcelas do HFS (B)', seg: [['fixas', 'Fixas em R$'], ['dolar', 'Atreladas ao dólar']], hint: 'confirmar com a GE' },
     { id: 'fin.alternativa', nome: 'Alternativa', seg: [['C', 'C · VMI compra'], ['B', 'B · GE/HFS'], ['D', 'D · VMI locação']], hint: '' },
     { id: 'equip.precoC', nome: 'Preço do pacote VMI vs. GE', min: 0.7, max: 1.3, step: 0.05, fmt: function (v) { return (v >= 1 ? '+' : '−') + P(Math.abs(v - 1), 0); }, hint: 'escala todos os itens do pacote C (com a RM, se ligada)', virtual: true },
     { id: 'rm.incluir', nome: 'Ressonância (Cignus 600)', seg: [['sim', 'Com RM'], ['nao', 'Sem RM']], hint: 'serviço novo; o quadro com × sem está em Alternativas' },
@@ -708,6 +762,7 @@
       { nome: 'Preço do pacote', set: function (mm, v) { mm.equip.C.forEach(function (it) { it.preco *= v; }); mm.equip.B.forEach(function (it) { it.preco *= v; }); }, lo: 1.15, hi: 0.85, loTxt: '+15%', hiTxt: '−15%' },
       { nome: 'Taxa de desconto', set: function (mm, v) { mm.fin.desconto = v; }, lo: 0.20, hi: 0.10, loTxt: '20%', hiTxt: '10%' }
     ];
+    if (sm.fin.alternativa === 'B') { var u0 = +((sm.cambio || {}).usd) || 5.38; al.push({ nome: 'Câmbio (pacote GE)', set: function (mm, v) { mm.cambio = mm.cambio || {}; mm.cambio.usd = v; }, lo: u0 * 1.2, hi: u0 * 0.9, loTxt: 'R$ ' + NF2.format(u0 * 1.2), hiTxt: 'R$ ' + NF2.format(u0 * 0.9) }); }
     if (E.pacsOn(sm)) al.push({ nome: 'PACS por exame', set: function (mm, v) { mm.propria.pacs_exame = v; }, lo: 10.58, hi: 6.94, loTxt: 'R$ 10,58', hiTxt: 'R$ 6,94' });
     if (sm.fin.alternativa === 'D') al.push({ nome: 'Prêmio do locador', set: function (mm, v) { mm.altD.premio = v; }, lo: 0.07, hi: 0.01, loTxt: '7 p.p.', hiTxt: '1 p.p.' }, { nome: 'Prazo da locação', set: function (mm, v) { mm.altD.prazo = v; }, lo: 36, hi: 84, loTxt: '36 m', hiTxt: '84 m' }, { nome: 'Manutenção na cotação VMI', set: function (mm, v) { mm.altD.vmi_manut = v ? 'sim' : 'nao'; }, lo: 0, hi: 1, loTxt: 'à parte', hiTxt: 'inclusa' });
     if (E.rmOn(sm)) { var rr = sm.rm, rmP = function (mm, f) { ['B', 'C'].forEach(function (k) { (mm.equip[k] || []).forEach(function (it) { if (E.isRM(it)) it.preco *= f; }); }); };
@@ -730,7 +785,7 @@
   }
 
   /* ================= PREMISSAS ================= */
-  function fmtVal(s, v) { if (s.fmt === 'pct') return NF2.format(v * 100); if (s.fmt === 'int') return String(Math.round(v)); if (s.fmt === 'txt') return v; return NF2.format(v); }
+  function fmtVal(s, v) { if (s.fmt === 'pct') return NF2.format(v * 100); if (s.fmt === 'int') return String(Math.round(v)); if (s.fmt === 'txt') return v; if (s.fmt === 'fx') return NF4.format(v); return NF2.format(v); }
   function renderPremissas() {
     var blocos = [], byB = {};
     SCHEMA.forEach(function (s) { if (!byB[s.bloco]) { byB[s.bloco] = []; blocos.push(s.bloco); } byB[s.bloco].push(s); });
@@ -751,7 +806,7 @@
     });
     $('#tab-premissas').innerHTML = h;
     renderVersoes();
-    $$('#tab-premissas [data-prem]').forEach(function (inp) { inp.addEventListener('change', function () { var s = SCHEMA.filter(function (x) { return x.id === this.dataset.prem; }, this)[0]; var v = this.value; if (s.fmt === 'pct') v = parseBR(v) / 100; else if (s.fmt === 'int') v = Math.round(parseBR(v)); else if (s.fmt === 'num') v = parseBR(v); else if (s.ui && s.ui.choices && !isNaN(+v) && typeof s.def === 'number') v = +v; setPath(model, s.id, v); afterEdit(); }); });
+    $$('#tab-premissas [data-prem]').forEach(function (inp) { inp.addEventListener('change', function () { var s = SCHEMA.filter(function (x) { return x.id === this.dataset.prem; }, this)[0]; var v = this.value; if (s.fmt === 'pct') v = parseBR(v) / 100; else if (s.fmt === 'int') v = Math.round(parseBR(v)); else if (s.fmt === 'num' || s.fmt === 'fx') v = parseBR(v); else if (s.ui && s.ui.choices && !isNaN(+v) && typeof s.def === 'number') v = +v; setPath(model, s.id, v); afterEdit(); }); });
   }
   function renderVersoes() {
     var el = $('#cardVersoes'); if (!el) return;
@@ -964,8 +1019,9 @@
       ['Compromisso mensal no ano 3', R(ano3(c.flB)), R(ano3(c.flC)), R(ano3(c.flD))],
       ['VPL para o hospital, ' + H + ' anos', mi(c.flB.vplEnt), mi(c.flC.vplEnt), mi(c.flD.vplEnt)],
       ['Caixa acumulado, ' + H + ' anos', mi(c.flB.acumEnt), mi(c.flC.acumEnt), mi(c.flD.acumEnt)],
-      ['DSCR ' + l1.ano + ' do hospital com o projeto', X(e27('B')), X(e27('C')), X(e27('D'))]
-    ] }, p: [(qR ? (rmLig ? 'Cenário com RM. ' : 'Cenário sem RM. ') : '') + 'Compromisso mensal = parcelas + manutenção (B e C) ou aluguel' + (lt.sep ? ' e manutenção' : '') + ' (D). Na compra, B e C chegam ao ano ' + H + ' com o equipamento original; na locação, o equipamento é trocado a cada ' + c.D.n + ' meses.'] });
+      ['DSCR ' + l1.ano + ' do hospital com o projeto', X(e27('B')), X(e27('C')), X(e27('D'))],
+      ['Câmbio', c.B.fx.ids.length ? 'US$ a ' + FXr(c.B.fx.usd) + ', parcelas ' + (c.B.fx.dolar ? 'atreladas' : 'fixas') : 'nenhum', 'nenhum (R$)', 'nenhum (R$)']
+    ] }, p: [(qR ? (rmLig ? 'Cenário com RM. ' : 'Cenário sem RM. ') : '') + 'Compromisso mensal = parcelas + manutenção (B e C) ou aluguel' + (lt.sep ? ' e manutenção' : '') + ' (D). Na compra, B e C chegam ao ano ' + H + ' com o equipamento original; na locação, o equipamento é trocado a cada ' + c.D.n + ' meses.', fxFrase()] });
     /* 3b. ressonância */
     if (qR) {
       var rr = m.rm, ri = c.rm.isolada, regR = E.rmMensal(m, 2, 1), dsc = function (x) { return X(x.dscr[0].v) + ' / ' + X(x.dscr[1].v); };
@@ -1022,6 +1078,7 @@
     (function () { var cf = c.cenFIIS; if (!cf || cf.emUso) return; var p = cf.pedido, v = cf.vinte; pend.push('FIIS Saúde: só entra se o HDA tiver proposta inscrita e habilitada na Chamada Pública de 2025 (Transferegov, 13/10 a 07/11/2025); a janela de 2026 também fechou.' + (p ? ' Se tiver, o pacote C sai a CET de ' + Pp(p.cet) + ' em ' + p.n + ' meses e o VPL de C vai a ' + mi(p.vplC) + ' (' + (p.delta >= 0 ? '+' : '') + mi(p.delta) + ')' + (v && v.n > p.n ? '; com CEBAS, ' + v.n + ' meses e ' + mi(v.vplC) : '') + '.' : '') + ' O FIIS financia equipamento para uso no SUS (hoje cerca de 20% do HDA). Confirmar com o hospital.'); })();
     (function () { var la = c.lcdAuto; if (!la || la.emUso) return; pend.push('Sobretaxa da Taxa LCD (BNDES Automático): o modelo usa ' + Pp(la.sob) + ' como premissa. A Taxa LCD só fica mais barata que a linha em uso (' + la.refLinha + ', ' + rotCusto(la.refCusto) + ') com sobretaxa abaixo de ' + Pp(la.empate) + ', e expõe a parcela à Selic. Pedir a vigente ao agente; o Automático serve se entrar obra ou instalação no financiamento.'); })();
     pend.push('Perímetro do RX digital: fixo (Apolo D, proposta VMI) ou portátil (como no pacote GE).');
+    (function () { var f = fxInfo(); if (!f.q) return; pend.push('Câmbio do pacote GE: confirmar com a GE quais itens vêm em dólar (a proposta só declara a TC), se a parcela do HFS fica fixa em reais depois da assinatura e até quando vale o preço. O modelo usa ' + FXr(f.fx.usd) + ' (proposta a ' + FXr(f.fx.ref) + ') com parcelas ' + (f.modo === 'dolar' ? 'atreladas ao dólar' : 'fixas') + '; cada R$ 0,10 muda o VPL de B em ' + mi(Math.abs(f.rr.porDecimo)) + ' e ' + fxEmpateTxt(f.rr.empateC, 'C', c.flB.vplEnt, c.flC.vplEnt) + '.'); })();
     if (qR) pend.push('Ressonância, do lado do HDA: negociar com os planos de saúde a volta da RM aos pacotes de reembolso, de onde ela saiu recentemente. Sem isso, o volume de convênio do cenário com RM não existe.');
     if (qR) pend.push('Ressonância: demanda (RMs pedidas hoje para fora), ticket dos convênios, equipe e laudo, projeto da sala (o modelo usa ' + mi(+m.rm.obra || 0) + ', informado pelo CEO; referências públicas de pré-instalação são maiores), cotação de manutenção e de locação, preço (referências de R$ 4,33 a 4,9 mi) e CFI da versão sem hélio. Cada 100 exames/mês valem ' + mi(qR.eq[selId].porExame * 100) + ' de VPL em ' + selId + '.');
     S.secoes.push({ h: 'Pendências que mudam o número', b: pend });
@@ -1148,6 +1205,12 @@
       su.anos.forEach(function (a) { sS.push([a.ano, a.tc, a.rm, a.rl, a.total]); });
       sS.push([], ['Margem mensal em regime', su.regMes], ['Margem anual em regime', su.regAno], ['Receita líquida anual em regime', su.rlAno], ['VPL total', su.vpl], ['VPL TC', su.vplTC], ['VPL RM', su.vplRM]);
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sS), 'SUS'); }
+    if (c.cenCambio) { var qx = c.cenCambio, bf = c.B.fx, fxS = [['Câmbio do pacote GE (B): ' + (bf.ids.length ? FX_ITENS_TXT[bf.itens] + ' em dólar' : 'nenhum item em dólar') + '; parcelas ' + (bf.dolar ? 'atreladas ao dólar' : 'fixas em reais')], [],
+        ['Premissa', 'Valor'], ['Câmbio na assinatura (R$/US$)', bf.usd], ['Câmbio da proposta GE (R$/US$)', bf.ref], ['Variação anual (parcelas atreladas)', bf.va], ['Itens em dólar (US$)', bf.usdTotal], ['Itens em dólar na proposta (R$)', bf.precoProposta], ['Itens em dólar no câmbio do modelo (R$)', bf.precoModelo], ['Parcela desses itens na proposta (R$/mês)', bf.parcelaProposta], ['… no câmbio do modelo (R$/mês)', bf.parcelaDolar], ['Variação cambial nas parcelas (R$, 60 meses)', bf.variacaoParcelas], [],
+        ['Câmbio (R$/US$)', 'Itens em dólar (R$)', 'Parcela do pacote B, fixas (R$/mês)', 'VPL de B, parcelas fixas', 'VPL de B, atreladas', 'VPL de C', 'VPL de D']];
+      qx.linhas.forEach(function (l) { fxS.push([l.usd, bf.usdTotal * l.usd, l.fixas.parcela, l.fixas.vplEnt, l.dolar.vplEnt, qx.vC, qx.vD]); });
+      fxS.push([], ['', 'Parcelas fixas', 'Parcelas atreladas'], ['VPL de B por R$ 0,10 no câmbio', qx.r.fixas.porDecimo, qx.r.dolar.porDecimo], ['Câmbio de empate B × C', qx.r.fixas.empateC, qx.r.dolar.empateC], ['Câmbio de empate B × D', qx.r.fixas.empateD, qx.r.dolar.empateD]);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(fxS), 'Câmbio B'); }
     var loc = [['Locação D no prazo de ' + c.D.n + ' meses · ' + locTxt().base + ' · ' + locTxt().manut], ['Item', 'Base', 'Cotação VMI R$/mês/un.', 'Valor de compra', 'Queda a.a.', 'Residual %', 'Residual R$', 'Aluguel (com tributos)', 'dos quais tributos', 'Manutenção média', 'Custo mensal', '% do valor/mês', 'Taxa implícita a.a.']];
     c.D.loc.linhas.forEach(function (x) { loc.push([x.nome, x.fonte === 'vmi' ? 'VMI · ' + x.cotModelo : 'composição', x.cotUnit || '', x.V, x.dep, x.rvPct, x.RV, x.fin, x.trib, x.man, x.aluguel, x.pctMes, x.taxaImpl == null ? '' : x.taxaImpl]); });
     loc.push(['Pacote', '', '', c.D.loc.V, '', c.D.loc.RV / c.D.loc.V, c.D.loc.RV, c.D.loc.fin, c.D.loc.trib, c.D.loc.man, c.D.loc.aluguel, c.D.loc.pctMes, '']);
@@ -1284,7 +1347,7 @@
       linhaAlt('Gasto mensal em ' + (+m.fin.ano_inicio), function (k) { return R(mediaMes(fl(k), 1)); }),
       linhaAlt('Gasto mensal no 3º ano', function (k) { return R(mediaMes(fl(k), 3)); }),
       linhaAlt('Cobertura do hospital em ' + l1.ano, function (k) { return X(e1(k)); }),
-      linhaAlt('Câmbio', function (k) { return k === 'B' ? 'TC em dólar' : 'nenhum'; }),
+      linhaAlt('Câmbio', function (k) { return k === 'B' ? (c.B.fx.ids.length ? 'US$ a ' + FXr(c.B.fx.usd) : 'nenhum') : 'nenhum'; }),
       linhaAlt('VPL para o hospital, ' + H + ' anos', function (k) { return { t: mi(fl(k).vplEnt), n: true, b: true, cor: k === best ? 'good' : '' }; }),
       linhaAlt('Caixa acumulado, ' + H + ' anos', function (k) { return mi(fl(k).acumEnt); })];
     lista.push({ nav: 'Alternativas', k: 'Alternativas', t: 'A ' + nomeAlt[best] + ' tem o maior valor para o hospital: ' + mi(fl(best).vplEnt) + ' em ' + H + ' anos, ' + mi(gap) + ' acima da ' + curtoAlt[ord[1]], b: [
@@ -1386,13 +1449,36 @@
     if (qP) { secCh('PACS Sectra (estimativa S&S, sem cotação)', 'o PACS'); linhaCh('Com PACS', qP.com, qP.on); linhaCh('Sem PACS', qP.sem, !qP.on); }
     if (qS) { secCh('SUS', 'o SUS'); linhaCh('Fora (decisão do CEO)', qS.v.fora, qS.modo === 'fora'); linhaCh('SUS atual', qS.v.atual, qS.modo === 'atual'); linhaCh('SUS atual + Agora Tem Especialistas', qS.v.ate, qS.modo === 'ate'); }
     if (qR) { secCh('Ressonância', 'a ressonância'); linhaCh('Sem RM', qR.sem, !rmLig); linhaCh('Com RM', qR.com, rmLig); }
-    var gruposTodos = [qP ? 'o PACS' : null, qS ? 'o SUS' : null, qR ? 'a ressonância' : null].filter(Boolean), gruposMuda = muda.map(function (x) { return x.g; });
+    var qX = c.cenCambio, fX = qX ? fxInfo() : null, temX = !!(qX && fX.tem);
+    if (temX) { secCh('Câmbio do pacote GE (parcelas ' + (fX.modo === 'dolar' ? 'atreladas ao dólar' : 'fixas em R$') + ')', 'o câmbio'); var lx = qX.linhas, lsel = [lx[0], lx.filter(function (l) { return l.atual; })[0], lx[lx.length - 1]].filter(function (l, i, a) { return l && a.indexOf(l) === i; });
+      lsel.forEach(function (l) { linhaCh('Dólar a ' + FXr(l.usd), { B: { vplEnt: l[fX.modo].vplEnt }, C: { vplEnt: qX.vC }, D: { vplEnt: qX.vD } }, l.atual); }); }
+    var gruposTodos = [qP ? 'o PACS' : null, qS ? 'o SUS' : null, qR ? 'a ressonância' : null, temX ? 'o câmbio' : null].filter(Boolean), gruposMuda = muda.map(function (x) { return x.g; });
     var listaE = function (a) { return a.length > 1 ? a.slice(0, -1).join(', ') + ' e ' + a[a.length - 1] : a[0]; }, cap = function (t) { return t.charAt(0).toUpperCase() + t.slice(1); };
     var tCh = !muda.length ? cap(listaE(gruposTodos)) + ' mudam o tamanho do ganho, não a escolha: a ' + curtoAlt[best] + ' fica à frente em todos os cenários'
       : cap(listaE(gruposMuda)) + ' ' + (gruposMuda.length > 1 ? 'mudam' : 'muda') + ' a escolha: ' + muda.map(function (x) { return x.lab.charAt(0).toLowerCase() + x.lab.slice(1) + ', a melhor passa a ser a ' + curtoAlt[x.bst]; }).join('; ') + (gruposTodos.length > gruposMuda.length ? '. ' + cap(listaE(gruposTodos.filter(function (g) { return gruposMuda.indexOf(g) < 0; }))) + ' só ' + (gruposTodos.length - gruposMuda.length > 1 ? 'mudam' : 'muda') + ' o tamanho do ganho' : '');
     lista.push({ nav: 'Cenários', k: 'Chaves de cenário', t: tCh, b: [
       { tipo: 'tab', x: 56, y: 150, w: 1168, tam: 14.5, cab: ['VPL para o hospital, ' + H + ' anos', 'B · GE, compra', 'C · VMI, compra', 'D · VMI, locação', 'Melhor'], larg: [0.36, 0.16, 0.16, 0.16, 0.16], al: ['', 'n', 'n', 'n', 'c'], rc: chRc, hl: chHl, linhas: chRows },
       { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Cada linha muda uma chave e mantém as outras como no cenário atual (destacado). As chaves ficam na Tese e em Premissas.' }] });
+
+    /* 11b · câmbio do pacote GE */
+    if (temX) {
+      var mxCD = Math.max(qX.vC, qX.vD), fxr = fX.rr, it0 = fX.itensTxt.charAt(0).toUpperCase() + fX.itensTxt.slice(1);
+      var fxRows = qX.linhas.map(function (l) { var d = l[fX.modo].vplEnt - mxCD; return [{ t: FXr(l.usd) + (l.proposta ? ' · proposta GE' : '') + (l.atual ? ' · premissa' : ''), b: l.atual }, { t: R(fX.fx.usdTotal * l.usd), n: true }, { t: R(l[fX.modo].parcela), n: true }, { t: mi(l.fixas.vplEnt), n: true, b: l.atual && fX.modo === 'fixas' }, { t: mi(l.dolar.vplEnt), n: true, b: l.atual && fX.modo === 'dolar' }, { t: (d >= 0 ? '+' : '') + mi(d), n: true, cor: d >= 0 ? 'good' : 'bad' }]; });
+      lista.push({ nav: 'Câmbio', k: 'Câmbio · pacote GE (B)', t: 'O câmbio pesa só no pacote GE: a ' + FXr(fX.fx.usd) + ', o VPL de B ' + (fX.dVpl <= 0 ? 'cai ' : 'sobe ') + mi(Math.abs(fX.dVpl)) + ' frente à proposta; ' + fxEmpateTxt(fxr.empateC, 'C', fl('B').vplEnt, fl('C').vplEnt), b: [
+        { tipo: 'tab', x: 56, y: 150, w: 810, tam: 14, cab: ['Dólar (R$/US$)', 'Itens em US$ (R$)', 'Parcela B (R$/mês)', 'VPL B, parcelas fixas', 'VPL B, atreladas', 'B − melhor de C e D'], larg: [0.25, 0.15, 0.15, 0.15, 0.14, 0.16], al: ['', 'n', 'n', 'n', 'n', 'n'], hl: qX.linhas.map(function (l) { return l.atual; }), linhas: fxRows },
+        { tipo: 'g', x: 56, y: 348, w: 810, tit: 'VPL para o hospital conforme o dólar (R$/US$)', f: function (el) {
+          var us = [], u; for (u = 4.5; u <= 6.5001; u += 0.25) us.push(Math.round(u * 100) / 100);
+          var lin = function (k) { return us.map(function (x) { return qX.r[k].vplAtual + qX.r[k].porDecimo * 10 * (x - fX.fx.usd); }); };
+          el.innerHTML = svgLines({ cats: us.map(function (x) { return NF2.format(x); }), h: 215, zoom: true, fmt: function (v) { return mi(v); }, aria: 'VPL conforme o câmbio', series: [
+            { nome: 'B · parcelas fixas', vals: lin('fixas'), cor: ALT_COR.B }, { nome: 'B · atreladas ao dólar', vals: lin('dolar'), cor: ALT_COR.B, dash: true },
+            { nome: 'C · VMI compra', vals: us.map(function () { return qX.vC; }), cor: ALT_COR.C }, { nome: 'D · VMI locação', vals: us.map(function () { return qX.vD; }), cor: ALT_COR.D, dash: true }] }); } },
+        { tipo: 'txt', x: 900, y: 150, w: 324, tam: 14.5, bullets: [
+          it0 + ' em dólar: US$ ' + NF0.format(Math.round(fX.fx.usdTotal)) + ' (proposta a ' + FXr(fX.fx.ref) + '). C e D são cotações VMI em reais.',
+          'Cada R$ 0,10 no dólar: **' + R(Math.abs(fxr.parcelaPorDecimo)) + '/mês** na parcela e **' + mi(Math.abs(fxr.porDecimo)) + '** no VPL de B.',
+          fxEmpateTxt(fxr.empateC, 'C', fl('B').vplEnt, fl('C').vplEnt) + '; ' + fxEmpateTxt(fxr.empateD, 'D', fl('B').vplEnt, fl('D').vplEnt) + '.',
+          '**A confirmar com a GE:** itens em dólar, parcela fixa em reais depois da assinatura e validade do preço.'] },
+        { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Parcelas ' + (fX.modo === 'dolar' ? 'atreladas ao dólar (+' + Pp(fX.fx.va * 100) + ' a.a., Focus)' : 'fixas em reais desde a assinatura') + ' no cenário atual. PTAX de venda: R$ 5,04 (23/10), R$ 5,50 (26/10) e R$ 5,3420 (28/10/2026). Focus de 23/10/2026: R$ 5,05 (2026), R$ 5,15 (2027), R$ 5,28 (2029).' }] });
+    }
 
     /* 12 · sensibilidade */
     var sens = sensDeck(), top = sens.itens.slice(0, 3);
@@ -1414,6 +1500,7 @@
       ['fin.inicio_op_mes', 'Início da operação própria', fmtMes(goLive())],
       ['altC.prazo', 'Financiamento pedido (C)', m.altC.prazo + ' meses, ' + m.altC.carencia + ' de carência'],
       ['altD.prazo', 'Locação (D)', c.D.n + ' meses'],
+      ['cambio.usd', 'Câmbio do pacote GE (B)', FXr(m.cambio.usd) + ' (proposta ' + FXr(m.cambio.ref) + ')'],
       ['fin.desconto', 'Taxa de desconto e horizonte', P(m.fin.desconto, 0) + ' a.a., ' + H + ' anos'],
       ['cenario.reajuste_modo', 'Inflação nos fluxos', (m.cenario.reajuste_modo || 'ipca') === 'ipca' ? 'IPCA do Focus' : 'taxa fixa'],
       ['sus.modo', 'SUS no modelo', susNome(E.susModo(m))],
@@ -1431,7 +1518,7 @@
       '**Código FINAME da Pulsar.** O modelo assume o credenciamento até dez/2026. Se atrasar, a TC sai do FINAME' + (fe.st === 'fora' ? ' e vai para recurso próprio ou o BNDES Automático' : ' e vai para o FGTS-Saúde, se couber, ou recurso próprio') + '.',
       '**Crédito antes do TDC.** Sem o TDC, a cobertura de ' + l1.ano + ' fica em ' + X(l1.dscrSem) + ' e o banco pode pedir garantia real ou adiar.'];
     if (qR) rk2.push('**Ressonância depende de volume.** Empata com ' + N(eqR.volume) + ' exames por mês; validar a demanda e a volta da RM aos pacotes dos planos antes de comprar.');
-    if (best === 'B' || sid === 'B') rk2.push('**Câmbio no pacote GE.** A TC GE tem preço em dólar a R$ 5,1604 até o contrato.');
+    (function () { var f = fxInfo(); if (!f.q || !f.tem) return; rk2.push('**Câmbio no pacote GE.** ' + f.itensTxt.charAt(0).toUpperCase() + f.itensTxt.slice(1) + ' em dólar: a ' + FXr(f.fx.usd) + ', o VPL de B ' + (f.dVpl <= 0 ? 'cai ' : 'sobe ') + mi(Math.abs(f.dVpl)) + ' frente à proposta (' + FXr(f.fx.ref) + '); ' + fxEmpateTxt(f.rr.empateC, 'C', c.flB.vplEnt, c.flC.vplEnt) + '.' + (sid === 'B' || best === 'B' ? ' Fixar as parcelas em reais na assinatura.' : '')); })();
     lista.push({ nav: 'Riscos', k: 'Riscos', t: 'O que pode dar errado e como evitar', b: [{ tipo: 'txt', x: 56, y: 156, w: 1168, tam: 18, bullets: rk2 }] });
 
     /* 15+ · pendências que mudam o número (paginadas) */
@@ -1683,7 +1770,18 @@
         }
       }
     } finally { off.remove(); }
-    return pptx.write({ outputType: 'blob' });
+    /* O PptxGenJS 3.12 repete <a:pPr> antes de cada trecho de um parágrafo com negrito: XML fora do esquema (o PowerPoint pode
+       pedir reparo e o marcador some). Mantém só o <a:pPr> do início de cada parágrafo. */
+    var JZ = window.JSZip, MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    if (!JZ) return pptx.write({ outputType: 'blob' });
+    var zip = await JZ.loadAsync(await pptx.write({ outputType: 'arraybuffer' }));
+    var arqs = Object.keys(zip.files).filter(function (n) { return /^ppt\/(slides|slideMasters|slideLayouts)\/[^/]+\.xml$/.test(n); });
+    for (var a = 0; a < arqs.length; a++) {
+      var xml = await zip.file(arqs[a]).async('string');
+      xml = xml.replace(/<a:p>([\s\S]*?)<\/a:p>/g, function (m0, inner) { var corrido = false; return '<a:p>' + inner.replace(/<a:pPr\b[^>]*\/>|<a:pPr\b[^>]*>[\s\S]*?<\/a:pPr>|<a:r>|<a:br\b|<a:fld\b/g, function (tk) { if (tk.indexOf('<a:pPr') !== 0) { corrido = true; return tk; } return corrido ? '' : tk; }) + '</a:p>'; });
+      zip.file(arqs[a], xml);
+    }
+    return zip.generateAsync({ type: 'blob', mimeType: MIME, compression: 'DEFLATE' });
   }
   async function baixarPptx() {
     if (ocupado) return; ocupado = true; busy('Carregando o gerador de PowerPoint…');

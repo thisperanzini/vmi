@@ -344,25 +344,46 @@ var Engine = (function () {
     };
   }
 
+  /* ---------- Câmbio (pacote B · GE) ----------
+     Preços e parcelas da tabela do pacote B estão no câmbio da proposta GE (cambio.ref). Os itens em dólar (cambio.itens)
+     são corrigidos pela razão cambio.usd ÷ cambio.ref na assinatura. Com parcelas "dolar", cada parcela desses itens segue
+     o câmbio do mês: cambio.usd × (1 + var_aa)^(meses desde a 1ª parcela do pacote ÷ 12). A taxa implícita não muda. */
+  var FX_ITENS = { tc: ['tc'], ge: ['tc', 'us'], ge_rm: ['tc', 'us', 'rm'] };
+  function fxB(m) {
+    var c = m.cambio || {}, ref = num(c.ref) || 5.1604, usd = num(c.usd) || ref, it = FX_ITENS[c.itens] ? c.itens : 'tc';
+    return { ref: ref, usd: usd, f: usd / ref, itens: it, ids: FX_ITENS[it], dolar: c.parcelas === 'dolar', va: num(c.var_aa) };
+  }
+  function emDolar(fx, it) { return !!it && fx.ids.indexOf(isRM(it) ? 'rm' : it.id) >= 0; }
+
   /* ---------- Alternativa B: parcelas fixas informadas pelos fornecedores (HFS/GE) ---------- */
   function altB(m) {
     var todos = m.equip.B || [], rows = [], anoIni = num(m.fin.ano_inicio), mIni = num(m.fin.inicio_op_mes) || 0;
-    var n = num(m.equip.B_n) || 60;
+    var n = num(m.equip.B_n) || 60, fx = fxB(m);
     /* RM sem proposta GE: parcela calculada à taxa implícita dos demais itens financiados do pacote (HFS e fornecedores) */
     var base0 = todos.filter(function (it) { return !isRM(it) && it.fin !== false; }), cx0 = capexDe(base0), iB = taxaImplicita(cx0.financiavel, cx0.parcelaMes, n);
     var efetivos = todos.map(function (it) {
-      if (!isRM(it) || (it.parcela_auto === false && num(it.parcela) > 0)) return it;
-      var c = clone(it), nn = num(it.n) || n, P = num(it.preco); c.parcela = iB ? P * iB / (1 - Math.pow(1 + iB, -nn)) : P / nn; c.parcelaAuto = true; return c;
+      var c = it;
+      if (isRM(it) && !(it.parcela_auto === false && num(it.parcela) > 0)) { c = clone(it); var nn = num(it.n) || n, P = num(it.preco); c.parcela = iB ? P * iB / (1 - Math.pow(1 + iB, -nn)) : P / nn; c.parcelaAuto = true; }
+      if (emDolar(fx, it)) { if (c === it) c = clone(it); c.usd = num(it.preco) / fx.ref; c.precoProposta = num(it.preco); c.preco = num(it.preco) * fx.f; c.parcela = num(c.parcela) * fx.f; c.emDolar = true; }
+      return c;
     });
     var itens = ativos(m, efetivos), cx = capexDe(itens), cxRM = capexDe(itens.filter(isRM)), cxB0 = capexDe(itens.filter(function (it) { return !isRM(it); }));
     /* parcela constante por item; taxa implícita por item para exibição (lista completa, na ordem da tabela) */
     var implic = efetivos.map(function (it) { var P = num(it.preco), pm = num(it.parcela), nn = num(it.n) || n; var i = taxaImplicita(P, pm, nn); return { id: it.id, taxaMes: i, taxaAno: i == null ? null : (Math.pow(1 + i, 12) - 1) * 100, totalPago: pm * nn * num(it.qtd), parcelaAuto: it.parcelaAuto ? pm : null, fora: isRM(it) && !rmOn(m), alerta: pm * nn < P ? 'Parcelas somam menos que o valor à vista' : (i === 0 ? 'Sem juros declarados' : '') }; });
     /* parcelas do pacote a partir da instalação; as da RM a partir da instalação da RM */
-    var acc = {}, add = function (ini, v) { for (var k = 1; k <= n; k++) acc[ini + k] = (acc[ini + k] || 0) + v; };
-    add(mIni, cxB0.parcelaMes); if (cxRM.parcelaMes) add(iniRM(m), cxRM.parcelaMes);
+    /* parcela dos itens em dólar (no câmbio da assinatura): com parcelas atreladas, segue o câmbio do mês */
+    var dol = function (l) { return capexDe(l.filter(function (it) { return it.emDolar; })); };
+    var uB0 = dol(itens.filter(function (it) { return !isRM(it); })).parcelaMes, uRM = dol(itens.filter(isRM)).parcelaMes, varFx = 0;
+    var idx = function (mm) { return fx.dolar ? Math.pow(1 + fx.va, (mm - mIni - 1) / 12) : 1; };
+    var acc = {}, add = function (ini, v, vu) { for (var k = 1; k <= n; k++) { var mm = ini + k, e = vu * (idx(mm) - 1); varFx += e; acc[mm] = (acc[mm] || 0) + v + e; } };
+    add(mIni, cxB0.parcelaMes, uB0); if (cxRM.parcelaMes) add(iniRM(m), cxRM.parcelaMes, uRM);
     Object.keys(acc).map(Number).sort(function (a, b) { return a - b; }).forEach(function (mm) { rows.push({ t: mm - mIni, y: anoIni + Math.floor((mm - 1) / 12), m: ((mm - 1) % 12) + 1, parcela: acc[mm], juros: 0, amort: 0, saldo: null }); });
-    var pagosB = rows.reduce(function (a, r) { return a + r.parcela; }, 0), juros = pagosB - cx.financiavel;
-    return { id: 'B', capex: cx.total, capexFin: cx.financiavel, capexRM: cxRM.total, capexFinRM: cxRM.financiavel, custosIni: 0, servico: servicoPorAnoProj(rows, anoIni), rows: rows, parcela: cx.parcelaMes, n: n, pagos: pagosB, juros: juros, implic: implic, cetAno: (function () { var i = taxaImplicita(cx.financiavel, cx.parcelaMes, n); return i == null ? null : (Math.pow(1 + i, 12) - 1) * 100; })() };
+    var pagosB = rows.reduce(function (a, r) { return a + r.parcela; }, 0), juros = pagosB - cx.financiavel - varFx;
+    var itU = itens.filter(function (it) { return it.emDolar; }), sU = function (k) { return itU.reduce(function (a, it) { return a + num(it.qtd) * num(it[k]); }, 0); };
+    var fxInfo = { ref: fx.ref, usd: fx.usd, f: fx.f, itens: fx.itens, dolar: fx.dolar, va: fx.va, ids: itU.map(function (it) { return it.id; }), nomes: itU.map(function (it) { return it.nome; }),
+      usdTotal: sU('usd'), precoProposta: sU('precoProposta'), precoModelo: sU('preco'), parcelaDolar: uB0 + uRM, parcelaProposta: (uB0 + uRM) / fx.f, variacaoParcelas: varFx,
+      usdUltima: fx.dolar ? fx.usd * Math.pow(1 + fx.va, (n - 1) / 12) : fx.usd };
+    return { id: 'B', capex: cx.total, capexFin: cx.financiavel, capexRM: cxRM.total, capexFinRM: cxRM.financiavel, custosIni: 0, servico: servicoPorAnoProj(rows, anoIni), rows: rows, parcela: cx.parcelaMes, n: n, pagos: pagosB, juros: juros, varCambio: varFx, fx: fxInfo, implic: implic, cetAno: (function () { var i = taxaImplicita(cx.financiavel, cx.parcelaMes, n); return i == null ? null : (Math.pow(1 + i, 12) - 1) * 100; })() };
   }
   function taxaImplicita(P, pm, n) {
     if (!P || !pm || !n) return null;
@@ -508,8 +529,31 @@ var Engine = (function () {
       out.cenFIIS = cenariosFIIS(m, Motor, BASE, out);
       out.cenSUS = cenariosSUS(m, Motor, BASE, out);
       out.lcdAuto = lcdAutomatico(m, Motor, BASE, out);
+      out.cenCambio = cenariosCambio(m, out);
     }
     return out;
+  }
+
+  /* Câmbio: o VPL de B em vários níveis de câmbio, nas duas formas de parcela, e o câmbio em que B empata com C e com D.
+     O VPL de B é linear no câmbio (preço e parcelas dos itens em dólar escalam juntos), então o empate sai de dois pontos. */
+  function vplBcambio(m, usd, parcelas) {
+    var m2 = clone(m); m2.cambio = m2.cambio || {}; m2.cambio.usd = usd; if (parcelas) m2.cambio.parcelas = parcelas;
+    var B = altB(m2); B.manut = manutPacote(m2, ativos(m2, m2.equip.B)); B.opex = opexManut(B.manut);
+    var fl = fluxo(m2, B);
+    return { usd: usd, vplEnt: fl.vplEnt, vpl: fl.vpl, acumEnt: fl.acumEnt, parcela: B.parcela, capex: B.capex, pagos: B.pagos, varCambio: B.varCambio };
+  }
+  function cenariosCambio(m, out) {
+    var fx = fxB(m), modo = fx.dolar ? 'dolar' : 'fixas', vC = out.flC.vplEnt, vD = out.flD.vplEnt;
+    var usd = Math.round(fx.usd * 10000) / 10000;
+    var niveis = [4.80, fx.ref, usd, 5.80, 6.50].map(function (v) { return Math.round(v * 10000) / 10000; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
+    var linhas = niveis.map(function (u) { return { usd: u, atual: u === usd, proposta: u === Math.round(fx.ref * 10000) / 10000, fixas: vplBcambio(m, u, 'fixas'), dolar: vplBcambio(m, u, 'dolar') }; });
+    var r = {}, lo = linhas[0], hi = linhas[linhas.length - 1], at = linhas.filter(function (l) { return l.atual; })[0];
+    ['fixas', 'dolar'].forEach(function (k) {
+      var sl = hi.usd > lo.usd ? (hi[k].vplEnt - lo[k].vplEnt) / (hi.usd - lo.usd) : 0; /* R$ de VPL por R$ 1,00 no câmbio (linear) */
+      var v0 = at[k].vplEnt, emp = function (alvo) { return sl ? usd + (alvo - v0) / sl : null; };
+      r[k] = { porDecimo: sl / 10, vplAtual: v0, empateC: emp(vC), empateD: emp(vD), parcelaPorDecimo: hi.usd > lo.usd ? (hi[k].parcela - lo[k].parcela) / (hi.usd - lo.usd) / 10 : 0, varCambio: at[k].varCambio };
+    });
+    return { fx: fx, modo: modo, niveis: niveis, linhas: linhas, vB: out.flB.vplEnt, vC: vC, vD: vD, r: r, temDolar: (out.B.fx.ids || []).length > 0, usdTotal: out.B.fx.usdTotal };
   }
 
   /* SUS: as três posições da chave lado a lado (a RM e o PACS ficam como estão) */
@@ -640,7 +684,7 @@ var Engine = (function () {
     return { base: basev, itens: out };
   }
 
-  return { num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
+  return { fxB: fxB, emDolar: emDolar, num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
     mesesAno: mesesAno, mesesDesde: mesesDesde, rmOn: rmOn, pacsOn: pacsOn, susModo: susModo, susAtualOn: susAtualOn, susAteOn: susAteOn, pacsEx: pacsEx, pacsImpl: pacsImpl, isRM: isRM, ativos: ativos, rmMensal: rmMensal, rmAno: rmAno, capacidadeRM: capacidadeRM, iniRM: iniRM, aprovRM: aprovRM, anoRM: anoRM, anoEqRM: anoEqRM, mesRMStr: mesRMStr, susUpside: susUpside, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
