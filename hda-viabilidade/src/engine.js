@@ -398,12 +398,37 @@ var Engine = (function () {
      Zerada a cada cálculo completo; resultados só de leitura. */
   var AV = { motor: null, base: null, map: {}, n: 0 };
   function avaliarMemo(Motor, caso, BASE) {
-    if (AV.motor !== Motor || AV.base !== BASE) AV = { motor: Motor, base: BASE, map: {}, n: 0 };
-    var k = JSON.stringify(caso), v = AV.map[k];
+    var bo = (BASE && BASE._hdaOrig) || BASE;
+    if (AV.motor !== Motor || AV.base !== bo) AV = { motor: Motor, base: bo, map: {}, n: 0 };
+    var k = ((BASE && BASE._hdaK) || '') + JSON.stringify(caso), v = AV.map[k];
     if (v) return v;
     if (AV.n >= 200) { AV.map = {}; AV.n = 0; }
     v = Motor.avaliar(caso, BASE); AV.map[k] = v; AV.n++;
     return v;
+  }
+
+  /* Cotação do agente (só no HDA): sobrepõe à base de linhas compartilhada o spread do agente no FINAME, a parte pré da TLP
+     e a tarifa de formalização. A base da ferramenta Financiamento VMI não muda; o motor recebe uma cópia. */
+  var BH = { orig: null, map: {} };
+  function cotacaoOn(m) { return !!(m.altC && m.altC.cotacao === 'daycoval'); }
+  function baseHDA(m, BASE) {
+    var orig = (BASE && BASE._hdaOrig) || BASE, a = m.altC || {};
+    if (!orig || !orig.linhas || !cotacaoOn(m)) return orig;
+    var sp = num(a.spread_agente) * 100, jm = num(a.tlp_jm) * 100, tf = num(a.tarifa_pct) * 100;
+    var k = 'cot:' + [sp, jm, tf].map(function (x) { return x.toFixed(6); }).join('|') + '|';
+    if (BH.orig !== orig) BH = { orig: orig, map: {} };
+    if (BH.map[k]) return BH.map[k];
+    var b = clone(orig);
+    if (b.macro && b.macro.tlp_jm && jm > 0) { b.macro.tlp_jm.v = jm; b.macro.tlp_jm.mes = 'cotação do agente'; }
+    b.linhas.forEach(function (l) {
+      if (!/^finame-bk/.test(l.id)) return;
+      var grupos = [l.spreads || []]; Object.keys(l.spreads_custo || {}).forEach(function (c) { grupos.push(l.spreads_custo[c]); });
+      grupos.forEach(function (ss) { ss.forEach(function (s) { if (s.nome === 'Taxa do agente') { s.base = s.min = s.max = sp; s.obs = 'Cotação do agente (premissa do HDA).'; } }); });
+      l.tarifa = tf;
+    });
+    Object.defineProperty(b, '_hdaOrig', { value: orig, enumerable: false });
+    Object.defineProperty(b, '_hdaK', { value: k, enumerable: false });
+    BH.map[k] = b; return b;
   }
 
   /* ---------- Alternativa C: pacote VMI financiado pelo Motor (ferramenta Financiamento VMI) ---------- */
@@ -499,8 +524,9 @@ var Engine = (function () {
 
   /* ---------- Cálculo completo ---------- */
   function calcular(m, Motor, BASE, opts) {
-    IPCA_PATH = (BASE && BASE.macro && BASE.macro.focus && BASE.macro.focus.ipca) || null;
-    if (!(opts && opts.leve)) AV = { motor: Motor, base: BASE, map: {}, n: 0 }; /* cálculo completo: memória nova (a base pode ter mudado) */
+    BASE = baseHDA(m, BASE);
+    IPCA_PATH =(BASE && BASE.macro && BASE.macro.focus && BASE.macro.focus.ipca) || null;
+    if (!(opts && opts.leve)) AV = { motor: Motor, base: (BASE && BASE._hdaOrig) || BASE, map: {}, n: 0 }; /* cálculo completo: memória nova (a base pode ter mudado) */
     var B = altB(m), C = altC(m, Motor, BASE);
     B.manut = manutPacote(m, ativos(m, m.equip.B)); B.opex = opexManut(B.manut);
     C.manut = manutPacote(m, ativos(m, m.equip.C)); C.opex = opexManut(C.manut);
@@ -532,6 +558,15 @@ var Engine = (function () {
       out.cenCambio = cenariosCambio(m, out);
     }
     return out;
+  }
+
+  /* Cotação do agente: o mesmo caso nas condições da base de linhas, para mostrar o que a cotação muda.
+     Fora do cálculo completo (custa um caso de crédito a mais); a página chama sob demanda. */
+  function cenarioCotacao(m, Motor, BASE, out) {
+    if (!cotacaoOn(m) || !out.C.escolha) return null;
+    var m2 = clone(m); m2.altC.cotacao = 'base';
+    var r = calcular(m2, Motor, (BASE && BASE._hdaOrig) || BASE, { leve: true }), e = r.C.escolha;
+    return { cet: r.C.cetAno, parcela: r.C.parcela, vplC: r.flC.vplEnt, dVplC: out.flC.vplEnt - r.flC.vplEnt, linha: e ? e.linha.nome : null, custo: e ? e.sim.custo : null, juros: r.C.juros, dJuros: (r.C.juros || 0) - (out.C.juros || 0), tarifa: (out.C.custosIni || 0) - (r.C.custosIni || 0) };
   }
 
   /* Câmbio: o VPL de B em vários níveis de câmbio, nas duas formas de parcela, e o câmbio em que B empata com C e com D.
@@ -684,7 +719,7 @@ var Engine = (function () {
     return { base: basev, itens: out };
   }
 
-  return { fxB: fxB, emDolar: emDolar, num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
+  return { baseHDA: baseHDA, cotacaoOn: cotacaoOn, cenarioCotacao: cenarioCotacao, fxB: fxB, emDolar: emDolar, num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
     mesesAno: mesesAno, mesesDesde: mesesDesde, rmOn: rmOn, pacsOn: pacsOn, susModo: susModo, susAtualOn: susAtualOn, susAteOn: susAteOn, pacsEx: pacsEx, pacsImpl: pacsImpl, isRM: isRM, ativos: ativos, rmMensal: rmMensal, rmAno: rmAno, capacidadeRM: capacidadeRM, iniRM: iniRM, aprovRM: aprovRM, anoRM: anoRM, anoEqRM: anoEqRM, mesRMStr: mesRMStr, susUpside: susUpside, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
