@@ -408,13 +408,14 @@ var Engine = (function () {
   }
 
   /* Cotação do agente (só no HDA): sobrepõe à base de linhas compartilhada o spread do agente no FINAME, a parte pré da TLP
-     e a tarifa de formalização. A base da ferramenta Financiamento VMI não muda; o motor recebe uma cópia. */
+     e a tarifa de formalização (a do contrato da RM com rm = true). A base da ferramenta Financiamento VMI não muda; o motor recebe uma cópia. */
   var BH = { orig: null, map: {} };
   function cotacaoOn(m) { return !!(m.altC && m.altC.cotacao === 'daycoval'); }
-  function baseHDA(m, BASE) {
+  function baseHDA(m, BASE, rm) {
     var orig = (BASE && BASE._hdaOrig) || BASE, a = m.altC || {};
     if (!orig || !orig.linhas || !cotacaoOn(m)) return orig;
-    var sp = num(a.spread_agente) * 100, jm = num(a.tlp_jm) * 100, tf = num(a.tarifa_pct) * 100;
+    var tfRM = a.tarifa_pct_rm === '' || a.tarifa_pct_rm == null ? a.tarifa_pct : a.tarifa_pct_rm; /* contrato da RM: tarifa própria */
+    var sp = num(a.spread_agente) * 100, jm = num(a.tlp_jm) * 100, tf = num(rm ? tfRM : a.tarifa_pct) * 100;
     var k = 'cot:' + [sp, jm, tf].map(function (x) { return x.toFixed(6); }).join('|') + '|';
     if (BH.orig !== orig) BH = { orig: orig, map: {} };
     if (BH.map[k]) return BH.map[k];
@@ -457,7 +458,7 @@ var Engine = (function () {
       if (cxRM.financiavel > 0) {
         var caso2 = clone(caso); caso2.operacao.valor_equip = cxRM.financiavel; caso2.operacao.valor_obra = 0; caso2.operacao.valor_financiar = null;
         caso2.operacao.inicio = mesRMStr(m); /* liberação na entrega da RM */ caso2.operacao.equipamento = { cfi: itensRM.every(function (i) { return /^\d+$/.test(String(i.cfi || '').trim()); }) ? 'informado' : (num(ac.cfi_presumido) ? 'presumido' : ''), origem: 'nacional' };
-        var av2 = avaliarMemo(Motor, caso2, BASE), x2 = av2.todas.filter(function (t) { return t.linha.id === escolha.linha.id; })[0];
+        var av2 = avaliarMemo(Motor, caso2, baseHDA(m, BASE, true)), x2 = av2.todas.filter(function (t) { return t.linha.id === escolha.linha.id; })[0];
         var sim2 = x2 && x2.sim ? (x2.alternativas || []).filter(function (a) { return a.custo === s.custo; })[0] || x2.sim : (av2.ranking[0] ? av2.ranking[0].sim : null);
         if (sim2) { s2 = sim2; out.rmFin = { sim: sim2, linha: x2 && x2.sim ? x2.linha : av2.ranking[0].linha, av: av2, inicio: caso2.operacao.inicio }; }
       }
