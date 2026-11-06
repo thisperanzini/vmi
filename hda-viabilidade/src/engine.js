@@ -223,6 +223,7 @@ var Engine = (function () {
   }
   function locacao(m, itens, n) {
     var d = m.altD || {}, ra = num(d.taxa_base) + num(d.premio), rm = Math.pow(1 + ra, 1 / 12) - 1, tr = num(d.trib);
+    var kAj = Math.max(0, 1 + num(d.ajuste)); /* ajuste sobre o preço da locação (tabela VMI, proxy da RM e composição) */
     var G = num(m.manut && m.manut.garantia_meses), fat = fatorManut(m), usaVmi = (d.fonte || 'vmi') !== 'composicao', manInclusa = d.vmi_manut === 'sim';
     var plano = (m.manut && m.manut.plano) === 'prata' ? 'prata' : 'ouro', tubo = num(m.propria.tubo);
     var v = Math.pow(1 + rm, -n), fa = rm > 0 ? rm / (1 - v) : 1 / n;
@@ -234,19 +235,19 @@ var Engine = (function () {
         if (cp != null && num(px.preco) > 0) { cot = cp / num(px.preco) * num(it.preco); proxy = true; }
       }
       if (cot != null) {
-        var base = cot * q, contrato = (plano === 'prata' ? num(it.m_prata) + (it.tubo ? tubo : 0) : num(it.m_ouro)) * q * fat;
+        var base = cot * q * kAj, contrato = (plano === 'prata' ? num(it.m_prata) + (it.tubo ? tubo : 0) : num(it.m_ouro)) * q * fat;
         var manSep = manInclusa ? 0 : contrato * Math.max(0, n - G) / n;
         var finImpl = base * (1 - tr); /* teto: trata o aluguel inteiro como parcela financeira; com manutenção inclusa, a taxa efetiva é menor */
         return { id: it.id, nome: it.nome, modelo: it.modelo, rm: isRM(it), ini: iniItem(m, it), qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: proxy ? 'proxy' : 'vmi', cotUnit: cot, cotModelo: it.loc_vmi_modelo || it.modelo,
           fin: base, trib: 0, man: manSep, manSep: manSep, manLoc: 0, aluguel: base + manSep, taxaImpl: taxaLocImplicita(V, RV, n, finImpl), pctMes: V ? (base + manSep) / V : null };
       }
-      var fin = (V - RV * v) * fa, finBruto = tr < 1 ? fin / (1 - tr) : fin;
-      var man = num(it.m_ouro) * q * fat * Math.max(0, n - G) / n;
+      var fin = (V - RV * v) * fa * kAj, finBruto = tr < 1 ? fin / (1 - tr) : fin;
+      var man = num(it.m_ouro) * q * fat * Math.max(0, n - G) / n * kAj;
       return { id: it.id, nome: it.nome, modelo: it.modelo, rm: isRM(it), ini: iniItem(m, it), qtd: q, V: V, dep: dep, rvPct: rv, RV: RV, fonte: 'composicao', cotUnit: null, fin: finBruto, finLiq: fin, trib: finBruto - fin, man: man, manSep: 0, manLoc: man, aluguel: finBruto + man, taxaImpl: null, pctMes: V ? (finBruto + man) / V : null };
     });
     var s = function (k) { return linhas.reduce(function (a, x) { return a + (x[k] || 0); }, 0); };
     var V = s('V'), vm = linhas.filter(function (x) { return x.fonte === 'vmi'; }), pxs = linhas.filter(function (x) { return x.fonte === 'proxy'; }), cps = linhas.filter(function (x) { return x.fonte === 'composicao'; });
-    return { n: n, taxaAno: ra, taxaMes: rm, linhas: linhas, V: V, RV: s('RV'), fin: s('fin'), trib: s('trib'), man: s('man'), manSep: s('manSep'), manLoc: s('manLoc'), aluguel: s('aluguel'), pctMes: V ? s('aluguel') / V : null,
+    return { n: n, taxaAno: ra, taxaMes: rm, ajuste: kAj - 1, linhas: linhas, V: V, RV: s('RV'), fin: s('fin'), trib: s('trib'), man: s('man'), manSep: s('manSep'), manLoc: s('manLoc'), aluguel: s('aluguel'), pctMes: V ? s('aluguel') / V : null,
       usaVmi: usaVmi, manInclusa: manInclusa, plano: plano, nVmi: vm.length, aluguelVmi: vm.reduce(function (a, x) { return a + x.fin; }, 0),
       nProxy: pxs.length, aluguelProxy: pxs.reduce(function (a, x) { return a + x.fin; }, 0), proxyItens: pxs.map(function (x) { return x.nome + (x.modelo ? ' (' + x.modelo + ')' : ''); }),
       aluguelComp: cps.reduce(function (a, x) { return a + x.aluguel; }, 0),
@@ -559,6 +560,8 @@ var Engine = (function () {
       out.entAlt = { B: entidade(m, B, flB), C: entidade(m, C, flC), D: entidade(m, D, flD) };
       out.prazosD = prazosD(m, C);
       D.equilibrioC = equilibrioD(m, D, flD, flC); D.equilibrioB = equilibrioD(m, D, flD, flB);
+      /* ajuste do preço da locação que empata D com C (o aluguel entra linear no VPL; a manutenção paga à parte não muda) */
+      var Ls = D.loc.manSep || 0; D.ajusteEmpateC = D.equilibrioC != null && D.aluguel - Ls > 0 ? (1 + D.loc.ajuste) * (D.equilibrioC - Ls) / (D.aluguel - Ls) - 1 : null;
       out.rm.isolada = rmIsolada(m, C);
       out.sus = susUpside(m);
       out.cenRM = cenariosRM(m, Motor, BASE, out);
