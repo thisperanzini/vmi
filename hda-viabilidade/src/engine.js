@@ -757,7 +757,7 @@ var Engine = (function () {
   function cenariosPACS(m, Motor, BASE, out) {
     var on = pacsOn(m), m2 = clone(m); m2.propria.pacs_incluir = on ? 'nao' : 'sim';
     var r2 = calcular(m2, Motor, BASE, { leve: true });
-    var res = function (r) { var o = {}; ['B', 'C', 'D'].forEach(function (k) { var fl = r['fl' + k]; o[k] = { vplEnt: fl.vplEnt, vpl: fl.vpl, tir: fl.tir, pb: fl.pb, acumEnt: fl.acumEnt, capex0: fl.capex0 }; }); o.resultado = r.cen.prop.resultado; o.ganhoMes = r.ganhoMes; o.pacsMes = r.cen.prop.pacs; o.selId = r.sel.id; o.dscr = entidade(r === out ? m : m2, r.sel, r.flSel).linhas.slice(0, 2).map(function (l) { return { ano: l.ano, v: l.dscrSem }; }); return o; };
+    var res = function (r) { var o = {}; ['B', 'C', 'D'].forEach(function (k) { var fl = r['fl' + k]; o[k] = { vplEnt: fl.vplEnt, vpl: fl.vpl, tir: fl.tir, pb: fl.pb, acumEnt: fl.acumEnt, capex0: fl.capex0 }; }); o.resultado = r.cen.prop.resultado; o.ganhoMes = r.ganhoMes; o.pacsMes = r.cen.prop.pacs; o.pacsEvitMes = r.cen.prop.pacsEvit || 0; o.selId = r.sel.id; o.dscr = entidade(r === out ? m : m2, r.sel, r.flSel).linhas.slice(0, 2).map(function (l) { return { ano: l.ano, v: l.dscrSem }; }); return o; };
     var cur = res(out), alt = res(r2), com = on ? cur : alt, sem = on ? alt : cur, d = {};
     ['B', 'C', 'D'].forEach(function (k) { d[k] = com[k].vplEnt - sem[k].vplEnt; });
     var ord = function (x) { return ['B', 'C', 'D'].sort(function (a, b) { return x[b].vplEnt - x[a].vplEnt; }); };
