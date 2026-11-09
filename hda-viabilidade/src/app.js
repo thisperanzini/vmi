@@ -31,6 +31,18 @@
   function anos(v) { return v == null ? 'não retorna' : N(v, 1) + ' anos'; }
   function Psig(v, d) { if (v == null || !isFinite(v)) return '—'; return (v < 0 ? '−' : '+') + P(Math.abs(v), d); }
   function sinal(v) { return v == null ? '' : v >= 0 ? 'pos' : 'neg'; }
+  /* Comparações que adaptam o texto ao resultado. Diferença de VPL abaixo de 0,5% do maior valor (mínimo R$ 10 mil)
+     fica dentro da precisão das premissas: o texto fala em empate, não em "R$ 3 acima". */
+  function empata(a, b, rel, abs) { if (a == null || b == null) return false; return Math.abs(a - b) <= Math.max((rel == null ? 0.005 : rel) * Math.max(Math.abs(a), Math.abs(b)), abs == null ? 10000 : abs); }
+  function aluguelEmpata(a, b) { return empata(a, b, 0.005, 500); }
+  function ranking(vals) {
+    var ks = Object.keys(vals).filter(function (k) { return vals[k] != null && isFinite(vals[k]); }).sort(function (a, b) { return vals[b] - vals[a]; });
+    var top = ks.filter(function (k) { return empata(vals[k], vals[ks[0]]); }), resto = ks.filter(function (k) { return top.indexOf(k) < 0; });
+    var gap = resto.length ? vals[ks[0]] - vals[resto[0]] : 0;
+    return { ord: ks, best: ks[0], top: top, empate: top.length > 1, resto: resto, seg: resto[0] || null, gap: gap, perto: resto.length > 0 && gap < 0.05 * Math.abs(vals[ks[0]]) };
+  }
+  function cap1(t) { t = String(t || ''); return t.charAt(0).toUpperCase() + t.slice(1); }
+  function juntaE(a) { return a.length > 1 ? a.slice(0, -1).join(', ') + ' e ' + a[a.length - 1] : (a[0] || ''); }
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
   var toastT; function toast(s) { var t = $('#toast'); t.textContent = s; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, 3200); }
@@ -351,6 +363,8 @@
     var q = calc.cenRM; if (!q) return ''; var e = q.eq[k || 'C'], r = model.rm, cap = q.cap;
     return 'Na alternativa ' + (k || 'C') + ', a RM empata com o cenário sem RM com <b>' + (e.volume == null ? '—' : N(e.volume)) + ' exames/mês</b> de convênio e particular a ' + R(q.t0) + ' (' + (e.volume == null ? '—' : P(e.volume / cap.cap, 0)) + ' da capacidade de ' + N(cap.cap) + '/mês em ' + N(+r.horas_dia || 12) + ' h), ou com ticket de <b>' + R(e.ticket) + '</b> no volume de ' + N(q.v0) + '/mês. Só pelo preço, a RM teria de custar ' + mi(e.preco) + '. Cada exame/mês a mais vale ' + mi(e.porExame) + ' de VPL; cada R$ 100 mil a menos no preço, ' + mi(-e.porReal * 1e5) + '.';
   }
+  /* juros e encargos pagos no horizonte: parcelas + saldo quitado no fim − valor financiado */
+  function encFin(fl, fin) { var p = 0; fl.anos.forEach(function (a) { p += (a.servico || 0) + (a.quitacao || 0); }); return Math.max(p - (fin || 0), 0); }
   function mediaMes(fl, t) { var a = fl.anos[t - 1]; return a ? a.desembolso / 12 : null; }
   function renderAlternativas() {
     var c = calc, m = model, B = c.B, C = c.C, D = c.D, fB = c.flB, fC = c.flC, fD = c.flD, e = c.cen.emg, pb = c.cen.propBase;
@@ -372,7 +386,7 @@
     function best(vals, dir) { var v = vals.filter(function (x) { return x != null && isFinite(x); }); if (!v.length) return null; return dir > 0 ? Math.max.apply(null, v) : Math.min.apply(null, v); }
     function linha(rot, vals, fmt, dir, cls) {
       var b = dir ? best(vals.slice(1), dir) : null;
-      return '<tr class="' + (cls || '') + '"><td>' + rot + '</td>' + vals.map(function (v, i) { var txt = typeof v === 'string' ? v : fmt(v); return '<td class="n' + (b != null && i > 0 && v === b ? ' best' : '') + '">' + txt + '</td>'; }).join('') + '</tr>';
+      return '<tr class="' + (cls || '') + '"><td>' + rot + '</td>' + vals.map(function (v, i) { var txt = typeof v === 'string' ? v : fmt(v); var ganha = b != null && i > 0 && typeof v === 'number' && (v === b || (fmt === mi && empata(v, b))); return '<td class="n' + (ganha ? ' best' : '') + '">' + txt + '</td>'; }).join('') + '</tr>';
     }
     var a3 = Math.min(3, H), a6 = Math.min(6, H);
     h += '<div class="card"><div class="card-h"><h2>Comparativo dos cenários</h2><span class="muted small">' + H + ' anos a partir de ' + m.fin.ano_inicio + ' · taxa de desconto ' + P(m.fin.desconto, 0) + ' a.a. · em destaque o melhor de B, C e D</span></div><div class="tbl-wrap"><table class="cmpT"><thead><tr><th></th><th class="n">A · EMG</th><th class="n">B · GE/HFS</th><th class="n">C · VMI compra</th><th class="n">D · VMI locação</th></tr></thead><tbody>' +
@@ -386,9 +400,11 @@
       linha('… no ano ' + a3, [0, mediaMes(fB, a3), mediaMes(fC, a3), mediaMes(fD, a3)], R, -1) +
       linha('… no ano ' + a6, [0, mediaMes(fB, a6), mediaMes(fC, a6), mediaMes(fD, a6)], R, -1) +
       linha('Total desembolsado com equipamentos em ' + H + ' anos', [0, fB.desembolsoTot, fC.desembolsoTot, fD.desembolsoTot], mi, -1) +
+      linha('Juros e encargos do financiamento em ' + H + ' anos', ['—', encFin(fB, B.capexFin), encFin(fC, C.capexFin), 'no aluguel'], mi, -1) +
       '<tr class="sec"><td colspan="5">Resultado</td></tr>' +
       linha('EBITDA incremental no ano ' + a3 + ' (após manutenção ou aluguel)', [0, fB.anos[a3 - 1].inc, fC.anos[a3 - 1].inc, fD.anos[a3 - 1].inc], mi, 1) +
       linha('VPL para o hospital (após parcelas ou aluguel)', [0, fB.vplEnt, fC.vplEnt, fD.vplEnt], mi, 1, 'hl') +
+      linha('Caixa acumulado em ' + fB.anos[Math.min(4, fB.anos.length - 1)].ano + ' (5 anos)', [0, fB.anos[Math.min(4, fB.anos.length - 1)].acumE, fC.anos[Math.min(4, fC.anos.length - 1)].acumE, fD.anos[Math.min(4, fD.anos.length - 1)].acumE], mi, 1) +
       linha('Caixa acumulado em ' + H + ' anos', [0, fB.acumEnt, fC.acumEnt, fD.acumEnt], mi, 1) +
       linha('VPL do projeto (sem financiamento)', ['—', fB.vpl, fC.vpl, fD.vpl], mi, 1) +
       '<tr class="sec"><td colspan="5">Crédito do hospital</td></tr>' +
@@ -412,7 +428,7 @@
     h += '<div class="card"><div class="card-h"><h2>Leitura</h2></div><ul class="bullets">' +
       (c.cenRM ? '<li><b>Ressonância</b>: com as hipóteses atuais, a RM reduz o VPL para o hospital em ' + mi(-c.cenRM.eq.B.delta) + ' (B), ' + mi(-c.cenRM.eq.C.delta) + ' (C) e ' + mi(-c.cenRM.eq.D.delta) + ' (D). ' + (rmOn() ? 'Com a RM, a compra financiada (C) fica com a melhor cobertura da dívida nos primeiros anos, porque a carência de 24 meses e o prazo de 120 absorvem a parcela da RM; na locação, o aluguel da RM corre desde a instalação.' : '') + '</li>' : '') +
       '<li>Qualquer forma de internalizar supera manter a EMG: VPL para o hospital de ' + mi(fB.vplEnt) + ' (B), ' + mi(fC.vplEnt) + ' (C) e ' + mi(fD.vplEnt) + ' (D), porque o hospital já paga a estrutura.</li>' +
-      (difCD >= 0 ? '<li><b>Comprar com linha de fomento (C) rende mais que alugar (D)</b>: ' + mi(difCD) + ' de VPL em ' + H + ' anos. O custo da locação' : '<li><b>Alugar (D) rende mais que comprar com linha de fomento (C)</b>: ' + mi(-difCD) + ' de VPL em ' + H + ' anos. O custo da locação') + ' de ' + R(D.aluguel) + '/mês (' + Pp(D.loc.pctMes * 100) + ' do valor ao mês' + (locTxt().vmi ? ', cotação VMI' + (locTxt().sep ? ' + manutenção à parte' : '') : '') + ') começa a correr na instalação, sem a carência de que a compra se beneficia' + (locTxt().vmi ? locTxt().taxas : ', e embute a taxa do locador de ' + Pp(D.loc.taxaAno * 100) + ' a.a., acima do custo da linha de fomento (' + Pp(C.cetAno) + ' a.a.)') + (D.equilibrioC >= D.aluguel ? '. A locação tem folga de <b>' + R(D.equilibrioC - D.aluguel) + '/mês</b> até o aluguel de equilíbrio com C (' + R(D.equilibrioC) + '/mês): é a margem para a cotação dos itens ainda estimados' + (D.loc.semCotacao.length ? ' (' + R(D.loc.aluguelComp) + '/mês hoje)' : '') + '.</li>' : '. Para empatar com C, o aluguel precisa ficar em <b>' + R(D.equilibrioC) + '/mês</b> (' + Psig(D.equilibrioC / D.aluguel - 1, 0) + ')' + (p60 ? '; no prazo de ' + D.n + ' meses, sem contar renovações, o empate é em ' + R(p60.equilibrio) + '/mês' : '') + '. É o número para negociar com a VMI.</li>') +
+      (empata(fC.vplEnt, fD.vplEnt) ? '<li><b>Comprar com linha de fomento (C) e alugar (D) empatam</b>: ' + mi(fC.vplEnt) + ' de VPL em ' + H + ' anos' + (Math.abs(difCD) >= 1000 ? ' (diferença de ' + mi(Math.abs(difCD)) + ', dentro da precisão das premissas)' : '') + '. O custo da locação' : difCD >= 0 ? '<li><b>Comprar com linha de fomento (C) rende mais que alugar (D)</b>: ' + mi(difCD) + ' de VPL em ' + H + ' anos. O custo da locação' : '<li><b>Alugar (D) rende mais que comprar com linha de fomento (C)</b>: ' + mi(-difCD) + ' de VPL em ' + H + ' anos. O custo da locação') + ' de ' + R(D.aluguel) + '/mês (' + Pp(D.loc.pctMes * 100) + ' do valor ao mês' + (locTxt().vmi ? ', cotação VMI' + (locTxt().sep ? ' + manutenção à parte' : '') : '') + ') começa a correr na instalação, sem a carência de que a compra se beneficia' + (locTxt().vmi ? locTxt().taxas : ', e embute a taxa do locador de ' + Pp(D.loc.taxaAno * 100) + ' a.a., acima do custo da linha de fomento (' + Pp(C.cetAno) + ' a.a.)') + (aluguelEmpata(D.equilibrioC, D.aluguel) ? '. O aluguel atual já é o de equilíbrio com C: não sobra folga para a cotação dos itens ainda estimados' + (D.loc.semCotacao.length ? ' (' + R(D.loc.aluguelComp) + '/mês hoje)' : '') + '; qualquer alta deixa D atrás de C.</li>' : D.equilibrioC >= D.aluguel ? '. A locação tem folga de <b>' + R(D.equilibrioC - D.aluguel) + '/mês</b> até o aluguel de equilíbrio com C (' + R(D.equilibrioC) + '/mês): é a margem para a cotação dos itens ainda estimados' + (D.loc.semCotacao.length ? ' (' + R(D.loc.aluguelComp) + '/mês hoje)' : '') + '.</li>' : '. Para empatar com C, o aluguel precisa ficar em <b>' + R(D.equilibrioC) + '/mês</b> (' + Psig(D.equilibrioC / D.aluguel - 1, 0) + ')' + (p60 ? '; no prazo de ' + D.n + ' meses, sem contar renovações, o empate é em ' + R(p60.equilibrio) + '/mês' : '') + '. É o número para negociar com a VMI.</li>') +
       '<li><b>O que a locação compra</b>: nenhum desembolso inicial nem dívida bancária nova antes do TDC, ' + (locTxt().sep ? 'risco de obsolescência com o locador (a manutenção, pela cotação, segue com o hospital: confirmar com a VMI)' : 'manutenção e risco do equipamento com o locador') + ', troca por equipamento novo a cada ' + D.n + ' meses (B e C chegam ao ano ' + H + ' com o equipamento original). Se o banco não aprovar a compra antes da desalavancagem, D não depende de linha bancária: o locador também analisa o crédito do hospital, mas fica com o equipamento como garantia.</li>' +
       '<li><b>Manutenção</b>: no plano ' + planoTxt + ', ' + R(C.manut.mes) + '/mês (C) e ' + R(B.manut.mes) + '/mês (B) a partir do ' + (+m.manut.garantia_meses + 1) + 'º mês de operação, contra ' + R(ctrl) + '/mês na planilha da Controladoria. A diferença vem dos dois RX: a cotação VMI (' + R(rxOuro) + '/mês no Ouro) é ' + N(rxOuro / 7037.5, 1) + ' vezes o que a planilha previa para ultrassom e RX juntos (R$ 7.038/mês). B e C ficam quase iguais porque, sem cotação da CDK, o RX do pacote GE usa a mesma referência.</li>' +
       (function () {
@@ -569,13 +585,13 @@
       '<label>Base <select id="selFonteD"><option value="vmi"' + ((d.fonte || 'vmi') !== 'composicao' ? ' selected' : '') + '>cotação VMI</option><option value="composicao"' + (d.fonte === 'composicao' ? ' selected' : '') + '>composição de custos</option></select></label>' +
       '<label>Ajuste no preço <input id="inAjD" type="number" step="0.01" value="' + (L.ajuste * 100).toFixed(2) + '" style="width:84px"> %</label>' +
       (D.ajusteEmpateC != null ? '<button id="btEmpD" class="sm"' + (Math.abs(D.ajusteEmpateC - L.ajuste) < 0.00005 ? ' disabled' : '') + '>Empatar com C (' + (D.ajusteEmpateC >= 0 ? '+' : '−') + Pp(Math.abs(D.ajusteEmpateC) * 100) + ')</button>' : '') + '</div></div>' +
-      (D.ajusteEmpateC != null ? '<p class="small muted" style="margin:-6px 0 12px">Com ' + (L.ajuste ? 'o ajuste de ' + (L.ajuste > 0 ? '+' : '−') + Pp(Math.abs(L.ajuste) * 100) : 'a tabela sem ajuste') + ', a locação ' + (Math.abs(calc.flD.vplEnt - calc.flC.vplEnt) < 1000 ? 'empata com a compra C no VPL.' : 'fica ' + (calc.flD.vplEnt >= calc.flC.vplEnt ? 'acima' : 'abaixo') + ' da compra C em ' + mi(Math.abs(calc.flD.vplEnt - calc.flC.vplEnt)) + ' de VPL.') + ' O empate pede ' + (D.ajusteEmpateC >= 0 ? '+' : '−') + Pp(Math.abs(D.ajusteEmpateC) * 100) + ' sobre a tabela (aluguel de ' + R(D.equilibrioC) + '/mês).</p>' : '');
+      (D.ajusteEmpateC != null ? '<p class="small muted" style="margin:-6px 0 12px">Com ' + (L.ajuste ? 'o ajuste de ' + (L.ajuste > 0 ? '+' : '−') + Pp(Math.abs(L.ajuste) * 100) : 'a tabela sem ajuste') + ', a locação ' + (empata(calc.flD.vplEnt, calc.flC.vplEnt) ? 'empata com a compra C no VPL.' : 'fica ' + (calc.flD.vplEnt >= calc.flC.vplEnt ? 'acima' : 'abaixo') + ' da compra C em ' + mi(Math.abs(calc.flD.vplEnt - calc.flC.vplEnt)) + ' de VPL.') + ' O empate pede ' + (D.ajusteEmpateC >= 0 ? '+' : '−') + Pp(Math.abs(D.ajusteEmpateC) * 100) + ' sobre a tabela (aluguel de ' + R(D.equilibrioC) + '/mês).</p>' : '');
     h += '<div class="grid kpis">' + (lt.vmi ? kpi('Aluguel VMI', R(L.aluguelVmi) + '/mês', L.nVmi + ' itens cotados, ' + D.n + ' meses', '', true) : kpi('Taxa do locador', Pp(L.taxaAno * 100) + ' a.a.', 'arrendamento PJ ' + Pp(d.taxa_base * 100) + ' (BCB, ago/26) + prêmio ' + Pp(d.premio * 100), '', true)) +
       kpi('Manutenção à parte', R(L.manSep) + '/mês', lt.sep ? 'cenário: contrato ' + lt.plano + ' × (' + D.n + ' − ' + m.manut.garantia_meses + ') ÷ ' + D.n + ' meses' : 'nenhuma: inclusa no aluguel VMI', lt.sep ? 'warn' : '', true) +
       (L.nProxy ? kpi('RM pelo proxy da TC', R(L.aluguelProxy) + '/mês', 'sem cotação VMI da RM · ' + Pp(L.aluguelProxy / (+((rmItem('C') || {}).preco) || 1) * 100) + ' do preço ao mês', 'warn', true) : '') +
       kpi('Itens sem cotação', R(L.aluguelComp) + '/mês', L.semCotacao.length ? 'composição de custos, com Ouro' : 'nenhum', '', true) +
       kpi('Custo mensal total', R(D.aluguel), Pp(L.pctMes * 100) + ' do valor do pacote ao mês', '', true) +
-      kpi('Equilíbrio com C', R(D.equilibrioC) + '/mês', 'mesmo VPL para o hospital em ' + m.fin.horizonte + ' anos (' + Psig(D.equilibrioC / D.aluguel - 1, 0) + ')', D.equilibrioC < D.aluguel ? 'warn' : 'good', true) + '</div>';
+      kpi('Equilíbrio com C', R(D.equilibrioC) + '/mês', 'mesmo VPL para o hospital em ' + m.fin.horizonte + ' anos (' + (aluguelEmpata(D.equilibrioC, D.aluguel) ? 'é o aluguel atual' : Psig(D.equilibrioC / D.aluguel - 1, 1)) + ')', aluguelEmpata(D.equilibrioC, D.aluguel) ? '' : D.equilibrioC < D.aluguel ? 'warn' : 'good', true) + '</div>';
     h += '<div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>Item</th><th>Base</th><th class="n">Valor de compra</th><th class="n">Aluguel</th><th class="n">Manutenção média</th><th class="n">Custo mensal</th><th class="n">% do valor/mês</th><th class="n">Taxa implícita a.a.</th></tr></thead><tbody>' +
       L.linhas.map(function (x) { return '<tr><td>' + esc(x.nome) + (x.qtd > 1 ? ' (' + x.qtd + ')' : '') + '</td><td class="small">' + (x.fonte === 'vmi' ? 'VMI · ' + esc(x.cotModelo) + '<div class="tiny muted">' + R(x.cotUnit) + '/un.</div>' : x.fonte === 'proxy' ? esc(x.cotModelo) + '<div class="tiny muted">' + R(x.cotUnit) + '/un.</div>' : 'composição') + '</td><td class="n">' + R(x.V) + '</td><td class="n">' + R(x.fin) + '</td><td class="n">' + R(x.man) + (x.fonte === 'vmi' ? (x.manSep ? '<div class="tiny muted">à parte</div>' : '') : '<div class="tiny muted">no aluguel</div>') + '</td><td class="n"><b>' + R(x.aluguel) + '</b></td><td class="n">' + Pp((x.pctMes || 0) * 100) + '</td><td class="n">' + (x.fonte !== 'composicao' ? (x.taxaImpl == null ? '<span class="neg">não fecha</span>' : Pp(x.taxaImpl * 100)) : Pp(L.taxaAno * 100) + '<div class="tiny muted">locador</div>') + '</td></tr>'; }).join('') +
       '<tr class="total"><td>Pacote</td><td></td><td class="n">' + R(L.V) + '</td><td class="n">' + R(L.fin) + '</td><td class="n">' + R(L.man) + '</td><td class="n">' + R(L.aluguel) + '</td><td class="n">' + Pp(L.pctMes * 100) + '</td><td></td></tr></tbody></table></div>' +
@@ -1030,11 +1046,14 @@
     function vplCom(f, id) { var mm = clone(model); f(mm); var r = E.calcular(mm, M, BASE, { leve: true }); return (id === 'B' ? r.flB : id === 'D' ? r.flD : id === 'C' ? r.flC : r.flSel).vplEnt; }
     var S = { titulo: 'Internalização do serviço de imagem do Hospital Dom Alvarenga', sub: 'Sumário executivo · gerado em ' + dt + ' · ' + origem + ' · ' + H + ' anos a ' + P(m.fin.desconto, 0) + ' a.a.', secoes: [] };
     /* 1. recomendação */
-    var rec = '**Internalizar o serviço.** Manter a EMG custa ' + mi(-emg.resultado * 12) + ' por ano de prejuízo; com imagem própria o resultado vai a ' + R(prop.resultado) + '/mês. Com as premissas atuais, a melhor alternativa é **' + best.nome + '**, com VPL para o hospital de ' + mi(best.fl.vplEnt) + ' em ' + H + ' anos, contra ' + ord.slice(1).map(function (a) { return mi(a.fl.vplEnt) + ' em ' + a.id; }).join(' e ') + '.';
-    if (best.id === 'D') rec += ' A locação também dispensa investimento e dívida nova num momento em que o hospital cobre ' + X(l1.dscrSemProj) + ' do serviço da dívida, e o aluguel da VMI já inclui a manutenção.';
-    if (best.id !== selId) rec += ' O plano em números está montado sobre a alternativa ' + selId + '.';
-    var gap = ord[0].fl.vplEnt - ord[1].fl.vplEnt;
-    if (gap < 0.05 * Math.abs(ord[0].fl.vplEnt)) rec += ' A diferença para ' + ord[1].id + ' é pequena (' + mi(gap) + '): a escolha depende das pendências abaixo, não do VPL.';
+    var rkS = ranking({ B: c.flB.vplEnt, C: c.flC.vplEnt, D: c.flD.vplEnt }), porId = {}; alts.forEach(function (a) { porId[a.id] = a; });
+    var topS = rkS.top.map(function (k) { return porId[k]; }), restoS = rkS.resto.map(function (k) { return porId[k]; });
+    var rec = '**Internalizar o serviço.** Manter a EMG custa ' + mi(-emg.resultado * 12) + ' por ano de prejuízo; com imagem própria o resultado vai a ' + R(prop.resultado) + '/mês. ' + (rkS.empate
+      ? 'Com as premissas atuais, **' + juntaE(topS.map(function (a) { return a.nome; })) + '** empatam como melhores alternativas, com VPL para o hospital de ' + mi(best.fl.vplEnt) + ' em ' + H + ' anos' + (restoS.length ? ', contra ' + restoS.map(function (a) { return mi(a.fl.vplEnt) + ' em ' + a.id; }).join(' e ') : '') + '. Com o valor igual, a escolha entre ' + juntaE(rkS.top) + ' sai do crédito e do risco, não do VPL.'
+      : 'Com as premissas atuais, a melhor alternativa é **' + best.nome + '**, com VPL para o hospital de ' + mi(best.fl.vplEnt) + ' em ' + H + ' anos, contra ' + ord.slice(1).map(function (a) { return mi(a.fl.vplEnt) + ' em ' + a.id; }).join(' e ') + '.');
+    if (rkS.top.indexOf('D') >= 0) rec += ' A locação ' + (rkS.empate ? '' : 'também ') + 'dispensa investimento e dívida nova num momento em que o hospital cobre ' + X(l1.dscrSemProj) + ' do serviço da dívida, e o aluguel da VMI já inclui a manutenção.';
+    if (rkS.top.indexOf(selId) < 0) rec += ' O plano em números está montado sobre a alternativa ' + selId + '.';
+    if (!rkS.empate && rkS.perto) rec += ' A diferença para ' + rkS.seg + ' é pequena (' + mi(rkS.gap) + '): a escolha depende das pendências abaixo, não do VPL.';
     var qR = c.cenRM, rmLig = rmOn();
     if (qR) {
       var eqR = qR.eq[selId], semBest = ['B', 'C', 'D'].sort(function (a, b) { return qR.sem[b].vplEnt - qR.sem[a].vplEnt; })[0];
@@ -1096,7 +1115,7 @@
     S.secoes.push({ h: 'Locação do pacote VMI (D)', b: [
       'Base: ' + lt.base + '. Prazo de ' + c.D.n + ' meses' + (c.D.n === 48 ? ' (sugestão da VMI)' : '') + ': custo de ' + R(c.D.aluguel) + '/mês' + (lt.vmi ? ', sendo ' + R(L.aluguelVmi) + ' de aluguel VMI (TC, Aquila S e Aquila D)' + (lt.sep ? ', ' + R(L.manSep) + ' de manutenção à parte (média no prazo)' : '') + (L.nProxy ? ', ' + R(L.aluguelProxy) + ' da RM pelo proxy da TC' : '') + ' e ' + R(L.aluguelComp) + ' dos itens sem cotação' : '') + (lt.vmi && !lt.sep ? '. O aluguel VMI já inclui a manutenção' : '') + '.',
       (lt.sep ? '**Cenário com manutenção à parte**: o VPL de D é ' + mi(c.flD.vplEnt) + '; com a manutenção inclusa, como a VMI confirmou, seria ' + mi(vplFlip) + '.' : '**Manutenção inclusa no aluguel** (confirmado em 17/10/2026): não há contrato à parte. Se fosse cobrada depois da garantia, o VPL de D cairia de ' + mi(c.flD.vplEnt) + ' a ' + mi(vplFlip) + '.') + ' O aluguel do Aquila S com manutenção (' + R(((m.equip.C.filter(function (x) { return x.id === 'rxp'; })[0] || {}).loc_vmi || {})[c.D.n]) + '/mês) é menor que o contrato Ouro avulso do mesmo equipamento (R$ 6.800/mês): argumento para negociar a manutenção dos RX na compra.',
-      (c.D.equilibrioC >= c.D.aluguel ? 'Folga de ' + R(c.D.equilibrioC - c.D.aluguel) + '/mês até o aluguel de equilíbrio com a compra C (' + R(c.D.equilibrioC) + '/mês). É a margem para a cotação de ultrassons e placa DR' + (L.nProxy ? ' e da RM' : '') + ', hoje estimados em ' + R(L.aluguelComp + L.aluguelProxy) + '/mês: até ' + R(c.D.equilibrioC - L.aluguelVmi - L.manSep) + '/mês por esses itens, D continua à frente de C.' : 'Aluguel de equilíbrio com a compra C: ' + R(c.D.equilibrioC) + '/mês (' + Psig(c.D.equilibrioC / c.D.aluguel - 1, 0) + ' sobre o custo atual). É o teto para negociar com a VMI.'),
+      (aluguelEmpata(c.D.equilibrioC, c.D.aluguel) ? 'O aluguel atual (' + R(c.D.aluguel) + '/mês) já é o de equilíbrio com a compra C: não há folga para a cotação de ultrassons e placa DR' + (L.nProxy ? ' e da RM' : '') + ', hoje estimados em ' + R(L.aluguelComp + L.aluguelProxy) + '/mês. Se vierem acima disso, D fica atrás de C.' : c.D.equilibrioC >= c.D.aluguel ? 'Folga de ' + R(c.D.equilibrioC - c.D.aluguel) + '/mês até o aluguel de equilíbrio com a compra C (' + R(c.D.equilibrioC) + '/mês). É a margem para a cotação de ultrassons e placa DR' + (L.nProxy ? ' e da RM' : '') + ', hoje estimados em ' + R(L.aluguelComp + L.aluguelProxy) + '/mês: até ' + R(c.D.equilibrioC - L.aluguelVmi - L.manSep) + '/mês por esses itens, D continua à frente de C.' : 'Aluguel de equilíbrio com a compra C: ' + R(c.D.equilibrioC) + '/mês (' + Psig(c.D.equilibrioC / c.D.aluguel - 1, 0) + ' sobre o custo atual). É o teto para negociar com a VMI.'),
       'A VMI cotou o RX digital como Aquila D; na compra, o RX digital é o Apolo D. Ultrassons e placa DR ainda sem cotação de locação.'
     ] });
     /* 6. crédito */
@@ -1314,10 +1333,18 @@
     var c = calc, m = model, H = +m.fin.horizonte, sel = c.sel, sid = sel.id, emg = c.cen.emg, prop = c.cen.prop, l1 = c.ent.linhas[0], isD = sid === 'D';
     var S = sumarioExecutivo(), secao = function (h) { return S.secoes.filter(function (x) { return x.h === h; })[0] || { b: [] }; };
     var fl = function (k) { return c['fl' + k]; }, alts = ['B', 'C', 'D'];
-    var ord = alts.slice().sort(function (a, b) { return fl(b).vplEnt - fl(a).vplEnt; }), best = ord[0], gap = fl(ord[0]).vplEnt - fl(ord[1]).vplEnt, perto = gap < 0.05 * Math.abs(fl(ord[0]).vplEnt);
+    var rk = ranking({ B: fl('B').vplEnt, C: fl('C').vplEnt, D: fl('D').vplEnt });
+    var ord = rk.ord, best = rk.best, gap = rk.gap, perto = rk.perto, emp = rk.empate, topV = rk.top, seg = rk.seg;
     var lC = c.C.escolha && c.C.escolha.linha, linhaC = lC ? lC.nome : 'linha de fomento';
     var nomeAlt = { B: 'compra do pacote GE (HFS em 60 parcelas)', C: 'compra do pacote VMI com ' + linhaCurta(lC), D: 'locação do pacote VMI (' + c.D.n + ' meses)' };
     var curtoAlt = { B: 'compra GE (B)', C: 'compra VMI (C)', D: 'locação VMI (D)' };
+    var aTop = function (lista, nomes) { return juntaE(lista.map(function (k) { return 'a ' + (nomes || curtoAlt)[k]; })); };
+    /* o que separa as alternativas empatadas no VPL: dívida, prazo e quem fica com o equipamento */
+    var difEmpate = function () {
+      var p = [];
+      topV.forEach(function (k) { p.push(k === 'D' ? 'a locação não pede investimento nem dívida nova e traz a manutenção no aluguel, mas troca o equipamento a cada ' + c.D.n + ' meses' : 'a ' + curtoAlt[k] + ' pede ' + mi(c[k].capexFin) + ' de dívida nova (' + (k === 'B' ? Pp(c.B.cetAno) + ' a.a. implícito, ' + c.B.n + ' meses' : 'CET ' + Pp(c.C.cetAno) + ' a.a., ' + (c.C.n || '—') + ' meses') + ') e deixa o equipamento com o hospital'); });
+      return p.join('; ');
+    };
     var qR = c.cenRM, qP = c.cenPACS, qS = c.cenSUS, rmLig = rmOn(), eqR = qR ? qR.eq[sid] : null;
     var hoje = new Date(), mesAno = MESES[hoje.getMonth()] + ' de ' + hoje.getFullYear();
     var e1 = function (k) { var e = c.entAlt && c.entAlt[k]; return e && e.linhas[0] ? e.linhas[0].dscrSem : null; };
@@ -1325,19 +1352,21 @@
 
     /* 1 · capa */
     lista.push({ capa: true, nav: 'Capa', k: 'Hospital Dom Alvarenga · ABENSENA · diagnóstico por imagem', t: 'Internalização do serviço de imagem com equipamentos VMI',
-      sub: 'Decisão pedida: internalizar o serviço pela ' + nomeAlt[best] + (best === 'D' ? ', assinando a locação junto com o aviso de 90 dias à EMG' : ', contratando depois da emissão do TDC') + (qR ? ', e decidir a ressonância à parte' : '') + '.',
+      sub: emp ? 'Decisão pedida: internalizar o serviço, escolhendo entre ' + aTop(topV, nomeAlt) + ', que empatam em valor para o hospital' + (qR ? '; e decidir a ressonância à parte' : '') + '.'
+        : 'Decisão pedida: internalizar o serviço pela ' + nomeAlt[best] + (best === 'D' ? ', assinando a locação junto com o aviso de 90 dias à EMG' : ', contratando depois da emissão do TDC') + (qR ? ', e decidir a ressonância à parte' : '') + '.',
       b: [{ tipo: 'img', x: 1080, y: 40, w: 136, h: 88, src: LOGO.navy },
         { tipo: 'txt', x: 56, y: 480, w: 1060, paras: ['Apresentação ao CEO · ' + mesAno + ' · S&S Partners', cenarioTxt(), 'Gerado da página "Viabilidade da internalização com equipamentos VMI" (' + origemTxt() + '). Os números mudam só na página; esta apresentação é refeita a cada abertura.'], tam: 15, cor: 'muted' }] });
 
     /* 2 · recomendação */
     var rec = [
       '**Internalizar.** Hoje o serviço perde ' + mi(-emg.resultado * 12) + ' por ano; com a mesma receita, a imagem própria fecha em ' + R(prop.resultado) + ' por mês em regime.',
-      '**A ' + nomeAlt[best] + ' tem o maior valor:** ' + mi(fl(best).vplEnt) + ' para o hospital em ' + H + ' anos, contra ' + ord.slice(1).map(function (k) { return mi(fl(k).vplEnt) + ' na ' + curtoAlt[k]; }).join(' e ') + '.' + (perto ? ' A diferença para a ' + curtoAlt[ord[1]] + ' é pequena (' + mi(gap) + '): decidem as pendências, não o VPL.' : '') + (best !== sid ? ' O plano em números está montado sobre a ' + curtoAlt[sid] + '.' : ''),
+      (emp ? '**' + cap1(aTop(topV)) + ' empatam no valor:** ' + mi(fl(best).vplEnt) + ' para o hospital em ' + H + ' anos' + (seg ? ', contra ' + rk.resto.map(function (k) { return mi(fl(k).vplEnt) + ' na ' + curtoAlt[k]; }).join(' e ') : '') + '. Com o VPL igual, decidem o crédito e o risco: ' + difEmpate() + '.'
+        : '**A ' + nomeAlt[best] + ' tem o maior valor:** ' + mi(fl(best).vplEnt) + ' para o hospital em ' + H + ' anos, contra ' + ord.slice(1).map(function (k) { return mi(fl(k).vplEnt) + ' na ' + curtoAlt[k]; }).join(' e ') + '.' + (perto ? ' A diferença para a ' + curtoAlt[seg] + ' é pequena (' + mi(gap) + '): decidem as pendências, não o VPL.' : '')) + (topV.indexOf(sid) < 0 ? ' O plano em números está montado sobre a ' + curtoAlt[sid] + '.' : ''),
       '**A restrição é o crédito do hospital, não o projeto.** Em ' + l1.ano + ' o hospital cobre ' + X(l1.dscrSemProj) + ' do serviço da dívida; com o projeto, ' + X(l1.dscrSem) + '; com o TDC, ' + X(l1.dscrCom) + '. Contratar depois da emissão do TDC.'
     ];
     if (qR) rec.push('**Ressonância, decisão à parte.** ' + (rmLig ? 'Está no número: ' : 'Fora do número: ') + 'com as hipóteses atuais ela ' + (eqR.delta >= 0 ? 'soma ' : 'tira ') + mi(Math.abs(eqR.delta)) + ' na ' + curtoAlt[sid] + ' e empata com ' + N(eqR.volume) + ' exames de convênio por mês; depende de os planos voltarem a incluir a RM nos pacotes do HDA.');
     rec.push('**Cenário:** ' + (pacsOn() ? 'PACS Sectra pela estimativa S&S (sem cotação)' : 'sem o PACS, que ainda não tem cotação (número otimista)') + '; ' + susNome(E.susModo(m)) + (E.susModo(m) === 'fora' ? ', como decidiu o CEO' : '') + '. As chaves estão no slide de cenários.');
-    lista.push({ nav: 'Recomendação', k: 'Recomendação', t: 'Internalizar vale ' + mi(fl(best).vplEnt) + ' para o hospital em ' + H + ' anos, pela ' + nomeAlt[best] + (perto ? ', quase empatada com a ' + curtoAlt[ord[1]] : ''), b: [
+    lista.push({ nav: 'Recomendação', k: 'Recomendação', t: 'Internalizar vale ' + mi(fl(best).vplEnt) + ' para o hospital em ' + H + ' anos' + (emp ? ', com ' + aTop(topV) + ' empatadas' : ', pela ' + nomeAlt[best] + (perto ? ', quase empatada com a ' + curtoAlt[seg] : '')), b: [
       { tipo: 'kpis', x: 56, y: 150, w: 1168, h: 118, cols: 6, vtam: 20, itens: [
         { lab: 'Resultado hoje, com a EMG', v: R(emg.resultado), sub: 'por mês · ' + mi(emg.resultado * 12) + ' por ano', cls: 'bad' },
         { lab: 'Com imagem própria', v: R(prop.resultado), sub: 'por mês em regime, ' + (isD ? 'com o aluguel' : 'antes das parcelas'), cls: 'good' },
@@ -1387,23 +1416,84 @@
       linhaAlt('Gasto mensal no 3º ano', function (k) { return R(mediaMes(fl(k), 3)); }),
       linhaAlt('Cobertura do hospital em ' + l1.ano, function (k) { return X(e1(k)); }),
       linhaAlt('Câmbio', function (k) { return k === 'B' ? (c.B.fx.ids.length ? 'US$ a ' + FXr(c.B.fx.usd) : 'nenhum') : 'nenhum'; }),
-      linhaAlt('VPL para o hospital, ' + H + ' anos', function (k) { return { t: mi(fl(k).vplEnt), n: true, b: true, cor: k === best ? 'good' : '' }; }),
+      linhaAlt('VPL para o hospital, ' + H + ' anos', function (k) { return { t: mi(fl(k).vplEnt), n: true, b: true, cor: topV.indexOf(k) >= 0 ? 'good' : '' }; }),
       linhaAlt('Caixa acumulado, ' + H + ' anos', function (k) { return mi(fl(k).acumEnt); })];
-    lista.push({ nav: 'Alternativas', k: 'Alternativas', t: 'A ' + nomeAlt[best] + ' tem o maior valor para o hospital: ' + mi(fl(best).vplEnt) + ' em ' + H + ' anos, ' + mi(gap) + ' acima da ' + curtoAlt[ord[1]], b: [
+    var tAlt = emp ? cap1(aTop(topV)) + ' empatam no valor para o hospital: ' + mi(fl(best).vplEnt) + ' em ' + H + ' anos' + (seg ? '; a ' + curtoAlt[seg] + ' fica ' + mi(gap) + ' atrás' : '')
+      : 'A ' + nomeAlt[best] + ' tem o maior valor para o hospital: ' + mi(fl(best).vplEnt) + ' em ' + H + ' anos, ' + mi(gap) + ' acima da ' + curtoAlt[seg];
+    /* aluguel × equilíbrio com a compra C: empate, folga ou o quanto falta */
+    var eqC = c.D.equilibrioC, alu = c.D.aluguel, eqTxt = eqC == null ? '' : aluguelEmpata(eqC, alu) ? 'O aluguel de ' + R(alu) + '/mês é o ponto de equilíbrio com a compra C: acima dele, comprar passa a valer mais; abaixo, alugar.'
+      : eqC > alu ? 'A locação segue à frente da compra C até um aluguel de ' + R(eqC) + '/mês (hoje ' + R(alu) + ', folga de ' + P(eqC / alu - 1, 1) + ').'
+      : 'Para empatar com a compra C, o aluguel teria de cair para ' + R(eqC) + '/mês (hoje ' + R(alu) + ', ' + Psig(eqC / alu - 1, 1) + ').';
+    lista.push({ nav: 'Alternativas', k: 'Alternativas', t: tAlt, b: [
       { tipo: 'tab', x: 56, y: 150, w: 790, tam: 14, cab: ['', 'B · GE, compra', 'C · VMI, compra', 'D · VMI, locação'], larg: [0.34, 0.22, 0.22, 0.22], al: ['', 'n', 'n', 'n'], rc: altRows.map(function (r, i) { return i === 8 ? 'total' : ''; }), linhas: altRows },
       { tipo: 'g', x: 880, y: 150, w: 344, tit: 'VPL para o hospital, ' + H + ' anos', f: function (el) { el.innerHTML = svgHBars(alts.map(function (k) { return { nome: k + ' · ' + { B: 'GE', C: 'VMI compra', D: 'VMI locação' }[k], v: fl(k).vplEnt, cor: ALT_COR[k] }; }), function (v) { return mi(v); }, 344); } },
       { tipo: 'txt', x: 880, y: 360, w: 344, tam: 14, bullets: [
-        'A locação dispensa investimento e dívida nova e traz a manutenção no aluguel, mas cobra desde a instalação e troca o equipamento a cada ' + c.D.n + ' meses.',
-        'Para empatar com a compra C, o aluguel teria de ser ' + R(c.D.equilibrioC) + ' por mês (hoje ' + R(c.D.aluguel) + ').'] },
+        emp && topV.indexOf('C') >= 0 && topV.indexOf('D') >= 0 ? 'Com o valor igual, a escolha é de balanço: a compra C pede ' + mi(c.C.capexFin) + ' de dívida nova e deixa o equipamento com o hospital; a locação não pede investimento nem dívida, traz a manutenção no aluguel e troca o equipamento a cada ' + c.D.n + ' meses.'
+          : 'A locação dispensa investimento e dívida nova e traz a manutenção no aluguel, mas cobra desde a instalação e troca o equipamento a cada ' + c.D.n + ' meses.',
+        eqTxt].filter(Boolean) },
       { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Gasto mensal = parcelas + manutenção (compra) ou aluguel (locação); ' + (+m.fin.ano_inicio) + ' em média de 12 meses, com a operação a partir de ' + fmtMes(goLive()) + '.' + (qR ? (rmLig ? ' Com a ressonância.' : ' Sem a ressonância.') : '') }] });
 
     /* 6 · caixa acumulado */
     var anosCat = fl(sid).anos.map(function (a) { return String(a.ano); });
     var pos = fl(sid).anos.filter(function (a) { return a.acumE >= 0; })[0];
-    lista.push({ nav: 'Caixa acumulado', k: 'Retorno', t: 'Na ' + curtoAlt[sid] + ', o caixa do hospital ' + (pos ? 'fica positivo em ' + pos.ano : 'não fica positivo no horizonte') + ' e acumula ' + mi(fl(sid).acumEnt) + ' em ' + H + ' anos, já descontadas as parcelas', b: [
+    /* caixa nominal × VPL: quando o líder no caixa acumulado não é o líder no VPL, o slide explica por quê */
+    var finInfo = function (k) {
+      var A0 = fl(k).anos, pago = 0, ult = null, fin = k === 'D' ? 0 : (c[k].capexFin || 0);
+      A0.forEach(function (a) { pago += (a.servico || 0) + (a.quitacao || 0); if ((a.servico || 0) > 1) ult = a.ano; });
+      return { pago: pago, enc: k === 'D' ? null : Math.max(pago - fin, 0), fin: fin, ult: ult, quit: fl(k).saldoFimH || 0, a5: A0[Math.min(4, A0.length - 1)].acumE, ano5: A0[Math.min(4, A0.length - 1)].ano, aH: fl(k).acumEnt, anoH: A0[A0.length - 1].ano };
+    };
+    var FI = { B: finInfo('B'), C: finInfo('C'), D: finInfo('D') };
+    var rkCx = ranking({ B: FI.B.aH, C: FI.C.aH, D: FI.D.aH }), lN = rkCx.best, refsCx = topV.indexOf(lN) >= 0 ? [] : topV.slice();
+    var passaEm = function (a, b) { var A1 = fl(a).anos, A2 = fl(b).anos, i = A1.length - 1; while (i >= 0 && A1[i].acumE > A2[i].acumE) i--; return i < A1.length - 1 ? A1[i + 1].ano : null; };
+    var passa = refsCx.length ? Math.max.apply(null, refsCx.map(function (k) { return passaEm(lN, k) || 0; })) : null;
+    var dFat = Math.pow(1 + (+m.fin.desconto || 0), -H);
+    var porQueFim = function (k) { var f = FI[k]; return k === 'D' ? 'D paga o aluguel todos os anos' : f.ult && f.ult < f.anoH && !f.quit ? k + ' quita o financiamento em ' + f.ult + ' e passa ' + (f.anoH - f.ult) + (f.anoH - f.ult > 1 ? ' anos' : ' ano') + ' sem parcelas' : k + ' paga parcelas até ' + (f.ult || f.anoH) + (f.quit > 1 ? ' e ainda quita ' + mi(f.quit) + ' de saldo em ' + f.anoH : ''); };
+    var tCx = refsCx.length && passa ? 'A ' + curtoAlt[lN] + ' termina os ' + H + ' anos com mais caixa (' + mi(FI[lN].aH) + '), mas só ultrapassa ' + aTop(refsCx) + ' em ' + passa + ': até lá, ' + juntaE(refsCx) + ' ' + (refsCx.length > 1 ? 'deixam' : 'deixa') + ' mais caixa no hospital'
+      : 'Na ' + curtoAlt[sid] + ', o caixa do hospital ' + (pos ? 'fica positivo em ' + pos.ano : 'não fica positivo no horizonte') + ' e acumula ' + mi(fl(sid).acumEnt) + ' em ' + H + ' anos, já descontadas as parcelas';
+    var bCx = refsCx.length && passa ? (function () {
+      var r0 = refsCx.slice().sort(function (a, b) { return FI[b].a5 - FI[a].a5; })[0];
+      return ['**Por que ' + lN + ' termina à frente:** ' + porQueFim(lN) + '; ' + refsCx.map(porQueFim).join('; ') + '.',
+        '**Até ' + FI[r0].ano5 + '**, ' + r0 + ' acumula ' + mi(FI[r0].a5) + ' e ' + lN + ', ' + mi(FI[lN].a5) + ': ' + mi(FI[r0].a5 - FI[lN].a5) + ' a mais no caixa do hospital nos anos em que a cobertura da dívida está mais apertada (' + X(e1(r0)) + ' em ' + l1.ano + ').',
+        '**O VPL desconta o tempo:** a ' + P(m.fin.desconto, 0) + ' a.a., R$ 1 de ' + FI[lN].anoH + ' vale cerca de R$ ' + NF2.format(dFat) + ' hoje. O caixa de ' + lN + ' chega no fim, por isso ' + (topV.length > 1 ? juntaE(topV) + ' empatam' : best + ' fica') + ' à frente no VPL (' + mi(fl(best).vplEnt) + ' contra ' + mi(fl(lN).vplEnt) + ').'];
+    })() : null;
+    lista.push({ nav: 'Caixa acumulado', k: 'Retorno', t: tCx, b: [
       { tipo: 'g', x: 56, y: 150, w: 820, tit: 'Caixa acumulado para o hospital (R$, nominal)', f: function (el) { el.innerHTML = svgLines({ cats: anosCat, series: alts.map(function (k) { return { nome: { B: 'B · compra GE', C: 'C · compra VMI', D: 'D · locação VMI' }[k], vals: fl(k).anos.map(function (a) { return a.acumE; }), cor: ALT_COR[k], dash: k !== sid }; }), fmt: function (v) { return mi(v); }, h: 380, aria: 'Caixa acumulado' }); } },
-      { tipo: 'txt', x: 910, y: 150, w: 314, tam: 15, bullets: alts.map(function (k) { var f = fl(k); return '**' + k + '** · ' + mi(f.acumEnt) + ' acumulados em ' + H + ' anos; VPL ' + mi(f.vplEnt) + (k !== 'D' && f.tir != null ? '; TIR do projeto ' + P(f.tir, 0) : '') + '; gasto com equipamentos de ' + R(mediaMes(f, 1)) + ' por mês em ' + f.anos[0].ano + '.'; }).concat(['O investimento inicial com caixa (RIS, PACS' + (rmLig ? ', sala da RM' : '') + ') é de ' + mi(-fl(sid).ent[0]) + ' na ' + curtoAlt[sid] + '.']) },
+      { tipo: 'txt', x: 910, y: 150, w: 314, tam: bCx ? 14 : 15, bullets: bCx || alts.map(function (k) { var f = fl(k); return '**' + k + '** · ' + mi(f.acumEnt) + ' acumulados em ' + H + ' anos; VPL ' + mi(f.vplEnt) + (k !== 'D' && f.tir != null ? '; TIR do projeto ' + P(f.tir, 0) : '') + '; gasto com equipamentos de ' + R(mediaMes(f, 1)) + ' por mês em ' + f.anos[0].ano + '.'; }).concat(['O investimento inicial com caixa (RIS, PACS' + (rmLig ? ', sala da RM' : '') + ') é de ' + mi(-fl(sid).ent[0]) + ' na ' + curtoAlt[sid] + '.']) },
       { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Fluxo do hospital = ganho operacional sobre a EMG − manutenção ou aluguel − parcelas − investimento com caixa. IPCA do Focus em todos os caminhos; parcelas nominais.' }] });
+
+    /* 6b · prazo × taxa: por que juros menores por ano podem somar mais em reais, e o que o VPL enxerga */
+    if (FI.B.fin > 0 && FI.C.fin > 0) {
+      var cetB = c.B.cetAno, cetC = c.C.cetAno, rkBC = ranking({ B: fl('B').vplEnt, C: fl('C').vplEnt });
+      var vplBC = rkBC.empate ? 'no VPL, B e C empatam' : 'no VPL, ' + rkBC.best + ' vale ' + mi(rkBC.gap) + ' a mais';
+      var tPz = cetC < cetB && FI.C.enc > FI.B.enc ? 'C paga taxa menor que B, mas por mais tempo: ' + mi(FI.C.enc) + ' de juros em ' + H + ' anos, contra ' + mi(FI.B.enc) + ' embutidos nas parcelas de B; ' + vplBC
+        : cetB < cetC && FI.B.enc > FI.C.enc ? 'B paga taxa menor que C, mas por mais tempo: ' + mi(FI.B.enc) + ' de encargos em ' + H + ' anos, contra ' + mi(FI.C.enc) + ' em C; ' + vplBC
+        : (FI.C.enc <= FI.B.enc ? 'C' : 'B') + ' paga menos juros em ' + H + ' anos (' + mi(Math.min(FI.B.enc, FI.C.enc)) + ' contra ' + mi(Math.max(FI.B.enc, FI.C.enc)) + '); ' + vplBC;
+      var prazoTxt = function (k) { return k === 'B' ? c.B.n + ' meses' : k === 'C' ? (c.C.n || '—') + ' meses, ' + (c.C.c || 0) + ' de carência' : c.D.n + ' meses, renovável'; };
+      var ultTxt = function (k) { var f = FI[k]; return k === 'D' ? 'contínuo' : f.quit > 1 ? 'após ' + f.anoH : String(f.ult || '—'); };
+      var rkA5 = ranking({ B: FI.B.a5, C: FI.C.a5, D: FI.D.a5 }), rkAH = rkCx;
+      var cel = function (v, rkx, k) { return { t: mi(v), n: true, cor: rkx.top.indexOf(k) >= 0 ? 'good' : '' }; };
+      var pzRows = [
+        [{ t: 'Valor financiado' }, { t: mi(FI.B.fin), n: true }, { t: mi(FI.C.fin), n: true }, { t: 'nenhum', n: true }],
+        [{ t: 'Taxa ou aluguel' }, { t: Pp(cetB) + ' a.a.', n: true }, { t: Pp(cetC) + ' a.a.', n: true }, { t: R(c.D.aluguel) + '/mês', n: true }],
+        [{ t: 'Prazo' }, { t: prazoTxt('B'), n: true }, { t: prazoTxt('C'), n: true }, { t: prazoTxt('D'), n: true }],
+        [{ t: 'Parcelas até' }, { t: ultTxt('B'), n: true }, { t: ultTxt('C'), n: true }, { t: ultTxt('D'), n: true }]];
+      if (FI.B.quit > 1 || FI.C.quit > 1) pzRows.push([{ t: 'Saldo quitado em ' + FI.B.anoH }, { t: FI.B.quit > 1 ? mi(FI.B.quit) : '—', n: true }, { t: FI.C.quit > 1 ? mi(FI.C.quit) : '—', n: true }, { t: '—', n: true }]);
+      pzRows.push([{ t: 'Juros e encargos em ' + H + ' anos' }, { t: mi(FI.B.enc), n: true }, { t: mi(FI.C.enc), n: true }, { t: 'no aluguel', n: true }],
+        [{ t: 'Caixa acumulado até ' + FI.B.ano5 }].concat(alts.map(function (k) { return cel(FI[k].a5, rkA5, k); })),
+        [{ t: 'Caixa acumulado até ' + FI.B.anoH }].concat(alts.map(function (k) { return cel(FI[k].aH, rkAH, k); })),
+        [{ t: 'VPL para o hospital' }].concat(alts.map(function (k) { return { t: mi(fl(k).vplEnt), n: true, b: true, cor: topV.indexOf(k) >= 0 ? 'good' : '' }; })));
+      var mesesDiv = function (k) { return k === 'B' ? c.B.n : (c.C.n || 0); };
+      var outros5 = alts.filter(function (k) { return k !== rkAH.best && FI[k].a5 > FI[rkAH.best].a5; });
+      var bPz = [
+        'Juros dependem da taxa e do tempo: ' + (mesesDiv('C') > mesesDiv('B') ? 'C carrega a dívida por ' + mesesDiv('C') + ' meses' + ((c.C.c || 0) ? ', ' + c.C.c + ' deles só com juros sobre o saldo cheio,' : '') + ' contra ' + mesesDiv('B') + ' em B, que amortiza desde a primeira parcela.' : 'B carrega a dívida por ' + mesesDiv('B') + ' meses, contra ' + mesesDiv('C') + ' em C.'),
+        outros5.length ? 'Até ' + FI.B.ano5 + ', ' + juntaE(outros5.map(function (k) { return k + ' acumula' + ' ' + mi(FI[k].a5); })) + ', contra ' + mi(FI[rkAH.best].a5) + ' de ' + rkAH.best + '; ' + rkAH.best + ' só passa à frente ' + (passa ? 'em ' + passa : 'no fim') + ', sem parcelas. A ' + P(m.fin.desconto, 0) + ' a.a., o caixa do fim vale menos: o VPL pesa isso.'
+          : juntaE(rkAH.top) + (rkAH.top.length > 1 ? ' lideram' : ' lidera') + ' o caixa acumulado do começo ao fim do horizonte.'];
+      lista.push({ nav: 'Prazo × taxa', k: 'Financiamento · prazo × taxa', t: tPz, b: [
+        { tipo: 'g', x: 56, y: 150, w: 530, tit: 'Desembolso com os equipamentos por ano (R$)', f: function (el) { el.innerHTML = svgBars({ cats: anosCat.map(function (a) { return "'" + a.slice(2); }), series: alts.map(function (k) { return { nome: { B: 'B · compra GE', C: 'C · compra VMI', D: 'D · locação VMI' }[k], vals: fl(k).anos.map(function (a) { return (a.desembolso || 0) + (a.quitacao || 0); }), cor: ALT_COR[k] }; }), fmt: function (v) { return mi(v); }, h: 380, aria: 'Desembolso anual com os equipamentos' }); } },
+        { tipo: 'tab', x: 616, y: 150, w: 608, tam: 13, denso: true, cab: ['', 'B · GE', 'C · VMI compra', 'D · locação'], larg: [0.31, 0.2, 0.27, 0.22], al: ['', 'n', 'n', 'n'], rc: pzRows.map(function (r, i) { return i === pzRows.length - 1 ? 'total' : ''; }), linhas: pzRows },
+        { tipo: 'txt', x: 616, y: pzRows.length > 8 ? 462 : 432, w: 608, tam: 13.5, bullets: bPz },
+        { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Desembolso = parcelas + manutenção (B, C) ou aluguel (D), com o saldo quitado no fim. Caixa acumulado soma anos diferentes pelo valor de face; o VPL desconta a ' + P(m.fin.desconto, 0) + ' a.a.' }] });
+    }
 
     /* 7 · plano em números */
     var A = fl(sid).anos, temTrib = A.some(function (a) { return Math.abs(a.trib) > 1; }), temRM = rmLig && A.some(function (a) { return Math.abs(a.rmEbitda) > 1; });
@@ -1486,7 +1576,16 @@
     /* 11 · chaves de cenário */
     var melhor = function (o) { return alts.slice().sort(function (a, b) { return o[b].vplEnt - o[a].vplEnt; })[0]; };
     var chRows = [], chRc = [], chHl = [], melhores = [], grupo = null, muda = [];
-    var linhaCh = function (lab, o, atual) { var bst = melhor(o); melhores.push(bst); if (bst !== best && muda.filter(function (x) { return x.g === grupo; }).length === 0) muda.push({ g: grupo, lab: lab, bst: bst }); chRows.push([{ t: lab + (atual ? ' (atual)' : ''), b: atual }].concat(alts.map(function (k) { return { t: mi(o[k].vplEnt), n: true, b: k === bst }; })).concat([{ t: bst + ' · ' + { B: 'GE', C: 'VMI compra', D: 'VMI locação' }[bst], c: true }])); chRc.push(''); chHl.push(!!atual); };
+    var NOME_CH = { B: 'GE', C: 'VMI compra', D: 'VMI locação' };
+    var linhaCh = function (lab, o, atual) {
+      var rr = ranking({ B: o.B.vplEnt, C: o.C.vplEnt, D: o.D.vplEnt }), bst = rr.best, tops = rr.top;
+      melhores.push(bst);
+      /* a escolha só muda se nenhuma das líderes da linha estiver entre as líderes do cenário atual (empate não é virada) */
+      var vira = tops.every(function (k) { return topV.indexOf(k) < 0; });
+      if (vira && muda.filter(function (x) { return x.g === grupo; }).length === 0) muda.push({ g: grupo, lab: lab, bst: bst, tops: tops });
+      chRows.push([{ t: lab + (atual ? ' (atual)' : ''), b: atual }].concat(alts.map(function (k) { return { t: mi(o[k].vplEnt), n: true, b: tops.indexOf(k) >= 0 }; })).concat([{ t: tops.length > 1 ? tops.slice().sort().join(' = ') + ' (empate)' : bst + ' · ' + NOME_CH[bst], c: true }]));
+      chRc.push(''); chHl.push(!!atual);
+    };
     var secCh = function (t, g) { grupo = g; chRows.push([{ t: t }]); chRc.push('sec'); chHl.push(false); };
     if (qP) { secCh('PACS Sectra (estimativa S&S, sem cotação)', 'o PACS'); linhaCh('Com PACS', qP.com, qP.on); linhaCh('Sem PACS', qP.sem, !qP.on); }
     if (qS) { secCh('SUS', 'o SUS'); linhaCh('Fora (decisão do CEO)', qS.v.fora, qS.modo === 'fora'); linhaCh('SUS atual', qS.v.atual, qS.modo === 'atual'); linhaCh('SUS atual + Agora Tem Especialistas', qS.v.ate, qS.modo === 'ate'); }
@@ -1496,8 +1595,8 @@
       lsel.forEach(function (l) { linhaCh('Dólar a ' + FXr(l.usd), { B: { vplEnt: l[fX.modo].vplEnt }, C: { vplEnt: qX.vC }, D: { vplEnt: qX.vD } }, l.atual); }); }
     var gruposTodos = [qP ? 'o PACS' : null, qS ? 'o SUS' : null, qR ? 'a ressonância' : null, temX ? 'o câmbio' : null].filter(Boolean), gruposMuda = muda.map(function (x) { return x.g; });
     var listaE = function (a) { return a.length > 1 ? a.slice(0, -1).join(', ') + ' e ' + a[a.length - 1] : a[0]; }, cap = function (t) { return t.charAt(0).toUpperCase() + t.slice(1); };
-    var tCh = !muda.length ? cap(listaE(gruposTodos)) + ' mudam o tamanho do ganho, não a escolha: a ' + curtoAlt[best] + ' fica à frente em todos os cenários'
-      : cap(listaE(gruposMuda)) + ' ' + (gruposMuda.length > 1 ? 'mudam' : 'muda') + ' a escolha: ' + muda.map(function (x) { return x.lab.charAt(0).toLowerCase() + x.lab.slice(1) + ', a melhor passa a ser a ' + curtoAlt[x.bst]; }).join('; ') + (gruposTodos.length > gruposMuda.length ? '. ' + cap(listaE(gruposTodos.filter(function (g) { return gruposMuda.indexOf(g) < 0; }))) + ' só ' + (gruposTodos.length - gruposMuda.length > 1 ? 'mudam' : 'muda') + ' o tamanho do ganho' : '');
+    var tCh = !muda.length ? cap(listaE(gruposTodos)) + ' mudam o tamanho do ganho, não a escolha: ' + (emp ? aTop(topV) + ' seguem à frente em todos os cenários' : 'a ' + curtoAlt[best] + ' fica à frente em todos os cenários')
+      : cap(listaE(gruposMuda)) + ' ' + (gruposMuda.length > 1 ? 'mudam' : 'muda') + ' a escolha: ' + muda.map(function (x) { return x.lab.charAt(0).toLowerCase() + x.lab.slice(1) + (x.tops.length > 1 ? ', ' + aTop(x.tops) + ' passam a empatar à frente' : ', a melhor passa a ser a ' + curtoAlt[x.bst]); }).join('; ') + (gruposTodos.length > gruposMuda.length ? '. ' + cap(listaE(gruposTodos.filter(function (g) { return gruposMuda.indexOf(g) < 0; }))) + ' só ' + (gruposTodos.length - gruposMuda.length > 1 ? 'mudam' : 'muda') + ' o tamanho do ganho' : '');
     lista.push({ nav: 'Cenários', k: 'Chaves de cenário', t: tCh, b: [
       { tipo: 'tab', x: 56, y: 150, w: 1168, tam: 14.5, cab: ['VPL para o hospital, ' + H + ' anos', 'B · GE, compra', 'C · VMI, compra', 'D · VMI, locação', 'Melhor'], larg: [0.36, 0.16, 0.16, 0.16, 0.16], al: ['', 'n', 'n', 'n', 'c'], rc: chRc, hl: chHl, linhas: chRows },
       { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Cada linha muda uma chave e mantém as outras como no cenário atual (destacado). As chaves ficam na Tese e em Premissas.' }] });
@@ -1836,7 +1935,13 @@
   window.HDA_DECK = { slides: function () { return deckSlides(); }, abrir: abrirApresentacao, pptx: gerarPptx };
 
   /* ================= boot ================= */
-  $('#logoTopo').src = LOGO.navy;
+  /* logo colorido no tema claro; no escuro, a versão com S e PARTNERS em branco */
+  (function () {
+    var img = $('#logoTopo'), mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    var poe = function () { var t = document.documentElement.getAttribute('data-theme'); img.src = (t === 'dark' || (t !== 'light' && mq && mq.matches)) ? LOGO.branco : LOGO.navy; };
+    poe(); if (mq) { if (mq.addEventListener) mq.addEventListener('change', poe); else if (mq.addListener) mq.addListener(poe); }
+    try { new MutationObserver(poe).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) { }
+  })();
   if (NO_DOMINIO) { var ft = $('#foot'); ft.innerHTML = '<a href="/.netlify/functions/sair" style="margin-right:10px">Sair</a><a href="/admin/" style="margin-right:10px">Acessos</a>' + ft.innerHTML; }
   registrarUso('pagina');
   if (HM && !HM.off()) document.body.classList.add('m-boot');
