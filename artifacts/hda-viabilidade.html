@@ -1567,7 +1567,10 @@ var Engine = (function () {
       d.aluguel = num(opex && opex.aluguel) * reaj;
       var exPacs = exames + exS + exA; /* PACS: os exames que estão no modelo (convênio e particular; o SUS só quando a chave o inclui) */
       d.exPacs = exPacs; d.ris = num(p.rispacs_mes) * reaj; d.pacs = pacsEx(m) * exPacs * reaj;
-      d.rispacs = d.ris + d.pacs;
+      /* PACS que o hospital já paga hoje (Pixeon): deixa de existir quando o Sectra entra; vale para os exames que já existem */
+      var pa = p.pacs_atual || 'igual', exAt = exames + exS;
+      d.pacsEvit = !pacsOn(m) ? 0 : pa === 'mes' ? num(p.pacs_atual_valor) * reaj : (pa === 'exame' ? num(p.pacs_atual_valor) : pacsEx(m)) * exAt * reaj;
+      d.rispacs = d.ris + d.pacs - d.pacsEvit;
     }
     d.repasse = d.rep_med + d.rep_mat + d.rep_bio + d.rep_sala;
     d.cv = d.matmed + d.repasse;
@@ -1597,7 +1600,10 @@ var Engine = (function () {
      pacotes B e C e entra no cálculo só com rm.incluir = "sim"; a obra de pré-instalação sai no ano 0.          */
   function rmOn(m) { return !(m.rm && m.rm.incluir === 'nao'); }
   function isRM(it) { return !!it && (it.rm === true || it.id === 'rm'); }
-  function ativos(m, itens) { var on = rmOn(m); return (itens || []).filter(function (it) { return on || !isRM(it); }); }
+  /* RM em pay per use: nas alternativas VMI (lista equip.C) a RM sai do investimento, da manutenção e da locação */
+  function ppuOn(m) { return rmOn(m) && ((m.rm || {}).modo_vmi === 'ppu'); }
+  function ativos(m, itens) { var on = rmOn(m), fora = ppuOn(m) && m.equip && itens === m.equip.C; return (itens || []).filter(function (it) { return on && !fora || !isRM(it); }); }
+  function ppuAno(m, t, rmA) { if (!rmA || !ppuOn(m)) return 0; var r = m.rm || {}; return num(r.ppu_exame) * Math.max(num(rmA.exames), num(r.ppu_minimo) * num(rmA.meses)) * reajAno(m, t); }
   /* Meses contados de janeiro do ano 1 (0 = jan do ano 1). A RM é aprovada e contratada em rm.aprovacao (AAAA-MM)
      e começa a operar rm.prazo_instalacao meses depois (obra, entrega, comissionamento). */
   function mesIdx(sx) { var mm = /^(\d{4})-(\d{2})/.exec(String(sx || '')); return mm ? (+mm[1]) * 12 + (+mm[2]) - 1 : null; }
@@ -1626,7 +1632,7 @@ var Engine = (function () {
   function obraRM(m) { return rmOn(m) ? num(m.rm && m.rm.obra) : 0; }
   /* Itens de terceiros da RM que o preço VMI não inclui (gaiola, chiller, estabilizador); a proposta GE já traz gaiola e chiller */
   function terceirosRM(m) { return rmOn(m) ? num(m.rm && m.rm.terceiros_vmi) : 0; }
-  function obraAlt(m, alt) { return obraRM(m) + (alt && (alt.id === 'C' || alt.id === 'D') ? terceirosRM(m) : 0); }
+  function obraAlt(m, alt) { return obraRM(m) + (alt && (alt.id === 'C' || alt.id === 'D') && !ppuOn(m) ? terceirosRM(m) : 0); }
   /* Saldo devedor no fim do horizonte: o fluxo do hospital quita o restante no último ano, para não favorecer o financiamento mais longo */
   function saldoFimH(m, alt) {
     var H = Math.max(1, Math.round(num(m.fin.horizonte))), fim = num(m.fin.ano_inicio) + H - 1, rs = (alt && alt.rows) || [], last = null, depois = false;
@@ -1835,6 +1841,7 @@ var Engine = (function () {
       var incBase = (ebitdaPropBase - ebitdaEmg) * frac;
       var opexAno = alt.opex ? alt.opex.ano(t) : 0; /* manutenção pós-garantia (B, C) ou aluguel (D) */
       var rmA = rmAno(m, t), rmE = rmA ? rmA.ebitda : 0; /* RM: serviço novo, todo incremental */
+      var ppu = alt && (alt.id === 'C' || alt.id === 'D') ? ppuAno(m, t, rmA) : 0; rmE -= ppu; /* pay per use: tarifa por exame à VMI */
       var inc = incBase + rmE - opexAno;
       var opReg = alt.opex ? (alt.opex.tipo === 'aluguel' ? { aluguel: alt.opex.mes } : { manut: alt.opex.mes }) : null;
       var depAno = depAnoT(t);
@@ -1855,7 +1862,7 @@ var Engine = (function () {
         }
       }
       acumP += fcp; acumE += fce;
-      anos.push({ t: t, ano: num(f.ano_inicio) + t - 1, fator: fator, frac: frac, exames: p.exames * 12, rl: p.rl * 12, ebitdaEmg: ebitdaEmg, ebitdaPropBase: ebitdaPropBase, incBase: incBase, rm: rmA, rmEbitda: rmE, invRM: invP, invRMHosp: invE, opex: opexAno, opexTipo: alt.opex ? alt.opex.tipo : null, inc: inc, dep: depAno, ebit: ebit, trib: trib, residual: residual, fcp: fcp, servico: serv, juros: qaFeito && qaFeito.t < t ? 0 : (alt.jurosAno && alt.jurosAno[t]) || 0, fce: fce, acumP: acumP, acumE: acumE, dscr: serv > 0 ? inc / serv : null, quitacao: quita, desembolso: opexAno + serv, dre: { emg: e, prop: dreMensal(m, fator, 'propria', t, opReg) } });
+      anos.push({ t: t, ano: num(f.ano_inicio) + t - 1, fator: fator, frac: frac, exames: p.exames * 12, rl: p.rl * 12, ebitdaEmg: ebitdaEmg, ebitdaPropBase: ebitdaPropBase, incBase: incBase, rm: rmA, rmEbitda: rmE, ppu: ppu, invRM: invP, invRMHosp: invE, opex: opexAno, opexTipo: alt.opex ? alt.opex.tipo : null, inc: inc, dep: depAno, ebit: ebit, trib: trib, residual: residual, fcp: fcp, servico: serv, juros: qaFeito && qaFeito.t < t ? 0 : (alt.jurosAno && alt.jurosAno[t]) || 0, fce: fce, acumP: acumP, acumE: acumE, dscr: serv > 0 ? inc / serv : null, quitacao: quita, desembolso: opexAno + serv, dre: { emg: e, prop: dreMensal(m, fator, 'propria', t, opReg) } });
       proj.push(fcp); ent.push(fce);
     }
     var r = num(f.desconto);
@@ -2111,6 +2118,22 @@ var Engine = (function () {
     return { cet: r.C.cetAno, parcela: r.C.parcela, vplC: r.flC.vplEnt, dVplC: out.flC.vplEnt - r.flC.vplEnt, linha: e ? e.linha.nome : null, custo: e ? e.sim.custo : null, juros: r.C.juros, dJuros: (r.C.juros || 0) - (out.C.juros || 0), tarifa: (out.C.custosIni || 0) - (r.C.custosIni || 0) };
   }
 
+  /* RM em pay per use (alternativas VMI): VPL com a RM comprada/alugada, em pay per use e sem a RM, e as tarifas de empate.
+     O VPL é linear na tarifa, então o empate sai de dois pontos. */
+  function cenarioPPU(m, Motor, BASE) {
+    var B0 = (BASE && BASE._hdaOrig) || BASE, f0 = Math.max(0, num((m.rm || {}).ppu_exame));
+    var run = function (modo, incl, fee) { var m2 = clone(m); m2.rm = m2.rm || {}; m2.rm.incluir = incl; m2.rm.modo_vmi = modo; if (fee != null) m2.rm.ppu_exame = fee; return calcular(m2, Motor, B0, { leve: true }); };
+    var rC = run('compra', 'sim'), rP = run('ppu', 'sim', f0), rP2 = run('ppu', 'sim', f0 + 100), rS = run('compra', 'nao');
+    var out = { fee: f0, minimo: num((m.rm || {}).ppu_minimo), exames: num((m.rm || {}).exames_mes) };
+    ['C', 'D'].forEach(function (k) {
+      var vc = rC['fl' + k].vplEnt, vp = rP['fl' + k].vplEnt, vp2 = rP2['fl' + k].vplEnt, vs = rS['fl' + k].vplEnt, dv = (vp2 - vp) / 100;
+      out[k] = { compra: vc, ppu: vp, sem: vs, porReal: dv, feeSem: dv < 0 ? f0 - (vp - vs) / dv : null, feeCompra: dv < 0 ? f0 - (vp - vc) / dv : null,
+        fin: rP[k].capexFin || 0, finCompra: rC[k].capexFin || 0, aluguel: k === 'D' ? rP.D.aluguel : null, aluguelCompra: k === 'D' ? rC.D.aluguel : null };
+    });
+    out.B = { compra: rC.flB.vplEnt, sem: rS.flB.vplEnt };
+    return out;
+  }
+
   /* Quitação antecipada de C: o fluxo de C com e sem a regra (o outro lado da chave atual), só refaz o fluxo */
   function cenarioQuitar(m, out) {
     if (!out || !out.C || !(out.C.rows || []).length || !out.flC) return null;
@@ -2273,7 +2296,7 @@ var Engine = (function () {
     return { base: basev, itens: out };
   }
 
-  return { baseHDA: baseHDA, cotacaoOn: cotacaoOn, cenarioCotacao: cenarioCotacao, cenarioQuitar: cenarioQuitar, cenario600F: cenario600F, terceirosRM: terceirosRM, saldoFimH: saldoFimH, fxB: fxB, emDolar: emDolar, num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
+  return { baseHDA: baseHDA, cotacaoOn: cotacaoOn, cenarioCotacao: cenarioCotacao, cenarioQuitar: cenarioQuitar, cenarioPPU: cenarioPPU, ppuOn: ppuOn, cenario600F: cenario600F, terceirosRM: terceirosRM, saldoFimH: saldoFimH, fxB: fxB, emDolar: emDolar, num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
     mesesAno: mesesAno, mesesDesde: mesesDesde, rmOn: rmOn, pacsOn: pacsOn, susModo: susModo, susAtualOn: susAtualOn, susAteOn: susAteOn, pacsEx: pacsEx, pacsImpl: pacsImpl, isRM: isRM, ativos: ativos, rmMensal: rmMensal, rmAno: rmAno, capacidadeRM: capacidadeRM, iniRM: iniRM, aprovRM: aprovRM, anoRM: anoRM, anoEqRM: anoEqRM, mesRMStr: mesRMStr, susUpside: susUpside, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
@@ -2320,6 +2343,8 @@ var SCHEMA = [
   { id: 'propria.pacs_incluir', bloco: 'Imagem própria: operação', label: 'PACS Sectra no modelo', un: '', fmt: 'txt', def: 'sim', origem: 'ss', fonte: 'Chave de cenário (20/10/2026): o PACS Sectra Standard tem grande impacto no resultado e ainda não tem cotação. "Incluído" cobra o custo por exame (também na RM) e a implantação; "fora do modelo" zera os dois, mas o hospital continua precisando de um PACS: o valor cai no lugar errado, não some. A tese e o simulador mostram os dois cenários lado a lado.', ui: { choices: [['sim', 'Incluído (estimativa S&S)'], ['nao', 'Fora do modelo (a cotar)']] } },
   { id: 'propria.pacs_exame', bloco: 'Imagem própria: operação', label: 'PACS Sectra One Cloud Standard: custo por exame', un: 'R$/exame', fmt: 'num', def: 8.33, origem: 'ss', fonte: 'Sugestão do CEO e da S&S (20/10/2026): PACS Sectra, edição Standard, em nuvem. Estimativa S&S, sem impostos: assinatura por exame (software, hospedagem e cache) mais arquivo em nuvem pela média de 5 anos; faixa de R$ 6,94 a R$ 10,58. Cobrada sobre os exames que estão no modelo: convênio e particular (~3.568/mês), mais o SUS quando a chave "SUS no modelo" o inclui (~352/mês hoje; o SUS a mais, na posição Agora Tem Especialistas), e sobre os exames de RM. A confirmar com cotação da Sectra e com a disponibilidade da edição Standard no Brasil. Conflito de interesse: a S&S representa a Sectra.' },
   { id: 'propria.pacs_impl', bloco: 'Imagem própria: operação', label: 'PACS Sectra: setup e implantação (ano 0)', un: 'R$', fmt: 'num', def: 607900, origem: 'ss', fonte: 'Estimativa S&S, sem impostos: setup do ambiente em nuvem, hospedagem até o go-live e implantação (workflow, integrações HL7/DICOM, configuração, treinamento). Faixa de R$ 0,33 a 0,77 mi. A cotar com a Sectra.' },
+  { id: 'propria.pacs_atual', bloco: 'Imagem própria: operação', label: 'PACS atual (Pixeon), que o HDA já paga', un: 'regra', fmt: 'txt', def: 'igual', origem: 'pendente', fonte: 'Reunião de 09/11/2026: o HDA já paga um PACS (Pixeon) hoje; com o Sectra, esse custo deixa de existir. Igual ao Sectra: premissa de que a Pixeon custa hoje o mesmo por exame que o Sectra (impacto do PACS = implantação e os exames novos). Por exame ou por mês: usa o valor abaixo, do contrato Pixeon (a pedir ao HDA).', ui: { choices: [['igual', 'Igual ao Sectra, por exame'], ['exame', 'Valor por exame'], ['mes', 'Valor mensal fixo']] } },
+  { id: 'propria.pacs_atual_valor', bloco: 'Imagem própria: operação', label: 'PACS atual (Pixeon): valor do contrato', un: 'R$/exame ou R$/mês', fmt: 'num', def: 0, origem: 'pendente', fonte: 'Só vale com a regra acima em "valor por exame" ou "valor mensal fixo". A pedir ao HDA.' },
   { id: 'propria.tc_exh', bloco: 'Imagem própria: operação', label: 'Capacidade da TC: exames por hora', un: 'exames/h', fmt: 'num', def: 3, origem: 'ss', fonte: 'Padrão da ferramenta de financiamento (TC).' },
   { id: 'propria.tc_h', bloco: 'Imagem própria: operação', label: 'Capacidade da TC: horas por dia', un: 'h', fmt: 'num', def: 24, origem: 'ss', fonte: 'Hospital com PS 24 h; 1.400 TC/mês não cabem em 12 h.' },
   { id: 'propria.tc_d', bloco: 'Imagem própria: operação', label: 'Capacidade da TC: dias por mês', un: 'dias', fmt: 'num', def: 30, origem: 'ss', fonte: 'Operação contínua.' },
@@ -2345,6 +2370,9 @@ var SCHEMA = [
   { id: 'rm.outros_mes', bloco: 'Ressonância magnética (novo serviço)', label: 'Outros custos fixos da RM', un: 'R$/mês', fmt: 'num', def: 5000, origem: 'ss', fonte: 'Bobinas e acessórios fora do contrato, seguro do equipamento, lavanderia, agendamento.' },
   { id: 'rm.obra', bloco: 'Ressonância magnética (novo serviço)', label: 'Sala da RM (obra de pré-instalação, recurso próprio)', un: 'R$', fmt: 'num', def: 200000, origem: 'ceo', fonte: 'CEO, 20/10/2026: R$ 200 mil para a sala da RM. Sai do caixa no ano da aprovação nas três formas de pagar (o FINAME não financia obra). Risco: referências de pré-instalação são maiores (edital da FAS Niterói, 2026, RM e TC em ~200 m²: blindagem R$ 434 mil e elétrica R$ 1,28 mi); confirmar o escopo com o projeto da VMI. Gaiola, chiller e estabilizador ficam na premissa seguinte (só nas propostas VMI; a GE já inclui gaiola e chiller).' },
   { id: 'rm.terceiros_vmi', bloco: 'Ressonância magnética (novo serviço)', label: 'Gaiola, chiller e estabilizador da RM (só nas propostas VMI)', un: 'R$', fmt: 'num', def: 350000, origem: 'vmi', fonte: 'Javier Sordo (VMI), 04/11/2026: o preço VMI não inclui itens de terceiros (gaiola, chiller, estabilizador), cerca de R$ 350 mil. A proposta GE do Projeto Radiologia já traz gaiola e chiller, então o valor entra só em C e D, com a obra da sala (recurso próprio, no ano da aprovação). Pedir valores firmes à VMI.' },
+  { id: 'rm.modo_vmi', bloco: 'Ressonância magnética (novo serviço)', label: 'RM VMI: compra/locação ou pay per use', un: 'modo', fmt: 'txt', def: 'compra', origem: 'ss', fonte: 'Reunião de 09/11/2026: avaliar a RM em pay per use. Nesse modo, nas alternativas VMI (C e D), a VMI instala e mantém a RM (com gaiola, chiller e estabilizador) e cobra por exame; o hospital paga a sala, a equipe, a energia e os insumos. Na alternativa GE (B), a RM segue comprada.', ui: { choices: [['compra', 'Compra (C) ou locação (D)'], ['ppu', 'Pay per use']] } },
+  { id: 'rm.ppu_exame', bloco: 'Ressonância magnética (novo serviço)', label: 'Pay per use: tarifa por exame', un: 'R$/exame', fmt: 'num', def: 150, origem: 'pendente', fonte: 'Hipótese S&S até a proposta da VMI; corrigida pelo IPCA. A apresentação mostra as tarifas de empate.' },
+  { id: 'rm.ppu_minimo', bloco: 'Ressonância magnética (novo serviço)', label: 'Pay per use: mínimo de exames cobrados por mês', un: 'exames/mês', fmt: 'int', def: 0, origem: 'pendente', fonte: 'Franquia mínima, comum nesse tipo de contrato. A confirmar na proposta da VMI.' },
   { id: 'rm.preco_600f', bloco: 'Ressonância magnética (novo serviço)', label: 'Preço da Cignus 600F sem hélio (cenário)', un: 'R$', fmt: 'num', def: 5000000, origem: 'vmi', fonte: 'Pré-cálculo VMI de 04/11/2026 (Javier Sordo, dólar de R$ 5,30): Cignus 600F, 24 canais, ímã sem hélio (sem tubo de quench nem recarga), R$ 5,0 mi, com as mesmas exclusões da Cignus 600. A VMI busca condição especial da WDM para competir. Não entra no plano: a página mostra o VPL com a 600F e o preço que empata C com B.' },
   { id: 'rm.horas_dia', bloco: 'Ressonância magnética (novo serviço)', label: 'Horas de operação da RM por dia', un: 'h', fmt: 'num', def: 12, origem: 'ss', fonte: 'Define só a capacidade mostrada (2 exames/h × horas × 26 dias). Com PS 24 h, a agenda pode ser estendida se a demanda passar de 624/mês.' },
 
@@ -2902,8 +2930,15 @@ window.HDAMotion = (function () {
     var g = q.ganhoMes, neutro = g != null && Math.abs(g) <= Math.max(0.01 * Math.abs(q.sem.vplEnt), 50000);
     var vTxt = g == null ? '' : neutro ? 'no valor presente é quase neutra (' + (g >= 0 ? '+' : '−') + mi(Math.abs(g)) + ' mês a mês): a dívida restante custa ' + Pp(q.taxaRest) + ' a.a., perto dos ' + P(d, 0) + ' de desconto'
       : g > 0 ? 'no valor presente ganha ' + mi(g) + ': a dívida restante custa ' + Pp(q.taxaRest) + ' a.a., acima dos ' + P(d, 0) + ' de desconto' : 'no valor presente perde ' + mi(-g) + ': a dívida restante custa ' + Pp(q.taxaRest) + ' a.a., abaixo dos ' + P(d, 0) + ' de desconto';
-    if (curto) return '**Quitação antecipada:** em ' + q.q.ano + ' o caixa do projeto já cobre o saldo de ' + mi(q.q.saldo) + ' (com ' + mi(q.reserva) + ' de reserva). Quitando, os juros caem para ' + mi(encC) + ' e o caixa acumulado vai a ' + mi(q.com.acumEnt) + '; ' + vTxt + '. Opção para decidir lá na frente.';
+    if (curto) return '**Quitação antecipada:** em ' + q.q.ano + ' o caixa do projeto já cobre o saldo de ' + mi(q.q.saldo) + ' (com ' + mi(q.reserva) + ' de reserva). Quitando, os juros em ' + H + ' anos caem de ' + mi(encS) + ' para ' + mi(encC) + '; ' + vTxt + '. Opção para decidir lá na frente.';
     return (q.on ? '<b>Quitação antecipada (ligada nas premissas)</b>: ' : '<b>Quitação antecipada de C (opção)</b>: ') + 'em ' + q.q.ano + ' o caixa acumulado do projeto já cobre o saldo devedor de ' + mi(q.q.saldo) + ' e deixa ' + mi(q.reserva) + ' de reserva. Quitando, os juros e encargos em ' + H + ' anos caem de ' + mi(encS) + ' para ' + mi(encC) + ' e o caixa acumulado vai de ' + mi(q.sem.acumEnt) + ' a ' + mi(q.com.acumEnt) + '; ' + vTxt + '. No VPL anual do modelo, ' + mi(q.sem.vplEnt) + ' sem e ' + mi(q.com.vplEnt) + ' com a quitação (a convenção anual trata as parcelas como pagas no fim de cada ano). É uma opção a exercer conforme o caixa, sem decidir agora' + (q.tarifa ? '' : '; confirmar com o agente se há tarifa de liquidação') + '. A chave fica em Premissas.';
+  }
+  function cenPPU() { if (!calc) return null; if (calc._ppu === undefined) { try { calc._ppu = calc.cenRM ? E.cenarioPPU(model, M, BASE) : null; } catch (e) { calc._ppu = null; } } return calc._ppu; }
+  /* RM em pay per use: leitura para o painel (curto = apresentação) */
+  function ppuTxt(q, k) {
+    if (!q || !q[k]) return '';
+    var o = q[k], sem = o.ppu - o.sem, com = o.compra - o.sem, minTxt = q.minimo ? ', mínimo de ' + N(q.minimo) + ' exames/mês' : '';
+    return '<b>RM em pay per use (opção)</b>: a VMI instala e mantém a RM e cobra por exame; o hospital paga a sala, a equipe, a energia e os insumos. A R$ ' + N(q.fee) + ' por exame' + minTxt + ' (hipótese até a proposta), a RM ' + (sem >= 0 ? 'soma ' : 'tira ') + mi(Math.abs(sem)) + ' no VPL de ' + k + ', contra ' + sgnMi(com) + ' com a RM ' + (k === 'D' ? 'alugada' : 'comprada') + '. ' + (o.feeSem != null ? 'Deixa de tirar valor até R$ ' + N(o.feeSem) + ' por exame e vale mais que ' + (k === 'D' ? 'alugar' : 'comprar') + ' até R$ ' + N(o.feeCompra) + '. ' : '') + (k === 'C' ? 'Sai ' + mi(o.finCompra - o.fin) + ' de dívida nova. ' : 'O aluguel cai de ' + R(o.aluguelCompra) + ' para ' + R(o.aluguel) + '/mês. ') + 'Cada R$ 10 na tarifa = ' + mi(Math.abs(o.porReal) * 10) + ' de VPL. A chave fica em Premissas.';
   }
   function cenQuit() { if (!calc) return null; if (calc._quit === undefined) calc._quit = E.cenarioQuitar(model, calc); return calc._quit; }
   function cenCot() { if (!calc || !E.cotacaoOn(model)) return null; if (calc._cot === undefined) calc._cot = E.cenarioCotacao(model, M, BASE, calc); return calc._cot; }
@@ -2956,7 +2991,7 @@ window.HDAMotion = (function () {
       '</div></div>' +
       '<div class="card"><div class="card-h"><h2>O que pode dar errado</h2></div><div class="grid" style="gap:12px">' +
       '<div class="tile"><h3>Janela sem TC na troca</h3><p>O contrato com a EMG não tem multa e pede 90 dias de aviso (CEO, 20/10). A EMG é dona dos equipamentos: o aviso deve sair ~90 dias antes da instalação (go-live em ' + fmtMes(goLive()) + ' no modelo). Se a entrega atrasar depois do aviso, o hospital fica sem TC: amarrar o prazo de entrega no pedido e manter a opção de prorrogar com a EMG.</p></div>' +
-      (pacsOn() ? '<div class="tile"><h3>PACS Sectra é estimativa, não cotação</h3><p>O modelo usa R$ ' + NF2.format(+model.propria.pacs_exame || 0) + ' por exame (' + R(prop.pacs) + '/mês) e ' + mi(+model.propria.pacs_impl || 0) + ' de setup e implantação, estimativas S&S para a edição Standard, que a Sectra ainda está disponibilizando no Brasil. Faixa de R$ 6,94 a 10,58 por exame. Tira ' + mi(c.cenPACS ? -c.cenPACS.delta[sel.id] : 0) + ' do VPL. A S&S representa a Sectra: declarar ao hospital.</p></div>' : '<div class="tile"><h3>PACS fora do modelo: número otimista</h3><p>Sem o PACS, o resultado fica ' + R(c.cenPACS ? c.cenPACS.sem.resultado - c.cenPACS.com.resultado : 0) + '/mês acima e o VPL ' + mi(c.cenPACS ? -c.cenPACS.delta[sel.id] : 0) + ' acima do cenário com a estimativa S&S do Sectra Standard. O hospital vai precisar de um PACS: trocar pela cotação assim que sair.</p></div>') +
+      (pacsOn() ? '<div class="tile"><h3>PACS Sectra é estimativa, não cotação</h3><p>O modelo usa R$ ' + NF2.format(+model.propria.pacs_exame || 0) + ' por exame (' + R(prop.pacs) + '/mês), ' + pixTxt() + ', e ' + mi(+model.propria.pacs_impl || 0) + ' de setup e implantação, estimativas S&S para a edição Standard, que a Sectra ainda está disponibilizando no Brasil. Faixa de R$ 6,94 a 10,58 por exame. Tira ' + mi(c.cenPACS ? -c.cenPACS.delta[sel.id] : 0) + ' do VPL. A S&S representa a Sectra: declarar ao hospital.</p></div>' : '<div class="tile"><h3>PACS: o número mantém a Pixeon</h3><p>O HDA já paga um PACS (Pixeon), que segue nos custos dos dois cenários. Com o Sectra ' + pixTxt().replace(/^no lugar do PACS que o HDA já paga \(Pixeon\)/, 'no lugar dele') + ', o VPL muda ' + mi(c.cenPACS ? c.cenPACS.delta[sel.id] : 0) + ': a implantação e o PACS dos exames novos (RM' + (E.susAteOn(model) ? ' e SUS a mais' : '') + ').</p></div>') +
       '<div class="tile"><h3>O CFI da Pulsar ainda não saiu</h3><p>O modelo assume o credenciamento até dez/2026 (premissa VMI). Se atrasar além do Gate 2, a TC fica fora do FINAME e vai para o FGTS-Saúde (se o hospital cumprir os requisitos) ou recurso próprio, enquanto a TC GE (Ascend, Aspire) entra. Para testar esse caso, coloque "Não" em "Tratar o pacote como credenciado" em Premissas.</p></div>' +
       (c.rm.on && q ? '<div class="tile"><h3>A RM depende de volume</h3><p>Com as hipóteses atuais a RM tira ' + mi(-q.eq[sel.id].delta) + ' do VPL e leva a cobertura de ' + q.sem[sel.id].dscr[0].ano + ' de ' + X(q.sem[sel.id].dscr[0].v) + ' para ' + X(q.com[sel.id].dscr[0].v) + '. Empata com ' + N(q.eq[sel.id].volume) + ' exames/mês. O volume de convênio depende de o HDA reincluir a RM nos pacotes de reembolso dos planos de saúde, de onde ela saiu recentemente. Validar a demanda antes de comprar e negociar o preço (R$ 4,33 mi no contrato FINAME da CEMAN; R$ 4,9 mi nos pregões de Goiás).</p></div>' : '') +
       '<div class="tile"><h3>Crédito antes do TDC</h3><p>Sem o TDC, o hospital rola capital de giro a 48 meses e a cobertura fica em ' + X(e27.dscrSem) + '. Um banco pode pedir garantia real ou recusar até a desalavancagem.</p></div>' +
@@ -2982,7 +3017,7 @@ window.HDAMotion = (function () {
     h += '<div class="grid two"><div class="card"><div class="card-h"><h2>DRE mensal: EMG × imagem própria</h2><span class="muted small">volume atual, regime após a garantia · alternativa ' + calc.sel.id + '</span></div><div class="tbl-wrap"><table><thead><tr><th>R$/mês</th><th class="n">EMG</th><th class="n">A.V.</th><th class="n">Própria</th><th class="n">A.V.</th></tr></thead><tbody>' +
       row('Receita bruta', e.rb, p.rb) + (e.rbSus || p.rbSus ? row('dos quais SUS atual', e.rbSus, p.rbSus, 'sub') : '') + (p.rbSusMais ? row('dos quais SUS a mais (Agora Tem Especialistas)', e.rbSusMais, p.rbSusMais, 'sub') : '') + row('(−) Glosas', -e.glosa, -p.glosa, 'sub') + row('Receita líquida', e.rl, p.rl, 'total') +
       row('(−) Mat/Med', -e.matmed, -p.matmed) + row('(−) Repasse: médicos', -e.rep_med, -p.rep_med) + row('(−) Repasse: material EMG', -e.rep_mat, -p.rep_mat) + row('(−) Repasse: biópsias', -e.rep_bio, -p.rep_bio) + row('(−) Médicos que usam a sala', -e.rep_sala, -p.rep_sala) +
-      row('Margem de contribuição', e.mc, p.mc, 'total') + row('(−) Custos fixos diretos', -e.cf_dir, -p.cf_dir) + row('(−) Manutenção pós-garantia', -e.manut, -p.manut) + (p.aluguel ? row('(−) Aluguel dos equipamentos', -e.aluguel, -p.aluguel) : '') + row('(−) RIS (Touch Health)', -(e.ris || 0), -(p.ris || 0)) + row('(−) PACS Sectra, por exame' + (pacsOn() ? '' : ' (fora do modelo)'), -(e.pacs || 0), -(p.pacs || 0)) + row('Margem direta', e.margem_direta, p.margem_direta, 'total') + row('(−) Custos indiretos', -e.cf_ind, -p.cf_ind) + row('Resultado operacional (EBITDA)', e.resultado, p.resultado, 'total hl') +
+      row('Margem de contribuição', e.mc, p.mc, 'total') + row('(−) Custos fixos diretos', -e.cf_dir, -p.cf_dir) + row('(−) Manutenção pós-garantia', -e.manut, -p.manut) + (p.aluguel ? row('(−) Aluguel dos equipamentos', -e.aluguel, -p.aluguel) : '') + row('(−) RIS (Touch Health)', -(e.ris || 0), -(p.ris || 0)) + row('(−) PACS Sectra, por exame' + (pacsOn() ? '' : ' (fora do modelo)'), -(e.pacs || 0), -(p.pacs || 0)) + (p.pacsEvit ? row('(+) PACS atual (Pixeon), que deixa de ser pago', 0, p.pacsEvit) : '') + row('Margem direta', e.margem_direta, p.margem_direta, 'total') + row('(−) Custos indiretos', -e.cf_ind, -p.cf_ind) + row('Resultado operacional (EBITDA)', e.resultado, p.resultado, 'total hl') +
       '</tbody></table></div><p class="small muted" style="margin-top:8px">Fonte: Viabilidade v2, aba Viabilidade, linhas 48–63. A aba DRE da mesma planilha mostra R$ 162 mil para a própria porque omite manutenção e RIS/PACS no cenário de volume atual.</p></div>';
     h += '<div class="card"><div class="card-h"><h2>Para onde vai a receita hoje</h2><span class="muted small">R$ por mês, jan–jun/26</span></div><div class="chart">' + svgBars({ cats: ['Médicos EMG', 'Material EMG', 'Biópsias', 'Médicos na sala', 'Mat/Med hosp.', 'Fixos diretos', 'Indiretos', 'Resultado'], series: [{ nome: 'R$/mês', vals: [e.rep_med, e.rep_mat, e.rep_bio, e.rep_sala, e.matmed, e.cf_dir, e.cf_ind, e.resultado], cor: 'var(--s-c)' }], fmt: function (v) { return mi(v); }, h: 260, labels: true, aria: 'Destino da receita' }) + '</div><p class="small muted">A EMG recebe ' + R(e.repasse) + '/mês; o CEO estima "uns 300 mil por mês". A diferença pode ser a parcela que a EMG paga aos médicos.</p></div></div>';
     /* volumes */
@@ -3011,6 +3046,11 @@ window.HDAMotion = (function () {
   function pacsSegHtml(id) { var on = pacsOn(); return '<span class="seg" id="' + id + '"><button data-pacs="sim" class="' + (on ? 'on' : '') + '">Com PACS</button><button data-pacs="nao" class="' + (!on ? 'on' : '') + '">Sem PACS</button></span>'; }
   function bindPacsSeg(id) { var el = document.getElementById(id); if (!el) return; $$('button[data-pacs]', el).forEach(function (b) { b.addEventListener('click', function () { if ((model.propria.pacs_incluir || 'sim') === this.dataset.pacs) return; model.propria.pacs_incluir = this.dataset.pacs; afterEdit(); }); }); }
   /* texto "no outro cenário de PACS" para os KPIs */
+  /* PACS atual (Pixeon): como entra no número quando o Sectra é ligado */
+  function pixTxt() {
+    var p = model.propria || {}, pa = p.pacs_atual || 'igual', v = +p.pacs_atual_valor || 0;
+    return pa === 'mes' ? 'descontado o PACS atual (Pixeon), de ' + R(v) + '/mês, que deixa de ser pago' : pa === 'exame' ? 'descontado o PACS atual (Pixeon), de R$ ' + NF2.format(v) + ' por exame, que deixa de ser pago' : 'no lugar do PACS que o HDA já paga (Pixeon), suposto no mesmo custo por exame até o HDA informar o contrato';
+  }
   function pacsOutro(f) { var q = calc.cenPACS; if (!q) return ''; var o = q.on ? q.sem : q.com; return ' · ' + (q.on ? 'sem PACS: ' : 'com PACS: ') + f(o); }
   /* SUS: chave de três posições (fora, atual, atual + Agora Tem Especialistas) */
   function susNome(k) { return { fora: 'SUS fora', atual: 'SUS atual', ate: 'SUS atual + Agora Tem Especialistas' }[k] || k; }
@@ -3045,7 +3085,7 @@ window.HDAMotion = (function () {
     var dl = function (v, fmt) { return '<span class="' + (v >= 0 ? 'pos' : 'neg') + '">' + (v >= 0 ? '+' : '−') + fmt(Math.abs(v)).replace('−', '') + '</span>'; };
     var row = function (l, a, b, fmt, cls) { return '<tr class="' + (cls || '') + '"><td>' + l + '</td><td class="n">' + fmt(a) + '</td><td class="n">' + fmt(b) + '</td><td class="n">' + dl(a - b, fmt) + '</td></tr>'; };
     var h = '<div class="card"><div class="card-h"><h2>PACS Sectra: com e sem no modelo</h2>' + pacsSegHtml('segPacsTese') + '</div>' +
-      '<p class="small">O PACS Sectra Standard ainda não tem cotação e é o custo que mais pesa depois do volume: estimativa S&S de R$ ' + NF2.format(q.exame) + ' por exame × ' + N(q.exames) + ' exames/mês no modelo (convênio e particular' + (E.susAtualOn(model) ? ', mais o SUS' : '; o SUS só entra com a chave do SUS') + ') (' + R(q.com.pacsMes) + '/mês' + (rmOn() ? ', mais a RM' : '') + ') e ' + mi(q.impl) + ' de setup e implantação. A página está no cenário <b>' + (on ? 'com PACS' : 'sem PACS') + '</b>.</p>' +
+      '<p class="small">O PACS Sectra Standard ainda não tem cotação: estimativa S&S de R$ ' + NF2.format(q.exame) + ' por exame × ' + N(q.exames) + ' exames/mês no modelo (convênio e particular' + (E.susAtualOn(model) ? ', mais o SUS' : '; o SUS só entra com a chave do SUS') + ') (' + R(q.com.pacsMes) + '/mês' + (rmOn() ? ', mais a RM' : '') + ') e ' + mi(q.impl) + ' de setup e implantação, ' + pixTxt() + '. Por isso a diferença fica na implantação e nos exames novos. A página está no cenário <b>' + (on ? 'com o Sectra' : 'com a Pixeon atual') + '</b>.</p>' +
       '<div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th></th><th class="n">Com PACS</th><th class="n">Sem PACS</th><th class="n">Diferença</th></tr></thead><tbody>' +
       ['B', 'C', 'D'].map(function (k) { return row('VPL para o hospital, ' + A[k] + (k === sid ? ' (em uso)' : ''), q.com[k].vplEnt, q.sem[k].vplEnt, mi, k === sid ? 'hl' : ''); }).join('') +
       row('VPL do projeto (' + sid + ')', q.com[sid].vpl, q.sem[sid].vpl, mi) +
@@ -3202,6 +3242,7 @@ window.HDAMotion = (function () {
       })() +
       '<li>Entre B e C a diferença segue no financiamento: ' + Pp(B.cetAno) + ' a.a. em 60 meses, com ' + FX_ITENS_TXT[calc.B.fx.itens] + ' em dólar a ' + FXr(calc.B.fx.usd) + ', contra ' + Pp(C.cetAno) + ' a.a. em ' + (C.n || '—') + ' meses em reais' + (lc && lc.iof === 'zero' ? ', sem IOF' : '') + '. A Pulsar entra no FINAME com o CFI previsto para dez/2026 (premissa VMI); até a publicação, é condição suspensiva da contratação.</li></ul></div>';
     $('#tab-alternativas').innerHTML = h;
+    if ($('#ppuLi')) setTimeout(function () { var li = $('#ppuLi'); if (!li) return; var q = cenPPU(), k = calc.sel.id === 'D' ? 'D' : 'C'; if (!q) { li.remove(); return; } li.className = ''; li.innerHTML = ppuTxt(q, k); }, 30);
     bindRmSeg('segRmAlt'); bindCambio();
   }
 
@@ -3229,6 +3270,7 @@ window.HDAMotion = (function () {
       '<li><b>O que faz a RM fechar</b>: volume de convênio (depende da volta da RM aos pacotes dos planos); preço mais perto das referências; horário estendido; laudo por telerradiologia; e o SUS. ' + (c.cenSUS ? (E.susAteOn(m) ? 'Com a chave do SUS em "+ Agora Tem Especialistas", ' + N((m.sus || {}).rm_mes) + ' RMs/mês pelo programa (R$ ' + NF2.format(+(m.sus || {}).rm_valor || 0) + ' por exame) já estão no número e valem ' + mi(c.cenSUS.vplRMsus) + ' de VPL' : 'O SUS está fora do caso-base por decisão do CEO, mas ' + N((m.sus || {}).rm_mes) + ' RMs/mês pelo Agora Tem Especialistas (R$ ' + NF2.format(+(m.sus || {}).rm_valor || 0) + ' por exame) valeriam ' + mi(c.cenSUS.vplRMsus) + ' de VPL e mudariam o sinal da RM (chave "SUS no modelo", na Tese)') : 'o SUS pode ocupar a agenda ociosa') + '. Volume, ticket e preço podem ser testados no Simulador.</li>' +
       (function () { var q = c.cenRM, e0 = q && q.eq[c.sel.id], v0 = +((m.rm || {}).exames_mes) || 0; if (!e0 || e0.volume == null || Math.abs(e0.volume - v0) < 0.5) return ''; var por = e0.delta / (v0 - e0.volume);
         return '<li><b>O que o número ainda não conta</b>: os pacientes que hoje saem do HDA para fazer RM (e tendem a fazer lá os demais exames e o seguimento) e as transferências de internados para RM em outra instituição (transporte com equipe, dias a mais de internação). Cada 10 exames/mês a mais vale ' + sgnMi(por * 10) + ' de VPL em ' + c.sel.id + '; o custo evitado das transferências ainda não está no modelo. Os dois só se medem com os dados pedidos ao HDA.</li>'; })() +
+      '<li id="ppuLi" class="muted">RM em pay per use: calculando…</li>' +
       '<li><b>Condição do lado do HDA</b>: os planos de saúde tiraram recentemente a RM dos pacotes de reembolso com o hospital. Sem negociar a volta da RM a esses pacotes, o volume de convênio deste cenário não existe; é a primeira pendência da RM.</li>' +
       '<li><b>Antes de decidir</b>: demanda real (RMs pedidas hoje para fora pelo PS, internação e ambulatório), ticket dos três maiores convênios, cotação de manutenção e de locação da RM pela VMI, projeto de pré-instalação (área, elétrica) e valores firmes de gaiola, chiller e estabilizador, e se o hospital precisa do pacote cardio (workstation de ~R$ 400 mil na VMI; suporte de vida compatível com RM, ~R$ 600 mil, com qualquer fornecedor). A internalização do serviço atual se paga sem a RM; vale tratá-la como gate separado.</li></ul></div></div>';
     /* VMI × GE, item a item, e a versão sem hélio */
@@ -3830,7 +3872,7 @@ window.HDAMotion = (function () {
       rec += rmLig ? ' Os números incluem a **ressonância** (' + rmDescAlt(selId) + ', mais ' + mi(+m.rm.obra || 0) + ' para a sala; aprovação em ' + fmtMes(m.rm.aprovacao) + ', operação a partir de ' + fmtMes(E.mesRMStr(m)) + '). Sem a RM, o VPL de ' + selId + ' seria ' + mi(qR.sem[selId].vplEnt) + ' (melhor alternativa: ' + semBest + ', ' + mi(qR.sem[semBest].vplEnt) + '): com as hipóteses atuais a RM tira ' + mi(-eqR.delta) + ' e só empata com ' + N(eqR.volume) + ' exames/mês. Tratar a RM como decisão separada, depois de o HDA negociar com os planos de saúde a volta da RM aos pacotes de reembolso, de validar a demanda e de negociar o preço.'
         : ' Os números não incluem a ressonância. Com a ' + (selId === 'B' ? 'GE SIGNA Prime Elite' : 'Cignus 600') + ' (' + mi(selId === 'B' ? rmPreco('B') : qR.p0) + ' e ' + mi(+m.rm.obra || 0) + ' para a sala, aprovada em ' + fmtMes(m.rm.aprovacao) + '), o VPL de ' + selId + ' iria a ' + mi(qR.com[selId].vplEnt) + ' (' + Psig(eqR.delta / Math.abs(qR.sem[selId].vplEnt || 1), 0) + '); a RM empata com ' + N(eqR.volume) + ' exames/mês e depende de o HDA reincluir a RM nos pacotes de reembolso dos planos de saúde.';
     }
-    if (c.cenPACS) { var qp = c.cenPACS; rec += pacsOn() ? ' Os números incluem o **PACS Sectra** pela estimativa S&S, ainda sem cotação (R$ ' + NF2.format(qp.exame) + ' por exame e ' + mi(qp.impl) + ' de implantação); sem ele, o VPL de ' + selId + ' seria ' + mi(qp.sem[selId].vplEnt) + '. O PACS custa o mesmo nas três alternativas: muda o tamanho do ganho, não a escolha.' : ' Os números **não incluem o PACS Sectra** (sem cotação); com a estimativa S&S (R$ ' + NF2.format(qp.exame) + ' por exame e ' + mi(qp.impl) + ' de implantação), o VPL de ' + selId + ' cairia a ' + mi(qp.com[selId].vplEnt) + '. O hospital vai precisar de um PACS: este número é o teto.'; }
+    if (c.cenPACS) { var qp = c.cenPACS; rec += pacsOn() ? ' Os números incluem o **PACS Sectra** pela estimativa S&S, ainda sem cotação (R$ ' + NF2.format(qp.exame) + ' por exame e ' + mi(qp.impl) + ' de implantação), ' + pixTxt() + '; mantendo a Pixeon, o VPL de ' + selId + ' seria ' + mi(qp.sem[selId].vplEnt) + '. O PACS custa o mesmo nas três alternativas: muda o tamanho do ganho, não a escolha.' : ' Os números mantêm o **PACS atual (Pixeon)**, que o HDA já paga; com o Sectra no lugar (estimativa S&S: R$ ' + NF2.format(qp.exame) + ' por exame e ' + mi(qp.impl) + ' de implantação), o VPL de ' + selId + ' iria a ' + mi(qp.com[selId].vplEnt) + ', pela implantação e pelo PACS dos exames novos.'; }
     var sgn = function (v) { return (v >= 0 ? '+' : '') + mi(v); };
     if (c.cenSUS) { var qs = c.cenSUS; rec += E.susModo(m) === 'fora' ? ' O SUS está fora do número, por decisão do CEO; o SUS que o hospital já atende mudaria o VPL de ' + selId + ' em ' + sgn(qs.dAtual[selId]) + ' (de ' + sgn(Math.min(qs.dAtual[selId], qs.dAtualOutroEmg[selId])) + ' a ' + sgn(Math.max(qs.dAtual[selId], qs.dAtualOutroEmg[selId])) + ', conforme o repasse da EMG), e o SUS a mais do Agora Tem Especialistas somaria ' + sgn(qs.dMais[selId]) + '.' : ' O número inclui o ' + susNome(E.susModo(m)) + ' (chave do SUS); com o SUS fora, como decidiu o CEO, o VPL de ' + selId + ' seria ' + mi(qs.v.fora[selId].vplEnt) + '.'; }
     S.secoes.push({ h: 'Recomendação', p: ['**Objetivo do CEO:** transformar o HDA num centro boutique de referência em imagem, com Sectra, Integrare e equipamentos modernos.', rec] });
@@ -3846,7 +3888,6 @@ window.HDAMotion = (function () {
       ['Dívida nova', R(c.B.capexFin) + ' (fornecedor)', R(c.C.capexFin), 'nenhuma'],
       ['Compromisso mensal no ano 3', R(ano3(c.flB)), R(ano3(c.flC)), R(ano3(c.flD))],
       ['VPL para o hospital, ' + H + ' anos', mi(c.flB.vplEnt), mi(c.flC.vplEnt), mi(c.flD.vplEnt)],
-      ['Caixa acumulado, ' + H + ' anos', mi(c.flB.acumEnt), mi(c.flC.acumEnt), mi(c.flD.acumEnt)],
       ['DSCR ' + l1.ano + ' do hospital com o projeto', X(e27('B')), X(e27('C')), X(e27('D'))],
       ['Câmbio', c.B.fx.ids.length ? 'US$ a ' + FXr(c.B.fx.usd) + ', parcelas ' + (c.B.fx.dolar ? 'atreladas' : 'fixas') : 'nenhum', 'nenhum (R$)', 'nenhum (R$)']
     ] }, p: [(qR ? (rmLig ? 'Cenário com RM. ' : 'Cenário sem RM. ') : '') + 'Compromisso mensal = parcelas + manutenção (B e C) ou aluguel' + (lt.sep ? ' e manutenção' : '') + ' (D). Na compra, B e C chegam ao ano ' + H + ' com o equipamento original; na locação, o equipamento é trocado a cada ' + c.D.n + ' meses.', fxFrase()] });
@@ -3899,7 +3940,7 @@ window.HDAMotion = (function () {
     pend.push('Folha da equipe técnica (' + R(+m.base.cf_dir_mes || 0) + '/mês): detalhar quadro, escalas e cargos para ver se está superdimensionada. Cada 10% a menos soma ' + R((+m.base.cf_dir_mes || 0) * 0.1) + '/mês ao resultado do serviço, em qualquer alternativa (não muda a escolha).');
     (function () { var v3 = vplCom(function (mm) { mm.propria.rep_med_pct = +mm.propria.rep_med_pct + 0.01; }); pend.push('Telelaudo noturno: ' + P(m.propria.rep_med_pct, 1) + ' da receita (' + R(prop.rep_med) + '/mês) para os radiologistas e o telelaudo; confirmar o contrato e o preço por exame. Cada ponto percentual a mais tira ' + mi(vSel - v3) + ' do VPL de ' + selId + '.'); })();
     pend.push('Aviso à EMG: enviar cerca de 90 dias antes da instalação (go-live em ' + fmtMes(goLive()) + ' no modelo), depois da aprovação do financiamento e com prazo de entrega firme, para não haver sobreposição de custos nem janela sem TC.');
-    (function () { var on = pacsOn(), lo = vplCom(function (mm) { mm.propria.pacs_incluir = 'sim'; mm.propria.pacs_exame = 10.58; }), hi = vplCom(function (mm) { mm.propria.pacs_incluir = 'sim'; mm.propria.pacs_exame = 6.94; }), sem = c.cenPACS ? c.cenPACS.sem[selId].vplEnt : null; pend.push('RIS e PACS: cotar Touch Health (RIS) e Sectra PACS Standard. O PACS (R$ ' + NF2.format(+m.propria.pacs_exame || 0) + ' por exame, ' + mi(+m.propria.pacs_impl || 0) + ' de implantação) é estimativa S&S, não cotação, e está ' + (on ? 'incluído' : 'fora do modelo') + '. De R$ 6,94 a 10,58 por exame, o VPL de ' + selId + ' vai de ' + mi(hi) + ' a ' + mi(lo) + '; sem PACS, ' + mi(sem) + '. A S&S representa a Sectra.'); })();
+    (function () { var on = pacsOn(), lo = vplCom(function (mm) { mm.propria.pacs_incluir = 'sim'; mm.propria.pacs_exame = 10.58; }), hi = vplCom(function (mm) { mm.propria.pacs_incluir = 'sim'; mm.propria.pacs_exame = 6.94; }), sem = c.cenPACS ? c.cenPACS.sem[selId].vplEnt : null; pend.push('RIS e PACS: cotar Touch Health (RIS) e Sectra PACS Standard. O PACS (R$ ' + NF2.format(+m.propria.pacs_exame || 0) + ' por exame, ' + mi(+m.propria.pacs_impl || 0) + ' de implantação) é estimativa S&S, não cotação, e está ' + (on ? 'incluído' : 'fora do modelo') + '. Pedir ao HDA o contrato da Pixeon (hoje o modelo supõe ' + ((m.propria.pacs_atual || 'igual') === 'igual' ? 'o mesmo custo por exame do Sectra' : 'o valor informado') + '). De R$ 6,94 a 10,58 por exame, o VPL de ' + selId + ' vai de ' + mi(hi) + ' a ' + mi(lo) + '; sem PACS, ' + mi(sem) + '. A S&S representa a Sectra.'); })();
     pend.push('Locação: cotar ultrassons e placa DR (hoje estimados) e confirmar se o RX digital locado é o Aquila D ou o Apolo D.');
     if (semCfi.length) pend.push('CFI de ' + semCfi.join(' e ') + ' (ou trocar o ultrassom pelo Dominus L1, credenciado)' + (prevCfi.length ? ', e publicação do CFI da Pulsar' : '') + '.');
     if (fgtsEstado().st === 'cond') pend.push('FGTS-Saúde: CEBAS na modalidade de 60% ao SUS, créditos SUS de 12 meses e contratos no Teto MAC.');
@@ -4007,6 +4048,7 @@ window.HDAMotion = (function () {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(eq), 'Equipamentos');
     var e = c.cen.emg, p = c.cen.prop;
     var dre = [['DRE mensal (R$)', 'EMG', 'Imagem própria'], ['Exames', e.exames, p.exames], ['Receita bruta', e.rb, p.rb], ['Glosas', -e.glosa, -p.glosa], ['Receita líquida', e.rl, p.rl], ['Mat/Med', -e.matmed, -p.matmed], ['Repasse médicos', -e.rep_med, -p.rep_med], ['Repasse material EMG', -e.rep_mat, -p.rep_mat], ['Repasse biópsias', -e.rep_bio, -p.rep_bio], ['Médicos que usam a sala', -e.rep_sala, -p.rep_sala], ['Margem de contribuição', e.mc, p.mc], ['Custos fixos diretos', -e.cf_dir, -p.cf_dir], ['Manutenção', -e.manut, -p.manut], ['RIS (Touch Health)', -(e.ris || 0), -(p.ris || 0)], ['PACS Sectra (por exame)', -(e.pacs || 0), -(p.pacs || 0)], ['Custos indiretos', -e.cf_ind, -p.cf_ind], ['EBITDA', e.resultado, p.resultado]];
+    if (p.pacsEvit) { var iPx2 = dre.findIndex(function (r) { return /^PACS Sectra/.test(String(r[0])); }); if (iPx2 >= 0) dre.splice(iPx2 + 1, 0, ['PACS atual (Pixeon), deixa de ser pago', 0, p.pacsEvit]); }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dre), 'DRE mensal');
     var fx = [['Ano', 'Ano civil', 'Fator volume', 'Fração', 'Receita líquida', 'EBITDA EMG', 'EBITDA própria antes de manut./aluguel', 'Diferença × fração', c.sel.id === 'D' ? 'Aluguel' : 'Manutenção', 'EBITDA incremental', 'Depreciação', 'Tributos', 'Residual', 'FCL projeto', 'Parcelas', 'Juros', 'Saldo quitado no fim', 'Caixa hospital', 'Acum. projeto', 'Acum. hospital', 'DSCR projeto']];
     fx.push([0, model.fin.ano_inicio - 1, '', '', '', '', '', '', '', '', '', '', '', fl.proj[0], '', '', '', fl.ent[0], fl.proj[0], fl.ent[0], '']);
@@ -4074,7 +4116,7 @@ window.HDAMotion = (function () {
   function sgnMi(v) { return v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '') + mi(v); }
   function sch(id) { return SCHEMA.filter(function (s) { return s.id === id; })[0] || {}; }
   function cenarioTxt() {
-    return 'Cenário: alternativa ' + calc.sel.id + ' · ' + (calc.cenRM ? (rmOn() ? 'com ressonância' : 'sem ressonância') + ' · ' : '') + (pacsOn() ? 'com PACS Sectra (estimativa S&S)' : 'sem PACS') + ' · ' + susNome(E.susModo(model)) + ' · ' + model.fin.horizonte + ' anos a ' + P(model.fin.desconto, 0) + ' a.a.';
+    return 'Cenário: alternativa ' + calc.sel.id + ' · ' + (calc.cenRM ? (rmOn() ? 'com ressonância' : 'sem ressonância') + ' · ' : '') + (pacsOn() ? 'PACS Sectra no lugar da Pixeon (estimativa S&S)' : 'PACS atual (Pixeon)') + ' · ' + susNome(E.susModo(model)) + ' · ' + model.fin.horizonte + ' anos a ' + P(model.fin.desconto, 0) + ' a.a.';
   }
   function pendentesN() { return SCHEMA.filter(function (s) { return s.origem === 'pendente'; }).length; }
   /* sensibilidade (a mesma do Simulador), guardada por cálculo: as alavancas de preço refazem o financiamento */
@@ -4083,6 +4125,45 @@ window.HDAMotion = (function () {
     if (sensMemo.calc === calc && sensMemo.v) return sensMemo.v;
     var base = clone(model); sensMemo = { calc: calc, v: E.sensibilidade(base, M, BASE, alavancasSens(base)) };
     return sensMemo.v;
+  }
+  /* Esquemática do centro de referência (quadro da reunião): o serviço de imagem no centro, as modalidades no mesmo anel
+     (PACS, RIS e agenda únicos) e a integração com o Tasy. o: { rm: RM no número, pacs: PACS Sectra ligado } */
+  function svgDACI(o) {
+    o = o || {};
+    var W = 760, Hh = 440, cx = 290, cy = 222, R = 158, rad = Math.PI / 180;
+    var pt = function (g, r) { return [cx + (r || R) * Math.cos(g * rad), cy + (r || R) * Math.sin(g * rad)]; };
+    var tx = function (x, y, t, st) { return '<text x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" text-anchor="middle" font-weight="' + (st.w || 400) + '" style="fill:' + (st.c || 'var(--fg)') + ';font-size:' + (st.s || 12) + 'px' + (st.f ? ';font-family:' + st.f : '') + '">' + esc(t) + '</text>'; };
+    var seta = function (a, b, ra, rb, cor) { var dx = b[0] - a[0], dy = b[1] - a[1], L = Math.sqrt(dx * dx + dy * dy), ux = dx / L, uy = dy / L; return '<path d="M' + (a[0] + ux * ra).toFixed(1) + ',' + (a[1] + uy * ra).toFixed(1) + ' L' + (b[0] - ux * rb).toFixed(1) + ',' + (b[1] - uy * rb).toFixed(1) + '" fill="none" stroke="' + (cor || 'var(--accent)') + '" stroke-width="2" marker-end="url(#dciSeta)"/>'; };
+    var s = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" role="img" aria-label="Esquemática do centro de referência em imagem do HDA">';
+    s += '<defs><marker id="dciSeta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker></defs>';
+    s += '<rect x="6" y="6" width="' + (W - 12) + '" height="' + (Hh - 12) + '" rx="26" fill="none" stroke="var(--accent)" stroke-opacity=".45" stroke-width="1.6"/>';
+    s += '<text x="' + (W - 28) + '" y="' + (Hh - 22) + '" text-anchor="end" font-weight="600" style="fill:var(--accent);font-size:12px;letter-spacing:.12em">CENTRO DE REFERÊNCIA · HDA</text>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" stroke="var(--fg-3)" stroke-width="1.6" stroke-dasharray="6 6"/>';
+    var nos = [
+      { g: -52, t: 'RM', sub: o.rm ? '1,5 tesla' : 'à parte', seta: true },
+      { g: 8, t: 'TC', sub: '128 cortes', seta: true },
+      { g: 108, t: 'US', sub: 'ultrassom', seta: true },
+      { g: 152, t: 'Raio X', sub: 'móvel e DR', seta: true },
+      { g: 200, t: 'Outros', sub: 'e gráficos', seta: true, leve: true },
+      { g: 246, t: '+', sub: 'próximas', vazio: true }];
+    /* setas do centro às modalidades, por baixo dos nós */
+    nos.forEach(function (n) { if (n.seta) s += seta([cx, cy], pt(n.g), 66, 46, n.leve ? 'var(--fg-3)' : null); });
+    /* PACS + RIS + agendamento, sobre o anel */
+    var pp = pt(54); s += '<rect x="' + (pp[0] - 92).toFixed(1) + '" y="' + (pp[1] - 27).toFixed(1) + '" width="184" height="54" rx="27" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.6"/>';
+    s += tx(pp[0], pp[1] - 3, 'PACS + RIS', { w: 600, s: 14 }) + tx(pp[0], pp[1] + 14, '+ agendamento único', { s: 11, c: 'var(--fg-2)' });
+    /* Tasy, fora do anel, com a integração */
+    var ta = [652, 118]; s += seta(pt(-24), ta, 0, 70);
+    s += '<circle cx="' + ta[0] + '" cy="' + ta[1] + '" r="66" fill="var(--surface)" stroke="var(--fg-2)" stroke-width="1.8"/>';
+    s += tx(ta[0], ta[1] - 4, 'Tasy', { w: 600, s: 20 }) + tx(ta[0], ta[1] + 15, 'pedido, prontuário', { s: 10.5, c: 'var(--fg-2)' }) + tx(ta[0], ta[1] + 29, 'e faturamento', { s: 10.5, c: 'var(--fg-2)' });
+    nos.forEach(function (n) {
+      var q = pt(n.g);
+      s += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="44" fill="var(--surface)" stroke="' + (n.vazio || n.leve ? 'var(--fg-3)' : 'var(--accent)') + '" stroke-width="' + (n.vazio ? 1.6 : 2) + '"' + (n.vazio ? ' stroke-dasharray="5 4"' : '') + '/>';
+      s += tx(q[0], q[1] + (n.vazio ? 2 : 1), n.t, { w: 600, s: n.vazio ? 24 : 18, c: n.vazio || n.leve ? 'var(--fg-2)' : 'var(--fg)' }) + tx(q[0], q[1] + 18, n.sub, { s: 9.5, c: 'var(--fg-2)' });
+    });
+    /* centro */
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="64" fill="var(--accent)"/>';
+    s += tx(cx, cy + 2, 'DACI', { w: 700, s: 24, c: '#ffffff' }) + tx(cx, cy + 22, 'serviço de imagem', { s: 10.5, c: '#ffffff' });
+    return s + '</svg>';
   }
   function svgHBars(itens, fmt, W) {
     W = W || 720; var rowH = 54, pl = Math.min(170, W * 0.36), pr = 120, H = itens.length * rowH + 10, iw = W - pl - pr;
@@ -4127,6 +4208,56 @@ window.HDAMotion = (function () {
       b: [{ tipo: 'img', x: 1080, y: 40, w: 136, h: 88, src: LOGO.navy },
         { tipo: 'txt', x: 56, y: 480, w: 1060, paras: ['Apresentação ao CEO · ' + mesAno + ' · S&S Partners', cenarioTxt(), 'Gerado da página "Viabilidade da internalização com equipamentos VMI" (' + origemTxt() + '). Os números mudam só na página; esta apresentação é refeita a cada abertura.'], tam: 15, cor: 'muted' }] });
 
+    /* 1b · visão: centro de referência (antes do modelo) */
+    var rmTxt = qR ? (rmLig ? 'ressonância 1,5T, ' : 'ressonância 1,5T (decisão à parte), ') : '';
+    var colV = function (x, tit, bl) { return { tipo: 'txt', x: x, y: 236, w: 360, tam: 14.5, titulo: tit, bullets: bl }; };
+    lista.push({ nav: 'Visão: referência', k: 'Visão · centro de referência', t: 'Proposta: fazer do HDA uma referência em diagnóstico por imagem, com parque novo, um fluxo digital só e o serviço nas mãos do hospital', b: [
+      { tipo: 'txt', x: 56, y: 156, w: 1168, tam: 16, paras: ['**Objetivo do CEO:** transformar o HDA num centro boutique de referência em imagem, com Sectra, Integrare e equipamentos modernos. A internalização do serviço é o caminho; o modelo, nos slides seguintes, mostra que ele se paga.'] },
+      colV(56, '1 · Parque completo e novo', ['Tomografia de 128 cortes, ' + rmTxt + 'dois ultrassons, raio X móvel e raio X digital, no mesmo lugar.', 'Equipamento nacional, com FINAME na compra ou locação com manutenção inclusa.', 'Menos pacientes encaminhados para fora e menos transferências de internados para exame.']),
+      colV(460, '2 · Um fluxo digital só', ['Pedido no Tasy, agenda única, exame, imagem no PACS e laudo de volta ao prontuário e ao faturamento.', 'Todas as modalidades no mesmo PACS' + (pacsOn() ? ' (Sectra)' : '') + ' e no mesmo RIS (Touch Health).', 'Laudo também à distância e prazo de laudo sob controle do hospital.']),
+      colV(864, '3 · O serviço é do hospital', ['Hoje a EMG fica com ' + P(emg.repasse / emg.rl, 0) + ' da receita e o serviço perde ' + mi(-emg.resultado * 12) + ' por ano.', 'Com o serviço próprio, o resultado vai a ' + R(prop.resultado) + ' por mês em regime, e o hospital decide agenda, qualidade e prazo.', 'Base para atrair convênios e médicos solicitantes e crescer com novas modalidades.']),
+      { tipo: 'kpis', x: 56, y: 520, w: 1168, h: 100, cols: 4, vtam: 20, itens: [
+        { lab: 'Serviço hoje, com a EMG', v: R(emg.resultado), sub: 'por mês', cls: 'bad' },
+        { lab: 'Com o serviço próprio', v: R(prop.resultado), sub: 'por mês em regime', cls: 'good' },
+        { lab: 'Valor para o hospital', v: mi(fl(best).vplEnt), sub: H + ' anos, ' + (emp ? juntaE(topV) + ' empatadas' : 'alternativa ' + best), cls: 'good' },
+        { lab: 'Pacote VMI cotado', v: mi(c.C.capex), sub: (qR && rmLig ? 'com a RM; ' : '') + 'ou ' + R(c.D.aluguel) + '/mês na locação', cls: '' }] },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'A seguir: a esquemática proposta, os equipamentos cotados e o preço; depois, o modelo de viabilidade e as formas de financiar.' }] });
+
+    /* 1c · esquemática (quadro da S&S) */
+    lista.push({ nav: 'Esquemática', k: 'Esquemática proposta', t: 'A esquemática: o serviço de imagem no centro, todas as modalidades no mesmo PACS, RIS e agenda, e tudo ligado ao Tasy', b: [
+      { tipo: 'g', x: 56, y: 150, w: 800, f: function (el) { el.innerHTML = svgDACI({ rm: !!(qR && rmLig), pacs: pacsOn() }); } },
+      { tipo: 'txt', x: 890, y: 150, w: 334, tam: 14, bullets: [
+        '**No centro, o DACI:** o serviço de imagem do hospital, que passa a operar todas as modalidades.',
+        '**O anel:** RM, TC, ultrassom, raio X e os métodos gráficos no mesmo PACS, RIS e agenda. O paciente marca, faz o exame e recebe o laudo num fluxo só.',
+        '**Tasy:** pedidos e laudos voltam ao prontuário e ao faturamento do hospital, sem redigitação.',
+        '**Espaço para crescer:** a próxima modalidade entra no mesmo anel, sem sistema novo.',
+        '**Referência:** com parque e fluxo integrados, o HDA passa a receber exames de fora em vez de mandar pacientes para fora.'] },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Esquemática sugerida pela S&S. RIS Touch Health; PACS Sectra ' + (pacsOn() ? 'pela estimativa S&S, ' + pixTxt() : 'ainda sem cotação (no número, o HDA segue com a Pixeon que já paga)') + '.' }] });
+
+    /* 1d · equipamentos cotados e preço final */
+    var fxE = E.fxB(m), ordE = ['tc', 'us', 'rxp', 'rxdr', 'dr', 'rm'], rotE = { tc: 'Tomografia (TC)', us: 'Ultrassom', rxp: 'Raio X móvel', rxdr: 'Raio X digital', dr: 'Placa DR avulsa', rm: 'Ressonância 1,5T' };
+    var achaE = function (lst, id) { return (lst || []).filter(function (x) { return x.id === id || (id === 'rm' && x.rm); })[0] || null; };
+    var precoC = function (it) { return it ? (+it.qtd || 1) * (+it.preco || 0) : 0; }, precoB = function (it) { return it ? (+it.qtd || 1) * (+it.preco || 0) * (E.emDolar(fxE, it) ? fxE.f : 1) : 0; };
+    var totE = { c0: 0, b0: 0, cR: 0, bR: 0 }, eqRows = [];
+    ordE.forEach(function (id) {
+      var ic = achaE(m.equip.C, id), ib = achaE(m.equip.B, id); if (!ic && !ib) return;
+      var pc = precoC(ic), pb = precoB(ib), rmI = id === 'rm';
+      if (rmI) { totE.cR += pc; totE.bR += pb; } else { totE.c0 += pc; totE.b0 += pb; }
+      eqRows.push([{ t: rotE[id] + (rmI && qR && !rmLig ? ' (à parte)' : '') }, { t: ic ? String(ic.modelo || '').replace(/^VMI$/, 'VMI') : '—' }, { t: ic ? N(+ic.qtd || 1) : '—', n: true }, { t: ic ? R(pc) : '—', n: true }, { t: ib ? String(ib.modelo || '') + (E.emDolar(fxE, ib) ? ' · US$' : '') + ((+ib.qtd || 1) > 1 ? ' · ' + N(+ib.qtd) + ' un.' : '') : '—' }, { t: ib ? R(pb) : '—', n: true }]);
+    });
+    var tercE = +((m.rm || {}).terceiros_vmi) || 0;
+    if (tercE > 0 && totE.cR > 0) { totE.cR += tercE; eqRows.push([{ t: 'Itens de terceiros da RM' }, { t: 'gaiola, chiller e estabilizador' }, { t: '' }, { t: R(tercE), n: true }, { t: 'incluídos na proposta' }, { t: '—', n: true }]); }
+    eqRows.push([{ t: 'Total sem a RM', b: true }, { t: '' }, { t: '' }, { t: R(totE.c0), n: true, b: true }, { t: '' }, { t: R(totE.b0), n: true, b: true }]);
+    if (totE.cR > 0) eqRows.push([{ t: 'Total com a RM', b: true }, { t: '' }, { t: '' }, { t: R(totE.c0 + totE.cR), n: true, b: true }, { t: '' }, { t: R(totE.b0 + totE.bR), n: true, b: true }]);
+    var ppuE = E.ppuOn(m) ? ' Com a RM em pay per use, ela sai do investimento VMI: R$ ' + N(+m.rm.ppu_exame || 0) + ' por exame (hipótese até a proposta).' : '';
+    lista.push({ nav: 'Equipamentos', k: 'Equipamentos cotados e preço', t: 'O pacote VMI cotado custa ' + mi(totE.c0) + ' sem a ressonância' + (totE.cR > 0 ? ' e ' + mi(totE.c0 + totE.cR) + ' com ela' : '') + '; na locação, ' + R(c.D.aluguel) + ' por mês com manutenção inclusa', b: [
+      { tipo: 'tab', x: 56, y: 150, w: 1168, tam: 13.5, cab: ['Equipamento', 'VMI: modelo (C e D)', 'Qtd', 'Preço VMI', 'GE: modelo (B)', 'Preço GE'], larg: [0.17, 0.23, 0.06, 0.13, 0.28, 0.13], al: ['', '', 'n', 'n', '', 'n'], rc: eqRows.map(function (r) { return /^Total/.test(r[0].t) ? 'total' : ''; }), linhas: eqRows },
+      { tipo: 'kpis', x: 56, y: 150 + 44 + eqRows.length * 31 + 22, w: 1168, h: 96, cols: 3, vtam: 19, itens: [
+        { lab: 'C · compra VMI com ' + linhaCurta(c.C.escolha && c.C.escolha.linha).replace(/^o /, ''), v: mi(c.C.capexFin), sub: 'financiados em ' + (c.C.n || '—') + ' meses, ' + (c.C.c || 0) + ' de carência, CET ' + Pp(c.C.cetAno) + ' a.a.', cls: '' },
+        { lab: 'D · locação VMI', v: R(c.D.aluguel) + '/mês', sub: c.D.n + ' meses, manutenção inclusa, sem investimento', cls: '' },
+        { lab: 'B · compra GE (HFS)', v: mi(c.B.capexFin), sub: c.B.n + ' parcelas, ' + Pp(c.B.cetAno) + ' a.a. implícito', cls: '' }] },
+      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Preços VMI de 15/10/2026 (RM de 04/11/2026); GE pela proposta HFS, com ' + FX_ITENS_TXT[fxE.itens].replace(/^a /, '') + ' em dólar a ' + FXr(fxE.usd) + '. Sem a sala da RM (' + mi(+((m.rm || {}).obra) || 0) + ', obra) e sem RIS e PACS.' + ppuE }] });
+
     /* 2 · recomendação */
     var rec = [
       '**Internalizar.** Hoje o serviço perde ' + mi(-emg.resultado * 12) + ' por ano; com a mesma receita, a imagem própria fecha em ' + R(prop.resultado) + ' por mês em regime.',
@@ -4135,7 +4266,7 @@ window.HDAMotion = (function () {
       '**A restrição é o crédito do hospital, não o projeto.** Em ' + l1.ano + ' o hospital cobre ' + X(l1.dscrSemProj) + ' do serviço da dívida; com o projeto, ' + X(l1.dscrSem) + '; com o TDC, ' + X(l1.dscrCom) + '. Contratar depois da emissão do TDC.'
     ];
     if (qR) rec.push('**Ressonância, decisão à parte.** ' + (rmLig ? 'Está no número: ' : 'Fora do número: ') + 'com as hipóteses atuais ela ' + (eqR.delta >= 0 ? 'soma ' : 'tira ') + mi(Math.abs(eqR.delta)) + ' na ' + curtoAlt[sid] + ' e empata com ' + N(eqR.volume) + ' exames de convênio por mês; depende de os planos voltarem a incluir a RM nos pacotes do HDA.');
-    rec.push('**Cenário:** ' + (pacsOn() ? 'PACS Sectra pela estimativa S&S (sem cotação)' : 'sem o PACS, que ainda não tem cotação (número otimista)') + '; ' + susNome(E.susModo(m)) + (E.susModo(m) === 'fora' ? ', como decidiu o CEO' : '') + '. As chaves estão no slide de cenários.');
+    rec.push('**Cenário:** ' + (pacsOn() ? 'PACS Sectra no lugar da Pixeon, pela estimativa S&S (sem cotação)' : 'PACS atual (Pixeon) mantido; o Sectra no lugar muda o VPL em ' + mi(qP ? qP.delta[sid] : 0)) + '; ' + susNome(E.susModo(m)) + (E.susModo(m) === 'fora' ? ', como decidiu o CEO' : '') + '. As chaves estão no slide de cenários.');
     lista.push({ nav: 'Recomendação', k: 'Recomendação', t: 'Internalizar vale ' + mi(fl(best).vplEnt) + ' para o hospital em ' + H + ' anos' + (emp ? ', com ' + aTop(topV) + ' empatadas' : ', pela ' + nomeAlt[best] + (perto ? ', quase empatada com a ' + curtoAlt[seg] : '')), b: [
       { tipo: 'kpis', x: 56, y: 150, w: 1168, h: 118, cols: 6, vtam: 20, itens: [
         { lab: 'Resultado hoje, com a EMG', v: R(emg.resultado), sub: 'por mês · ' + mi(emg.resultado * 12) + ' por ano', cls: 'bad' },
@@ -4163,6 +4294,7 @@ window.HDAMotion = (function () {
       ['Receita líquida', emg.rl, prop.rl, 'total'], ['(−) Mat/Med', -emg.matmed, -prop.matmed], ['(−) Repasse: médicos e laudo', -emg.rep_med, -prop.rep_med], ['(−) Repasse: material EMG', -emg.rep_mat, -prop.rep_mat], ['(−) Repasse: biópsias', -emg.rep_bio, -prop.rep_bio], ['(−) Médicos que usam a sala', -emg.rep_sala, -prop.rep_sala],
       ['Margem de contribuição', emg.mc, prop.mc, 'total'], ['(−) Equipe e fixos diretos', -emg.cf_dir, -prop.cf_dir], [isD ? '(−) Aluguel dos equipamentos' : '(−) Manutenção pós-garantia', -(emg.manut + emg.aluguel), -(prop.manut + prop.aluguel)], ['(−) RIS (Touch Health)', -(emg.ris || 0), -(prop.ris || 0)], ['(−) PACS Sectra' + (pacsOn() ? ', por exame' : ' (fora)'), -(emg.pacs || 0), -(prop.pacs || 0)],
       ['Margem direta', emg.margem_direta, prop.margem_direta, 'total'], ['(−) Custos indiretos (rateio)', -emg.cf_ind, -prop.cf_ind], ['Resultado (EBITDA)', emg.resultado, prop.resultado, 'total']];
+    if (prop.pacsEvit) { var iPx = dreL.findIndex(function (r) { return /PACS Sectra/.test(r[0]); }); dreL.splice(iPx + 1, 0, ['(+) PACS atual (Pixeon), deixa de ser pago', 0, prop.pacsEvit]); }
     var dreB = [
       'Saem os repasses à EMG de material, biópsias e "médicos que usam a sala": **' + R(emg.rep_mat + emg.rep_bio + emg.rep_sala - prop.rep_mat - prop.rep_bio - prop.rep_sala) + '** por mês.',
       'Fica o laudo: ' + P(m.propria.rep_med_pct, 1) + ' da receita para os radiologistas de dia e o telelaudo à noite (CEO, 20/10).',
@@ -4186,8 +4318,7 @@ window.HDAMotion = (function () {
       linhaAlt('Gasto mensal no 3º ano', function (k) { return R(mediaMes(fl(k), 3)); }),
       linhaAlt('Cobertura do hospital em ' + l1.ano, function (k) { return X(e1(k)); }),
       linhaAlt('Câmbio', function (k) { return k === 'B' ? (c.B.fx.ids.length ? 'US$ a ' + FXr(c.B.fx.usd) : 'nenhum') : 'nenhum'; }),
-      linhaAlt('VPL para o hospital, ' + H + ' anos', function (k) { return { t: mi(fl(k).vplEnt), n: true, b: true, cor: topV.indexOf(k) >= 0 ? 'good' : '' }; }),
-      linhaAlt('Caixa acumulado, ' + H + ' anos', function (k) { return mi(fl(k).acumEnt); })];
+      linhaAlt('VPL para o hospital, ' + H + ' anos', function (k) { return { t: mi(fl(k).vplEnt), n: true, b: true, cor: topV.indexOf(k) >= 0 ? 'good' : '' }; })];
     var tAlt = emp ? cap1(aTop(topV)) + ' empatam no valor para o hospital: ' + mi(fl(best).vplEnt) + ' em ' + H + ' anos' + (seg ? '; a ' + curtoAlt[seg] + ' fica ' + mi(gap) + ' atrás' : '')
       : 'A ' + nomeAlt[best] + ' tem o maior valor para o hospital: ' + mi(fl(best).vplEnt) + ' em ' + H + ' anos, ' + mi(gap) + ' acima da ' + curtoAlt[seg];
     /* aluguel × equilíbrio com a compra C: empate, folga ou o quanto falta */
@@ -4226,10 +4357,7 @@ window.HDAMotion = (function () {
         '**Até ' + FI[r0].ano5 + '**, ' + r0 + ' acumula ' + mi(FI[r0].a5) + ' e ' + lN + ', ' + mi(FI[lN].a5) + ': ' + mi(FI[r0].a5 - FI[lN].a5) + ' a mais no caixa do hospital nos anos em que a cobertura da dívida está mais apertada (' + X(e1(r0)) + ' em ' + l1.ano + ').',
         '**O VPL desconta o tempo:** a ' + P(m.fin.desconto, 0) + ' a.a., R$ 1 de ' + FI[lN].anoH + ' vale cerca de R$ ' + NF2.format(dFat) + ' hoje. O caixa de ' + lN + ' chega no fim, por isso ' + (topV.length > 1 ? juntaE(topV) + ' empatam' : best + ' fica') + ' à frente no VPL (' + mi(fl(best).vplEnt) + ' contra ' + mi(fl(lN).vplEnt) + ').'];
     })() : null;
-    lista.push({ nav: 'Caixa acumulado', k: 'Retorno', t: tCx, b: [
-      { tipo: 'g', x: 56, y: 150, w: 820, tit: 'Caixa acumulado para o hospital (R$, nominal)', f: function (el) { el.innerHTML = svgLines({ cats: anosCat, series: alts.map(function (k) { return { nome: { B: 'B · compra GE', C: 'C · compra VMI', D: 'D · locação VMI' }[k], vals: fl(k).anos.map(function (a) { return a.acumE; }), cor: ALT_COR[k], dash: k !== sid }; }), fmt: function (v) { return mi(v); }, h: 380, aria: 'Caixa acumulado' }); } },
-      { tipo: 'txt', x: 910, y: 150, w: 314, tam: bCx ? 14 : 15, bullets: bCx || alts.map(function (k) { var f = fl(k); return '**' + k + '** · ' + mi(f.acumEnt) + ' acumulados em ' + H + ' anos; VPL ' + mi(f.vplEnt) + (k !== 'D' && f.tir != null ? '; TIR do projeto ' + P(f.tir, 0) : '') + '; gasto com equipamentos de ' + R(mediaMes(f, 1)) + ' por mês em ' + f.anos[0].ano + '.'; }).concat(['O investimento inicial com caixa (RIS, PACS' + (rmLig ? ', sala da RM' : '') + ') é de ' + mi(-fl(sid).ent[0]) + ' na ' + curtoAlt[sid] + '.']) },
-      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Fluxo do hospital = ganho operacional sobre a EMG − manutenção ou aluguel − parcelas − investimento com caixa. IPCA do Focus em todos os caminhos; parcelas nominais.' }] });
+    /* (slide de evolução do caixa retirado na reunião de 09/11/2026; as contas acima seguem no slide Prazo × taxa) */
 
     /* 6b · prazo × taxa: por que juros menores por ano podem somar mais em reais, e o que o VPL enxerga */
     if (FI.B.fin > 0 && FI.C.fin > 0) {
@@ -4249,21 +4377,17 @@ window.HDAMotion = (function () {
         [{ t: 'Parcelas até' }, { t: ultTxt('B'), n: true }, { t: ultTxt('C'), n: true }, { t: ultTxt('D'), n: true }]];
       if (FI.B.quit > 1 || FI.C.quit > 1) pzRows.push([{ t: 'Saldo quitado em ' + FI.B.anoH }, { t: FI.B.quit > 1 ? mi(FI.B.quit) : '—', n: true }, { t: FI.C.quit > 1 ? mi(FI.C.quit) : '—', n: true }, { t: '—', n: true }]);
       pzRows.push([{ t: 'Juros e encargos em ' + H + ' anos' }, { t: mi(FI.B.enc), n: true }, { t: mi(FI.C.enc), n: true }, { t: 'no aluguel', n: true }],
-        [{ t: 'Caixa acumulado até ' + FI.B.ano5 }].concat(alts.map(function (k) { return cel(FI[k].a5, rkA5, k); })),
-        [{ t: 'Caixa acumulado até ' + FI.B.anoH }].concat(alts.map(function (k) { return cel(FI[k].aH, rkAH, k); })),
         [{ t: 'VPL para o hospital' }].concat(alts.map(function (k) { return { t: mi(fl(k).vplEnt), n: true, b: true, cor: topV.indexOf(k) >= 0 ? 'good' : '' }; })));
       var mesesDiv = function (k) { return k === 'B' ? c.B.n : (c.C.n || 0); };
       var outros5 = alts.filter(function (k) { return k !== rkAH.best && FI[k].a5 > FI[rkAH.best].a5; });
       var bPz = [
-        'Juros dependem da taxa e do tempo: ' + (mesesDiv('C') > mesesDiv('B') ? 'C carrega a dívida por ' + mesesDiv('C') + ' meses' + ((c.C.c || 0) ? ', ' + c.C.c + ' deles só com juros sobre o saldo cheio,' : '') + ' contra ' + mesesDiv('B') + ' em B, que amortiza desde a primeira parcela.' : 'B carrega a dívida por ' + mesesDiv('B') + ' meses, contra ' + mesesDiv('C') + ' em C.'),
-        outros5.length ? 'Até ' + FI.B.ano5 + ', ' + juntaE(outros5.map(function (k) { return k + ' acumula' + ' ' + mi(FI[k].a5); })) + ', contra ' + mi(FI[rkAH.best].a5) + ' de ' + rkAH.best + '; ' + rkAH.best + ' só passa à frente ' + (passa ? 'em ' + passa : 'no fim') + ', sem parcelas. A ' + P(m.fin.desconto, 0) + ' a.a., o caixa do fim vale menos: o VPL pesa isso.'
-          : juntaE(rkAH.top) + (rkAH.top.length > 1 ? ' lideram' : ' lidera') + ' o caixa acumulado do começo ao fim do horizonte.'];
+        'Juros dependem da taxa e do tempo: ' + (mesesDiv('C') > mesesDiv('B') ? 'C carrega a dívida por ' + mesesDiv('C') + ' meses' + ((c.C.c || 0) ? ', ' + c.C.c + ' deles só com juros sobre o saldo cheio,' : '') + ' contra ' + mesesDiv('B') + ' em B, que amortiza desde a primeira parcela.' : 'B carrega a dívida por ' + mesesDiv('B') + ' meses, contra ' + mesesDiv('C') + ' em C.')];
       var qT = quitTxt(true); if (qT) bPz.push(qT);
       lista.push({ nav: 'Prazo × taxa', k: 'Financiamento · prazo × taxa', t: tPz, b: [
         { tipo: 'g', x: 56, y: 150, w: 530, tit: 'Desembolso com os equipamentos por ano (R$)', f: function (el) { el.innerHTML = svgBars({ cats: anosCat.map(function (a) { return "'" + a.slice(2); }), series: alts.map(function (k) { return { nome: { B: 'B · compra GE', C: 'C · compra VMI', D: 'D · locação VMI' }[k], vals: fl(k).anos.map(function (a) { return (a.desembolso || 0) + (a.quitacao || 0); }), cor: ALT_COR[k] }; }), fmt: function (v) { return mi(v); }, h: 380, aria: 'Desembolso anual com os equipamentos' }); } },
         { tipo: 'tab', x: 616, y: 150, w: 608, tam: 13, denso: true, cab: ['', 'B · GE', 'C · VMI compra', 'D · locação'], larg: [0.31, 0.2, 0.27, 0.22], al: ['', 'n', 'n', 'n'], rc: pzRows.map(function (r, i) { return i === pzRows.length - 1 ? 'total' : ''; }), linhas: pzRows },
-        { tipo: 'txt', x: 616, y: pzRows.length > 8 ? 446 : 418, w: 608, tam: 13.5, bullets: bPz },
-        { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Desembolso = parcelas + manutenção (B, C) ou aluguel (D), com o saldo quitado no fim. Caixa acumulado soma anos diferentes pelo valor de face; o VPL desconta a ' + P(m.fin.desconto, 0) + ' a.a.' }] });
+        { tipo: 'txt', x: 616, y: 172 + pzRows.length * 27 + 26, w: 608, tam: 13.5, bullets: bPz },
+        { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Desembolso = parcelas + manutenção (B, C) ou aluguel (D), com o saldo quitado no fim. Juros e encargos = parcelas pagas no horizonte + saldo quitado − valor financiado. O VPL desconta a ' + P(m.fin.desconto, 0) + ' a.a.' }] });
     }
 
     /* 7 · plano em números */
@@ -4334,7 +4458,7 @@ window.HDAMotion = (function () {
         [{ t: 'Equilíbrio (exames de convênio/mês)' }].concat(alts.map(function (k) { return { t: N(qR.eq[k].volume), n: true }; }))];
       var rmB = [
         'Premissas (hipóteses S&S a validar): ' + N(rr.exames_mes) + ' exames de convênio e particular por mês a ' + R(rr.ticket) + ', ' + P(rr.rampa1, 0) + ' no 1º ano e ' + P(rr.rampa2, 0) + ' no 2º; aprovação em ' + fmtMes(rr.aprovacao) + ', operação em ' + fmtMes(E.mesRMStr(m)) + '.',
-        'Em ' + sid + ', a RM empata com ' + N(eqR.volume) + ' exames por mês, ou ticket de ' + R(eqR.ticket) + ', ou preço de ' + mi(eqR.preco) + ' (hoje ' + mi(qR.eq[sid].p0 || qR.p0) + (sid === 'B' ? ', GE Prime Elite' : ', Cignus 600') + ').'];
+        'Em ' + sid + ', a RM empata com ' + N(eqR.volume) + ' exames por mês, ou ticket de ' + R(eqR.ticket) + (E.ppuOn(m) && sid !== 'B' ? ', ou tarifa de pay per use de até R$ ' + N((cenPPU() || {})[sid] ? cenPPU()[sid].feeSem : 0) + ' por exame.' : ', ou preço de ' + mi(eqR.preco) + ' (hoje ' + mi(qR.eq[sid].p0 || qR.p0) + (sid === 'B' ? ', GE Prime Elite' : ', Cignus 600') + ').')];
       var f6d = cen600F(); rmB.push('Versão: Cignus 600 com hélio (' + mi(qR.p0) + ' + ' + mi(rmTerc()) + ' de gaiola, chiller e estabilizador), comparável à GE Prime Elite (' + mi(rmPreco('B')) + ' com gaiola, chiller e cardio).' + (f6d ? ' Com a 600F sem hélio (' + mi(f6d.preco) + '), o VPL de C seria ' + mi(f6d.vplC) + '.' : ''));
       if (rmS) rmB.push('Com ' + N((m.sus || {}).rm_mes) + ' RMs por mês do SUS pelo Agora Tem Especialistas (R$ ' + NF2.format(+(m.sus || {}).rm_valor || 0) + '), a RM passa de ' + sgnMi(rmS.sem) + ' para ' + sgnMi(rmS.com) + ' em ' + sid + '.');
       rmB.push('Condição: o HDA negociar com os planos de saúde a volta da RM aos pacotes de reembolso, de onde ela saiu recentemente.');
@@ -4342,6 +4466,32 @@ window.HDAMotion = (function () {
         { tipo: 'tab', x: 56, y: 150, w: 720, tam: 14, cab: ['', 'B · GE', 'C · VMI compra', 'D · VMI locação'], larg: [0.37, 0.21, 0.21, 0.21], al: ['', 'n', 'n', 'n'], rc: ['', '', 'total', '', '', ''], linhas: rmRows },
         { tipo: 'txt', x: 810, y: 150, w: 414, tam: 14.5, bullets: rmB },
         { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Cenário ' + (rmLig ? 'com' : 'sem') + ' RM na página. Na compra, a RM entra num segundo contrato da mesma linha, liberado na entrega; na locação, o aluguel segue o proxy da TC.' + (ri ? ' Sozinha, sem financiamento: VPL de ' + mi(ri.vpl) + '.' : '') }] });
+      /* 10a · RM em pay per use (VMI) */
+      var qU = cenPPU();
+      if (qU && qU.C && qU.D) {
+        var kU = sid === 'D' ? 'D' : 'C', oU = qU[kU], gU = oU.ppu - oU.sem, minU = qU.minimo ? ', mínimo de ' + N(qU.minimo) + '/mês' : '';
+        var linU = function (lab, f, opt) { return [{ t: lab, b: !!(opt && opt.b) }].concat(['C', 'D'].map(function (k) { var v = f(qU[k], k); return typeof v === 'object' ? v : { t: v, n: true }; })); };
+        var ppuRows = [
+          linU('VPL sem a RM', function (o) { return mi(o.sem); }),
+          linU('VPL com a RM comprada (C) ou alugada (D)', function (o) { return mi(o.compra); }),
+          linU('VPL com a RM em pay per use', function (o) { var d = o.ppu - Math.max(o.compra, o.sem); return { t: mi(o.ppu), n: true, b: true, cor: d > 0 ? 'good' : '' }; }, { b: true }),
+          linU('Dívida (C) ou aluguel/mês (D): compra → pay per use', function (o, k) { return k === 'C' ? mi(o.finCompra).replace(' mi', '') + ' → ' + mi(o.fin).replace('R$ ', '') : mi(o.aluguelCompra).replace(' mil', '') + ' → ' + mi(o.aluguel).replace('R$ ', ''); }),
+          linU('Tarifa máxima para a RM não tirar valor', function (o) { return o.feeSem == null ? '—' : 'R$ ' + N(o.feeSem) + '/exame'; }),
+          linU('Tarifa em que empata com a compra ou locação', function (o) { return o.feeCompra == null ? '—' : 'R$ ' + N(o.feeCompra) + '/exame'; })];
+        lista.push({ nav: 'RM: pay per use', k: 'Ressonância · pay per use', t: 'Em pay per use, a RM ' + (gU >= 0 ? 'passa a somar valor' : 'ainda tira valor') + ': a R$ ' + N(qU.fee) + ' por exame (hipótese), ' + sgnMi(gU) + ' no VPL de ' + kU + '; vale mais que ' + (kU === 'D' ? 'alugar' : 'comprar') + ' até R$ ' + N(oU.feeCompra) + ' por exame', b: [
+          { tipo: 'kpis', x: 56, y: 150, w: 720, h: 104, cols: 3, vtam: 20, itens: [
+            { lab: 'Tarifa usada no modelo', v: 'R$ ' + N(qU.fee), sub: 'por exame' + minU + ', hipótese S&S até a proposta da VMI', cls: 'warn' },
+            { lab: 'Não tira valor até', v: 'R$ ' + N(oU.feeSem), sub: 'por exame, em ' + kU, cls: '' },
+            { lab: 'Vale mais que ' + (kU === 'D' ? 'alugar' : 'comprar') + ' até', v: 'R$ ' + N(oU.feeCompra), sub: 'por exame, em ' + kU, cls: 'good' }] },
+          { tipo: 'tab', x: 56, y: 280, w: 720, tam: 13.5, cab: ['', 'C · VMI compra', 'D · VMI locação'], larg: [0.5, 0.25, 0.25], al: ['', 'n', 'n'], rc: ['', '', 'total', '', '', ''], linhas: ppuRows },
+          { tipo: 'txt', x: 810, y: 150, w: 414, tam: 14, bullets: [
+            '**Como funciona:** a VMI instala e mantém a RM, com gaiola, chiller e estabilizador, e cobra por exame. O hospital paga a sala (' + mi(+rr.obra || 0) + '), a equipe, a energia e os insumos.',
+            '**Sai a dívida da RM** (' + mi(qU.C.finCompra - qU.C.fin) + ' a menos em C) e parte do risco de volume passa para a VMI: se o volume não vier, o custo cai junto' + (qU.minimo ? ', até o mínimo contratado' : '') + '.',
+            '**Sensibilidade:** cada R$ 10 na tarifa = ' + mi(Math.abs(oU.porReal) * 10) + ' de VPL em ' + kU + '.',
+            '**A pedir à VMI:** tarifa por exame, mínimo mensal, reajuste, prazo, quem paga gaiola e chiller e a saída antecipada.'] },
+          { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Pay per use só nas alternativas VMI (C e D); em B a RM GE segue comprada. Mesmo volume, ticket e rampa da RM; tarifa corrigida pelo IPCA. ' + (E.ppuOn(m) ? 'A página está no modo pay per use.' : 'A página está no modo compra/locação; a chave fica em Premissas.') }] });
+      }
+
       /* 10b · RM: o que o número ainda não conta (volume retido, transferências evitadas), a confirmar com os dados do HDA */
       var v0 = +rr.exames_mes || 0, ve = eqR.volume, capRM = 2 * (+rr.horas_dia || 12) * 26;
       if (ve != null && isFinite(ve) && Math.abs(ve - v0) > 0.5) {
@@ -4379,7 +4529,7 @@ window.HDAMotion = (function () {
       chRc.push(''); chHl.push(!!atual);
     };
     var secCh = function (t, g) { grupo = g; chRows.push([{ t: t }]); chRc.push('sec'); chHl.push(false); };
-    if (qP) { secCh('PACS Sectra (estimativa S&S, sem cotação)', 'o PACS'); linhaCh('Com PACS', qP.com, qP.on); linhaCh('Sem PACS', qP.sem, !qP.on); }
+    if (qP) { secCh('PACS (Sectra: estimativa S&S, sem cotação)', 'o PACS'); linhaCh('Sectra no lugar da Pixeon', qP.com, qP.on); linhaCh('Pixeon (PACS atual)', qP.sem, !qP.on); }
     if (qS) { secCh('SUS', 'o SUS'); linhaCh('Fora (decisão do CEO)', qS.v.fora, qS.modo === 'fora'); linhaCh('SUS atual', qS.v.atual, qS.modo === 'atual'); linhaCh('SUS atual + Agora Tem Especialistas', qS.v.ate, qS.modo === 'ate'); }
     if (qR) { secCh('Ressonância', 'a ressonância'); linhaCh('Sem RM', qR.sem, !rmLig); linhaCh('Com RM', qR.com, rmLig); }
     var qX = c.cenCambio, fX = qX ? fxInfo() : null, temX = !!(qX && fX.tem);
@@ -4429,7 +4579,7 @@ window.HDAMotion = (function () {
       ['base.cf_dir_mes', 'Equipe técnica e fixos diretos', R(m.base.cf_dir_mes) + '/mês'],
       ['manut.plano', 'Manutenção pós-garantia (C)', (c.C.manut.plano === 'prata' ? 'Prata' : 'Ouro') + ', ' + R(c.C.manut.mes) + '/mês'],
       ['propria.rispacs_mes', 'RIS (Touch Health)', R(m.propria.rispacs_mes) + '/mês + ' + mi(+m.propria.rispacs_impl || 0)],
-      ['propria.pacs_exame', 'PACS Sectra Standard', pacsOn() ? 'R$ ' + NF2.format(+m.propria.pacs_exame || 0) + '/exame + ' + mi(+m.propria.pacs_impl || 0) : 'fora do modelo'],
+      ['propria.pacs_exame', 'PACS Sectra Standard', pacsOn() ? 'R$ ' + NF2.format(+m.propria.pacs_exame || 0) + '/exame + ' + mi(+m.propria.pacs_impl || 0) + ' (no lugar da Pixeon)' : 'Pixeon mantida (Sectra fora)'],
       ['fin.inicio_op_mes', 'Início da operação própria', fmtMes(goLive())],
       ['altC.prazo', 'Financiamento pedido (C)', m.altC.prazo + ' meses, ' + m.altC.carencia + ' de carência'],
       ['altD.prazo', 'Locação (D)', c.D.n + ' meses'],
@@ -4447,7 +4597,7 @@ window.HDAMotion = (function () {
     /* 14 · riscos */
     var rk2 = [
       '**Janela sem TC na troca.** O contrato com a EMG pede 90 dias de aviso. Enviar o aviso só com o financiamento aprovado e a entrega firme (go-live em ' + fmtMes(goLive()) + ').',
-      pacsOn() ? '**PACS é estimativa, não cotação.** R$ ' + NF2.format(+m.propria.pacs_exame || 0) + ' por exame e ' + mi(+m.propria.pacs_impl || 0) + ' de implantação; tira ' + mi(qP ? -qP.delta[sid] : 0) + ' do VPL. Cotar a Sectra (a S&S representa a Sectra: declarado).' : '**PACS fora do número.** O hospital vai precisar de um PACS: com a estimativa S&S, o VPL cai ' + mi(qP ? -qP.delta[sid] : 0) + '. Trocar pela cotação assim que sair.',
+      pacsOn() ? '**PACS é estimativa, não cotação.** R$ ' + NF2.format(+m.propria.pacs_exame || 0) + ' por exame e ' + mi(+m.propria.pacs_impl || 0) + ' de implantação, ' + pixTxt() + '; tira ' + mi(qP ? -qP.delta[sid] : 0) + ' do VPL. Cotar a Sectra (a S&S representa a Sectra: declarado).' : '**PACS: o número mantém a Pixeon.** Com o Sectra no lugar (estimativa S&S), o VPL muda ' + mi(qP ? qP.delta[sid] : 0) + ', pela implantação e pelos exames novos. Trocar pela cotação e pelo contrato Pixeon assim que saírem.',
       '**Código FINAME da Pulsar.** O modelo assume o credenciamento até dez/2026. Se atrasar, a TC sai do FINAME' + (fe.st === 'fora' ? ' e vai para recurso próprio ou o BNDES Automático' : ' e vai para o FGTS-Saúde, se couber, ou recurso próprio') + '.',
       '**Crédito antes do TDC.** Sem o TDC, a cobertura de ' + l1.ano + ' fica em ' + X(l1.dscrSem) + ' e o banco pode pedir garantia real ou adiar.'];
     if (qR) rk2.push('**Ressonância depende de volume.** Empata com ' + N(eqR.volume) + ' exames por mês; validar a demanda e a volta da RM aos pacotes dos planos antes de comprar.');
