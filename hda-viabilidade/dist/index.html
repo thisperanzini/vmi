@@ -1558,6 +1558,9 @@ var Engine = (function () {
     var rb = rbConv + rbS + rbA;
     var glosa = rb * g;
     var rl = rb - glosa;
+    /* PACS que o HDA paga hoje (Pixeon), sobre os exames que já existem: entra no EMG e na própria até o Sectra entrar no lugar */
+    var pa = p.pacs_atual || 'mes', exAt = exames + exS;
+    var pix = pa === 'mes' ? num(p.pacs_atual_valor) * reaj : (pa === 'exame' ? num(p.pacs_atual_valor) : num(p.pacs_exame)) * exAt * reaj;
     var d = { exames: exames, exSus: exS, exSusMais: exA, rbConv: rbConv, rbSus: rbS, rbSusMais: rbA, rlSus: rbS * (1 - g), rlSusMais: rbA * (1 - g), rb: rb, glosa: glosa, rl: rl };
     if (tipo === 'emg') {
       /* nos exames SUS atuais a EMG recebe os mesmos percentuais (sus.atual_emg = "mesmo") ou nada além do contrato ("nada") */
@@ -1567,7 +1570,7 @@ var Engine = (function () {
       d.rep_mat = rlRep * num(b.rep_mat_pct);
       d.rep_bio = rlRep * num(b.rep_bio_pct);
       d.rep_sala = rlRep * num(b.rep_sala_pct);
-      d.manut = 0; d.aluguel = 0; d.rispacs = 0;
+      d.manut = 0; d.aluguel = 0; d.rispacs = 0; d.pacsAtual = pix;
     } else {
       d.matmed = rl * num(p.matmed_pct);
       d.rep_med = rl * num(p.rep_med_pct);
@@ -1578,17 +1581,16 @@ var Engine = (function () {
       d.aluguel = num(opex && opex.aluguel) * reaj;
       var exPacs = exames + exS + exA; /* PACS: os exames que estão no modelo (convênio e particular; o SUS só quando a chave o inclui) */
       d.exPacs = exPacs; d.ris = num(p.rispacs_mes) * reaj; d.pacs = pacsEx(m) * exPacs * reaj;
-      /* PACS que o hospital já paga hoje (Pixeon): deixa de existir quando o Sectra entra; vale para os exames que já existem */
-      var pa = p.pacs_atual || 'igual', exAt = exames + exS;
-      d.pacsEvit = !pacsOn(m) ? 0 : pa === 'mes' ? num(p.pacs_atual_valor) * reaj : (pa === 'exame' ? num(p.pacs_atual_valor) : pacsEx(m)) * exAt * reaj;
-      d.rispacs = d.ris + d.pacs - d.pacsEvit;
+      /* com o Sectra, a Pixeon deixa de ser paga */
+      d.pacsAtual = pacsOn(m) ? 0 : pix; d.pacsEvit = pacsOn(m) ? pix : 0;
+      d.rispacs = d.ris + d.pacs;
     }
     d.repasse = d.rep_med + d.rep_mat + d.rep_bio + d.rep_sala;
     d.cv = d.matmed + d.repasse;
     d.mc = rl - d.cv;
     d.cf_dir = num(b.cf_dir_mes) * reaj;
     d.cf_ind = num(b.cf_ind_mes) * reaj;
-    d.margem_direta = d.mc - d.cf_dir - d.manut - d.aluguel - d.rispacs;
+    d.margem_direta = d.mc - d.cf_dir - d.manut - d.aluguel - d.rispacs - (d.pacsAtual || 0);
     d.resultado = d.margem_direta - d.cf_ind; /* = EBITDA mensal */
     return d;
   }
@@ -3003,7 +3005,7 @@ window.HDAMotion = (function () {
       '</div></div>' +
       '<div class="card"><div class="card-h"><h2>O que pode dar errado</h2></div><div class="grid" style="gap:12px">' +
       '<div class="tile"><h3>Janela sem TC na troca</h3><p>O contrato com a EMG não tem multa e pede 90 dias de aviso (CEO, 20/10). A EMG é dona dos equipamentos: o aviso deve sair ~90 dias antes da instalação (go-live em ' + fmtMes(goLive()) + ' no modelo). Se a entrega atrasar depois do aviso, o hospital fica sem TC: amarrar o prazo de entrega no pedido e manter a opção de prorrogar com a EMG.</p></div>' +
-      (pacsOn() ? '<div class="tile"><h3>PACS Sectra é estimativa, não cotação</h3><p>O modelo usa R$ ' + NF2.format(+model.propria.pacs_exame || 0) + ' por exame (' + R(prop.pacs) + '/mês), ' + pixTxt() + ', e ' + mi(+model.propria.pacs_impl || 0) + ' de setup e implantação, estimativas S&S para a edição Standard, que a Sectra ainda está disponibilizando no Brasil. Faixa de R$ 6,94 a 10,58 por exame. Tira ' + mi(c.cenPACS ? -c.cenPACS.delta[sel.id] : 0) + ' do VPL. A S&S representa a Sectra: declarar ao hospital.</p></div>' : '<div class="tile"><h3>PACS: o número mantém a Pixeon</h3><p>O HDA já paga um PACS (Pixeon), que segue nos custos dos dois cenários. Trocar pelo Sectra muda o VPL em ' + mi(c.cenPACS ? c.cenPACS.delta[sel.id] : 0) + ': ' + pacsDifTxt() + '.</p></div>') +
+      (pacsOn() ? '<div class="tile"><h3>PACS Sectra é estimativa, não cotação</h3><p>O modelo usa R$ ' + NF2.format(+model.propria.pacs_exame || 0) + ' por exame (' + R(prop.pacs) + '/mês), ' + pixTxt() + ', e ' + mi(+model.propria.pacs_impl || 0) + ' de setup e implantação, estimativas S&S para a edição Standard, que a Sectra ainda está disponibilizando no Brasil. Faixa de R$ 6,94 a 10,58 por exame. Tira ' + mi(c.cenPACS ? -c.cenPACS.delta[sel.id] : 0) + ' do VPL. A S&S representa a Sectra: declarar ao hospital.</p></div>' : '<div class="tile"><h3>PACS: o número mantém a Pixeon</h3><p>O HDA paga hoje a Pixeon (' + R(prop.pacsAtual || 0) + '/mês no ano 2), que fica nos custos de hoje e da imagem própria. Com o Sectra, a Pixeon sai. Trocar pelo Sectra muda o VPL em ' + mi(c.cenPACS ? c.cenPACS.delta[sel.id] : 0) + ': ' + pacsDifTxt() + '.</p></div>') +
       '<div class="tile"><h3>O CFI da Pulsar ainda não saiu</h3><p>O modelo assume o credenciamento até dez/2026 (premissa VMI). Se atrasar além do Gate 2, a TC fica fora do FINAME e vai para o FGTS-Saúde (se o hospital cumprir os requisitos) ou recurso próprio, enquanto a TC GE (Ascend, Aspire) entra. Para testar esse caso, coloque "Não" em "Tratar o pacote como credenciado" em Premissas.</p></div>' +
       (c.rm.on && q ? '<div class="tile"><h3>A RM depende de volume</h3><p>Com as hipóteses atuais a RM tira ' + mi(-q.eq[sel.id].delta) + ' do VPL e leva a cobertura de ' + q.sem[sel.id].dscr[0].ano + ' de ' + X(q.sem[sel.id].dscr[0].v) + ' para ' + X(q.com[sel.id].dscr[0].v) + '. Empata com ' + N(q.eq[sel.id].volume) + ' exames/mês. O volume de convênio depende de o HDA reincluir a RM nos pacotes de reembolso dos planos de saúde, de onde ela saiu recentemente. Validar a demanda antes de comprar e negociar o preço (R$ 4,33 mi no contrato FINAME da CEMAN; R$ 4,9 mi nos pregões de Goiás).</p></div>' : '') +
       '<div class="tile"><h3>Crédito antes do TDC</h3><p>Sem o TDC, o hospital rola capital de giro a 48 meses e a cobertura fica em ' + X(e27.dscrSem) + '. Um banco pode pedir garantia real ou recusar até a desalavancagem.</p></div>' +
@@ -3029,7 +3031,7 @@ window.HDAMotion = (function () {
     h += '<div class="grid two"><div class="card"><div class="card-h"><h2>DRE mensal: EMG × imagem própria</h2><span class="muted small">volume atual, regime após a garantia · alternativa ' + calc.sel.id + '</span></div><div class="tbl-wrap"><table><thead><tr><th>R$/mês</th><th class="n">EMG</th><th class="n">A.V.</th><th class="n">Própria</th><th class="n">A.V.</th></tr></thead><tbody>' +
       row('Receita bruta', e.rb, p.rb) + (e.rbSus || p.rbSus ? row('dos quais SUS atual', e.rbSus, p.rbSus, 'sub') : '') + (p.rbSusMais ? row('dos quais SUS a mais (Agora Tem Especialistas)', e.rbSusMais, p.rbSusMais, 'sub') : '') + row('(−) Glosas', -e.glosa, -p.glosa, 'sub') + row('Receita líquida', e.rl, p.rl, 'total') +
       row('(−) Mat/Med', -e.matmed, -p.matmed) + row('(−) Repasse: médicos', -e.rep_med, -p.rep_med) + row('(−) Repasse: material EMG', -e.rep_mat, -p.rep_mat) + row('(−) Repasse: biópsias', -e.rep_bio, -p.rep_bio) + row('(−) Médicos que usam a sala', -e.rep_sala, -p.rep_sala) +
-      row('Margem de contribuição', e.mc, p.mc, 'total') + row('(−) Custos fixos diretos', -e.cf_dir, -p.cf_dir) + row('(−) Manutenção pós-garantia', -e.manut, -p.manut) + (p.aluguel ? row('(−) Aluguel dos equipamentos', -e.aluguel, -p.aluguel) : '') + row('(−) RIS (Touch Health)', -(e.ris || 0), -(p.ris || 0)) + row('(−) PACS Sectra, por exame' + (pacsOn() ? '' : ' (fora do modelo)'), -(e.pacs || 0), -(p.pacs || 0)) + (p.pacsEvit ? row('(+) PACS atual (Pixeon), que deixa de ser pago', 0, p.pacsEvit) : '') + row('Margem direta', e.margem_direta, p.margem_direta, 'total') + row('(−) Custos indiretos', -e.cf_ind, -p.cf_ind) + row('Resultado operacional (EBITDA)', e.resultado, p.resultado, 'total hl') +
+      row('Margem de contribuição', e.mc, p.mc, 'total') + row('(−) Custos fixos diretos', -e.cf_dir, -p.cf_dir) + row('(−) Manutenção pós-garantia', -e.manut, -p.manut) + (p.aluguel ? row('(−) Aluguel dos equipamentos', -e.aluguel, -p.aluguel) : '') + row('(−) RIS (Touch Health)', -(e.ris || 0), -(p.ris || 0)) + row('(−) PACS Sectra, por exame' + (pacsOn() ? '' : ' (fora do modelo)'), -(e.pacs || 0), -(p.pacs || 0)) + ((e.pacsAtual || p.pacsAtual) ? row('(−) PACS atual (Pixeon)' + (pacsOn() ? ': sai com o Sectra' : ''), -(e.pacsAtual || 0), -(p.pacsAtual || 0)) : '') + row('Margem direta', e.margem_direta, p.margem_direta, 'total') + row('(−) Custos indiretos', -e.cf_ind, -p.cf_ind) + row('Resultado operacional (EBITDA)', e.resultado, p.resultado, 'total hl') +
       '</tbody></table></div><p class="small muted" style="margin-top:8px">Fonte: Viabilidade v2, aba Viabilidade, linhas 48–63. A aba DRE da mesma planilha mostra R$ 162 mil para a própria porque omite manutenção e RIS/PACS no cenário de volume atual.</p></div>';
     h += '<div class="card"><div class="card-h"><h2>Para onde vai a receita hoje</h2><span class="muted small">R$ por mês, jan–jun/26</span></div><div class="chart">' + svgBars({ cats: ['Médicos EMG', 'Material EMG', 'Biópsias', 'Médicos na sala', 'Mat/Med hosp.', 'Fixos diretos', 'Indiretos', 'Resultado'], series: [{ nome: 'R$/mês', vals: [e.rep_med, e.rep_mat, e.rep_bio, e.rep_sala, e.matmed, e.cf_dir, e.cf_ind, e.resultado], cor: 'var(--s-c)' }], fmt: function (v) { return mi(v); }, h: 260, labels: true, aria: 'Destino da receita' }) + '</div><p class="small muted">A EMG recebe ' + R(e.repasse) + '/mês; o CEO estima "uns 300 mil por mês". A diferença pode ser a parcela que a EMG paga aos médicos.</p></div></div>';
     /* volumes */
@@ -3061,7 +3063,7 @@ window.HDAMotion = (function () {
   /* PACS atual (Pixeon): como entra no número quando o Sectra é ligado */
   function pixTxt() {
     var p = model.propria || {}, pa = p.pacs_atual || 'igual', v = +p.pacs_atual_valor || 0;
-    return pa === 'mes' ? 'descontado o PACS atual (Pixeon), de ' + R(v) + '/mês, que deixa de ser pago' : pa === 'exame' ? 'descontado o PACS atual (Pixeon), de R$ ' + NF2.format(v) + ' por exame, que deixa de ser pago' : 'no lugar do PACS que o HDA já paga (Pixeon), suposto no mesmo custo por exame até o HDA informar o contrato';
+    return pa === 'mes' ? 'no lugar da Pixeon (' + R(v) + '/mês), que o HDA paga hoje e deixa de pagar' : pa === 'exame' ? 'no lugar da Pixeon (R$ ' + NF2.format(v) + ' por exame), que o HDA paga hoje e deixa de pagar' : 'no lugar do PACS que o HDA já paga (Pixeon), suposto no mesmo custo por exame até o HDA informar o contrato';
   }
   /* o que separa o cenário com o Sectra do cenário com a Pixeon: mensalidade de cada um e a implantação */
   function pacsDifTxt() {
@@ -4065,7 +4067,7 @@ window.HDAMotion = (function () {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(eq), 'Equipamentos');
     var e = c.cen.emg, p = c.cen.prop;
     var dre = [['DRE mensal (R$)', 'EMG', 'Imagem própria'], ['Exames', e.exames, p.exames], ['Receita bruta', e.rb, p.rb], ['Glosas', -e.glosa, -p.glosa], ['Receita líquida', e.rl, p.rl], ['Mat/Med', -e.matmed, -p.matmed], ['Repasse médicos', -e.rep_med, -p.rep_med], ['Repasse material EMG', -e.rep_mat, -p.rep_mat], ['Repasse biópsias', -e.rep_bio, -p.rep_bio], ['Médicos que usam a sala', -e.rep_sala, -p.rep_sala], ['Margem de contribuição', e.mc, p.mc], ['Custos fixos diretos', -e.cf_dir, -p.cf_dir], ['Manutenção', -e.manut, -p.manut], ['RIS (Touch Health)', -(e.ris || 0), -(p.ris || 0)], ['PACS Sectra (por exame)', -(e.pacs || 0), -(p.pacs || 0)], ['Custos indiretos', -e.cf_ind, -p.cf_ind], ['EBITDA', e.resultado, p.resultado]];
-    if (p.pacsEvit) { var iPx2 = dre.findIndex(function (r) { return /^PACS Sectra/.test(String(r[0])); }); if (iPx2 >= 0) dre.splice(iPx2 + 1, 0, ['PACS atual (Pixeon), deixa de ser pago', 0, p.pacsEvit]); }
+    if (e.pacsAtual || p.pacsAtual) { var iPx2 = dre.findIndex(function (r) { return /^PACS Sectra/.test(String(r[0])); }); if (iPx2 >= 0) dre.splice(iPx2 + 1, 0, ['PACS atual (Pixeon)', -(e.pacsAtual || 0), -(p.pacsAtual || 0)]); }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dre), 'DRE mensal');
     var fx = [['Ano', 'Ano civil', 'Fator volume', 'Fração', 'Receita líquida', 'EBITDA EMG', 'EBITDA própria antes de manut./aluguel', 'Diferença × fração', c.sel.id === 'D' ? 'Aluguel' : 'Manutenção', 'EBITDA incremental', 'Depreciação', 'Tributos', 'Residual', 'FCL projeto', 'Parcelas', 'Juros', 'Saldo quitado no fim', 'Caixa hospital', 'Acum. projeto', 'Acum. hospital', 'DSCR projeto']];
     fx.push([0, model.fin.ano_inicio - 1, '', '', '', '', '', '', '', '', '', '', '', fl.proj[0], '', '', '', fl.ent[0], fl.proj[0], fl.ent[0], '']);
@@ -4317,11 +4319,11 @@ window.HDAMotion = (function () {
       ['Receita líquida', emg.rl, prop.rl, 'total'], ['(−) Mat/Med', -emg.matmed, -prop.matmed], ['(−) Repasse: médicos e laudo', -emg.rep_med, -prop.rep_med], ['(−) Repasse: material EMG', -emg.rep_mat, -prop.rep_mat], ['(−) Repasse: biópsias', -emg.rep_bio, -prop.rep_bio], ['(−) Médicos que usam a sala', -emg.rep_sala, -prop.rep_sala],
       ['Margem de contribuição', emg.mc, prop.mc, 'total'], ['(−) Equipe e fixos diretos', -emg.cf_dir, -prop.cf_dir], [isD ? '(−) Aluguel dos equipamentos' : '(−) Manutenção pós-garantia', -(emg.manut + emg.aluguel), -(prop.manut + prop.aluguel)], ['(−) RIS (Touch Health)', -(emg.ris || 0), -(prop.ris || 0)], ['(−) PACS Sectra' + (pacsOn() ? ', por exame' : ' (fora)'), -(emg.pacs || 0), -(prop.pacs || 0)],
       ['Margem direta', emg.margem_direta, prop.margem_direta, 'total'], ['(−) Custos indiretos (rateio)', -emg.cf_ind, -prop.cf_ind], ['Resultado (EBITDA)', emg.resultado, prop.resultado, 'total']];
-    if (prop.pacsEvit) { var iPx = dreL.findIndex(function (r) { return /PACS Sectra/.test(r[0]); }); dreL.splice(iPx + 1, 0, ['(+) PACS atual (Pixeon), deixa de ser pago', 0, prop.pacsEvit]); }
+    if (emg.pacsAtual || prop.pacsAtual) { var iPx = dreL.findIndex(function (r) { return /PACS Sectra/.test(r[0]); }); dreL.splice(iPx + 1, 0, ['(−) PACS atual (Pixeon)' + (pacsOn() ? ', sai com o Sectra' : ''), -(emg.pacsAtual || 0), -(prop.pacsAtual || 0)]); }
     var dreB = [
       'Saem os repasses à EMG de material, biópsias e "médicos que usam a sala": **' + R(emg.rep_mat + emg.rep_bio + emg.rep_sala - prop.rep_mat - prop.rep_bio - prop.rep_sala) + '** por mês.',
       'Fica o laudo: ' + P(m.propria.rep_med_pct, 1) + ' da receita para os radiologistas de dia e o telelaudo à noite (CEO, 20/10).',
-      'Entram ' + (isD ? 'o aluguel dos equipamentos (' + R(prop.aluguel) + ', ' + locTxt().manut + ')' : 'a manutenção pós-garantia (' + R(prop.manut) + ', plano ' + (sel.manut.plano === 'prata' ? 'Prata' : 'Ouro') + ')') + ', o RIS (' + R(prop.ris) + ')' + (pacsOn() ? ' e o PACS Sectra (' + R(prop.pacs) + ', estimativa S&S)' : '; o PACS está fora do número') + '.',
+      'Entram ' + (isD ? 'o aluguel dos equipamentos (' + R(prop.aluguel) + ', ' + locTxt().manut + ')' : 'a manutenção pós-garantia (' + R(prop.manut) + ', plano ' + (sel.manut.plano === 'prata' ? 'Prata' : 'Ouro') + ')') + ', o RIS (' + R(prop.ris) + ')' + (pacsOn() ? ' e o PACS Sectra (' + R(prop.pacs) + ', estimativa S&S), no lugar da Pixeon (' + R(prop.pacsEvit || 0) + ', que sai)' : '; o PACS segue a Pixeon, que o hospital já paga (' + R(prop.pacsAtual || 0) + ')') + '.',
       'Ganho de **' + R(c.ganhoMes) + '** por mês, ' + mi(c.ganhoMes * 12) + ' por ano, antes das parcelas.'];
     if (prop.rbSus || prop.rbSusMais) dreB.push('Inclui o ' + susNome(E.susModo(m)) + ': ' + R((prop.rbSus || 0) + (prop.rbSusMais || 0)) + ' de receita bruta SUS por mês na imagem própria.');
     lista.push({ nav: 'DRE: EMG × própria', k: 'Por que internalizar', t: 'Com a mesma receita, o resultado mensal passa de ' + R(emg.resultado) + ' com a EMG para ' + R(prop.resultado) + ' com imagem própria', b: [

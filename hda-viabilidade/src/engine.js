@@ -45,6 +45,9 @@ var Engine = (function () {
     var rb = rbConv + rbS + rbA;
     var glosa = rb * g;
     var rl = rb - glosa;
+    /* PACS que o HDA paga hoje (Pixeon), sobre os exames que já existem: entra no EMG e na própria até o Sectra entrar no lugar */
+    var pa = p.pacs_atual || 'mes', exAt = exames + exS;
+    var pix = pa === 'mes' ? num(p.pacs_atual_valor) * reaj : (pa === 'exame' ? num(p.pacs_atual_valor) : num(p.pacs_exame)) * exAt * reaj;
     var d = { exames: exames, exSus: exS, exSusMais: exA, rbConv: rbConv, rbSus: rbS, rbSusMais: rbA, rlSus: rbS * (1 - g), rlSusMais: rbA * (1 - g), rb: rb, glosa: glosa, rl: rl };
     if (tipo === 'emg') {
       /* nos exames SUS atuais a EMG recebe os mesmos percentuais (sus.atual_emg = "mesmo") ou nada além do contrato ("nada") */
@@ -54,7 +57,7 @@ var Engine = (function () {
       d.rep_mat = rlRep * num(b.rep_mat_pct);
       d.rep_bio = rlRep * num(b.rep_bio_pct);
       d.rep_sala = rlRep * num(b.rep_sala_pct);
-      d.manut = 0; d.aluguel = 0; d.rispacs = 0;
+      d.manut = 0; d.aluguel = 0; d.rispacs = 0; d.pacsAtual = pix;
     } else {
       d.matmed = rl * num(p.matmed_pct);
       d.rep_med = rl * num(p.rep_med_pct);
@@ -65,17 +68,16 @@ var Engine = (function () {
       d.aluguel = num(opex && opex.aluguel) * reaj;
       var exPacs = exames + exS + exA; /* PACS: os exames que estão no modelo (convênio e particular; o SUS só quando a chave o inclui) */
       d.exPacs = exPacs; d.ris = num(p.rispacs_mes) * reaj; d.pacs = pacsEx(m) * exPacs * reaj;
-      /* PACS que o hospital já paga hoje (Pixeon): deixa de existir quando o Sectra entra; vale para os exames que já existem */
-      var pa = p.pacs_atual || 'igual', exAt = exames + exS;
-      d.pacsEvit = !pacsOn(m) ? 0 : pa === 'mes' ? num(p.pacs_atual_valor) * reaj : (pa === 'exame' ? num(p.pacs_atual_valor) : pacsEx(m)) * exAt * reaj;
-      d.rispacs = d.ris + d.pacs - d.pacsEvit;
+      /* com o Sectra, a Pixeon deixa de ser paga */
+      d.pacsAtual = pacsOn(m) ? 0 : pix; d.pacsEvit = pacsOn(m) ? pix : 0;
+      d.rispacs = d.ris + d.pacs;
     }
     d.repasse = d.rep_med + d.rep_mat + d.rep_bio + d.rep_sala;
     d.cv = d.matmed + d.repasse;
     d.mc = rl - d.cv;
     d.cf_dir = num(b.cf_dir_mes) * reaj;
     d.cf_ind = num(b.cf_ind_mes) * reaj;
-    d.margem_direta = d.mc - d.cf_dir - d.manut - d.aluguel - d.rispacs;
+    d.margem_direta = d.mc - d.cf_dir - d.manut - d.aluguel - d.rispacs - (d.pacsAtual || 0);
     d.resultado = d.margem_direta - d.cf_ind; /* = EBITDA mensal */
     return d;
   }
