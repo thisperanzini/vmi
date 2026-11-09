@@ -1,4 +1,4 @@
-# Site hda.sespartners.com.br. No Netlify, este site usa Base directory = "hda-viabilidade";
+# Site projetohda.sespartners.com.br. No Netlify, este site usa Base directory = "hda-viabilidade";
 # o publish abaixo é relativo à base. O dist/ já vem montado pelo build.py da raiz; nada a construir.
 [build]
   publish = "dist"
@@ -17,7 +17,7 @@
 # Quem entrar pelo endereço *.netlify.app vai para o domínio próprio (senão a camada de login é contornada).
 [[redirects]]
   from = "https://serene-bubblegum-a5555b.netlify.app/*"
-  to = "https://hda.sespartners.com.br/:splat"
+  to = "https://projetohda.sespartners.com.br/:splat"
   status = 301
   force = true
 
