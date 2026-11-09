@@ -14,6 +14,7 @@
 body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 "IBM Plex Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
 .band { background: var(--navy); color: #eef2f8; padding: 12px max(16px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .band b { font: 700 20px/1 "IBM Plex Sans Condensed", "IBM Plex Sans", Arial, sans-serif; } .band b i { color: var(--gold); font-style: normal; }
+.band .logo { height: 40px; width: auto; display: block; flex: none; }
 .band span { font-size: 12.5px; color: #a9b6cc; } .band a { color: #eef2f8; margin-left: auto; font-size: 13px; }
 .wrap { max-width: 1240px; margin: 0 auto; padding: 18px max(16px, env(safe-area-inset-left)) 40px; display: flex; flex-direction: column; gap: 16px; }
 h2 { font: 600 17px/1.2 "IBM Plex Sans Condensed", "IBM Plex Sans", Arial, sans-serif; margin: 0; }
@@ -52,7 +53,7 @@ td.mono { font-family: "IBM Plex Mono", monospace; font-size: 12px; }
 <script>
 (function () {
   var $ = function (s) { return document.querySelector(s); };
-  var h = location.hostname; $("#siteNome").textContent = (/^hda\./.test(h) ? "Imagem Própria HDA" : /^financiamento\./.test(h) ? "Financiamento VMI" : "Site") + " · acessos e permissões";
+  var h = location.hostname; $("#siteNome").textContent = (/^(projeto)?hda\./.test(h) ? "Imagem Própria HDA" : /^financiamento\./.test(h) ? "Financiamento VMI" : "Site") + " · acessos e permissões";
   var eventos = [], lista = null;
   var NOMES = { login: ["Login", "good"], logout: ["Saiu", ""], codigo_enviado: ["Código enviado", ""], codigo_negado: ["Código negado (não autorizado)", "bad"], codigo_bloqueado_limite: ["Bloqueado por limite", "bad"], codigo_erro_envio: ["Falha no envio", "bad"], login_falha: ["Código errado/expirado", "warn"], login_negado: ["Login negado", "bad"], pagina: ["Página", ""], caso: ["Caso aberto", ""], documento: ["Documento gerado", "good"], export: ["Exportação", "good"], versao: ["Versão congelada", ""], admin_negado: ["Admin negado", "bad"], admin_add: ["Autorizou e-mail", ""], admin_remove: ["Removeu e-mail", ""], admin_block: ["Bloqueou e-mail", "warn"], admin_unblock: ["Desbloqueou e-mail", ""] };
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }

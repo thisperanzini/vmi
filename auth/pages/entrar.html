@@ -14,6 +14,7 @@
 body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font: 15px/1.5 "IBM Plex Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; }
 .band { background: var(--navy); color: #eef2f8; padding: 14px max(16px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 12px; }
 .band b { font: 700 20px/1 "IBM Plex Sans Condensed", "IBM Plex Sans", Arial, sans-serif; } .band b i { color: var(--gold); font-style: normal; }
+.band .logo { height: 40px; width: auto; display: block; flex: none; }
 .band span { font-size: 12.5px; color: #a9b6cc; }
 main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px max(16px, env(safe-area-inset-left)); }
 .card { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 24px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 6px 18px rgba(20,32,53,.06); }
@@ -56,7 +57,7 @@ footer { text-align: center; font-size: 12px; color: var(--fg-3); padding: 14px;
   var $ = function (s) { return document.querySelector(s); };
   var q = new URLSearchParams(location.search), next = q.get("next") || "/";
   if (!/^\/(?!\/)/.test(next)) next = "/";
-  var h = location.hostname; $("#siteNome").textContent = /^hda\./.test(h) ? "Imagem Própria HDA" : /^financiamento\./.test(h) ? "Financiamento VMI" : "Acesso restrito";
+  var h = location.hostname; $("#siteNome").textContent = /^(projeto)?hda\./.test(h) ? "Imagem Própria HDA" : /^financiamento\./.test(h) ? "Financiamento VMI" : "Acesso restrito";
   var email = "";
   function msg(el, t, ok) { el.textContent = t; el.hidden = !t; el.className = "msg " + (ok ? "good" : "bad"); }
   async function post(fn, body) {

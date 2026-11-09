@@ -131,6 +131,11 @@ var Engine = (function () {
     rs.forEach(function (r) { if (r.y <= fim) last = r; else depois = true; });
     return depois && last ? Math.max(0, num(last.saldo)) : 0;
   }
+  function quitarRegra(m, alt) {
+    var c = m.altC || {};
+    if (!alt || alt.id !== 'C' || c.quitar !== 'auto' || !(alt.rows || []).length) return null;
+    return { reserva: Math.max(0, num(c.quitar_reserva)), tarifa: Math.max(0, num(c.quitar_tarifa)) };
+  }
   function capacidadeRM(m) { var r = m.rm || {}, cap = 2 * (num(r.horas_dia) || 12) * 26, sus = susAteOn(m) ? num((m.sus || {}).rm_mes) : 0, ex = num(r.exames_mes) + sus; return { cap: cap, exames: ex, conv: num(r.exames_mes), sus: sus, ocup: cap ? ex / cap : null }; }
   /* DRE mensal da RM no ano-projeto t; rampa opcional (1 = regime) */
   function rmMensal(m, t, rampa) {
@@ -318,6 +323,8 @@ var Engine = (function () {
     var depAnoT = function (t) { return (t <= vida ? capex0 / vida : 0) + (tE && t >= tE && t < tE + vida ? eqRM / vida : 0) + (tR && t >= tR && t < tR + vida ? obra / vida : 0); };
     var anos = [], proj = [-capex0], ent = [-(capex0 - ((alt.capexFin || 0) - finRM)) - ((alt.custosIni || 0) - ciRM)];
     var acumP = -capex0, acumE = ent[0];
+    /* quitação antecipada (só C): no primeiro ano em que o caixa acumulado cobre o saldo devedor + reserva */
+    var qa = quitarRegra(m, alt), qaFeito = null, saldoAno = function (ano) { var s0 = null; (alt.rows || []).forEach(function (r) { if (r.y === ano) s0 = num(r.saldo); }); return s0; };
     for (var t = 1; t <= H; t++) {
       var fator = (1 + num(c.volume_var)) * Math.pow(1 + num(c.cresc_aa), Math.max(0, t - 2));
       var frac = t === 1 ? (12 - ini) / 12 : 1;
@@ -335,18 +342,26 @@ var Engine = (function () {
       /* obra no ano da aprovação; equipamento, liberação do financiamento e custos na entrega */
       var invP = (t === tR ? obra : 0) + (t === tE ? eqRM : 0), invE = (t === tR ? obra : 0) + (t === tE ? (eqRM - finRM) + ciRM : 0);
       var fcp = inc - trib + residual - invP;
-      var serv = (alt.servico && alt.servico[t]) || 0;
-      var quita = t === H ? quitaH : 0; /* saldo devedor que passa do horizonte, quitado no último ano */
+      var serv = qaFeito ? 0 : ((alt.servico && alt.servico[t]) || 0);
+      var quita = t === H && !qaFeito ? quitaH : 0; /* saldo devedor que passa do horizonte, quitado no último ano */
       var fce = inc - trib - serv - quita + residual - invE;
+      if (qa && !qaFeito && t < H && t >= Math.max(1, tE || 0)) {
+        var sd = saldoAno(num(f.ano_inicio) + t - 1);
+        if (sd != null && sd > 1) {
+          var custoQ = sd * (1 + qa.tarifa);
+          if (acumE + fce - custoQ >= qa.reserva) { qaFeito = { t: t, ano: num(f.ano_inicio) + t - 1, saldo: sd, valor: custoQ }; quita = custoQ; fce -= custoQ; }
+        }
+      }
       acumP += fcp; acumE += fce;
-      anos.push({ t: t, ano: num(f.ano_inicio) + t - 1, fator: fator, frac: frac, exames: p.exames * 12, rl: p.rl * 12, ebitdaEmg: ebitdaEmg, ebitdaPropBase: ebitdaPropBase, incBase: incBase, rm: rmA, rmEbitda: rmE, invRM: invP, invRMHosp: invE, opex: opexAno, opexTipo: alt.opex ? alt.opex.tipo : null, inc: inc, dep: depAno, ebit: ebit, trib: trib, residual: residual, fcp: fcp, servico: serv, juros: (alt.jurosAno && alt.jurosAno[t]) || 0, fce: fce, acumP: acumP, acumE: acumE, dscr: serv > 0 ? inc / serv : null, quitacao: quita, desembolso: opexAno + serv, dre: { emg: e, prop: dreMensal(m, fator, 'propria', t, opReg) } });
+      anos.push({ t: t, ano: num(f.ano_inicio) + t - 1, fator: fator, frac: frac, exames: p.exames * 12, rl: p.rl * 12, ebitdaEmg: ebitdaEmg, ebitdaPropBase: ebitdaPropBase, incBase: incBase, rm: rmA, rmEbitda: rmE, invRM: invP, invRMHosp: invE, opex: opexAno, opexTipo: alt.opex ? alt.opex.tipo : null, inc: inc, dep: depAno, ebit: ebit, trib: trib, residual: residual, fcp: fcp, servico: serv, juros: qaFeito && qaFeito.t < t ? 0 : (alt.jurosAno && alt.jurosAno[t]) || 0, fce: fce, acumP: acumP, acumE: acumE, dscr: serv > 0 ? inc / serv : null, quitacao: quita, desembolso: opexAno + serv, dre: { emg: e, prop: dreMensal(m, fator, 'propria', t, opReg) } });
       proj.push(fcp); ent.push(fce);
     }
     var r = num(f.desconto);
     var dscrs = anos.map(function (a) { return a.dscr; }).filter(function (x) { return x != null; });
     var pagos = 0; Object.keys(alt.servico || {}).forEach(function (k) { pagos += alt.servico[k]; });
+    if (qaFeito) pagos = anos.reduce(function (s, a) { return s + a.servico + a.quitacao; }, 0);
     var opexTot = anos.reduce(function (s, a) { return s + a.opex; }, 0);
-    return { opexTot: opexTot, saldoFimH: quitaH, desembolsoTot: opexTot + pagos + (capex - (alt.capexFin || 0)) + (alt.custosIni || 0),
+    return { quitAnt: qaFeito, opexTot: opexTot, saldoFimH: qaFeito ? 0 : quitaH, desembolsoTot: opexTot + pagos + (capex - (alt.capexFin || 0)) + (alt.custosIni || 0),
       anos: anos, capex: capex, capex0: capex0, capexRM: capexRM, tRM: tR, tEqRM: tE, obra: obra, proj: proj, ent: ent,
       vpl: npv(proj, r), tir: irr(proj), pb: payback(proj, 0), pbDesc: payback(proj, r),
       vplEnt: npv(ent, r), tirEnt: irr(ent), pbEnt: payback(ent, 0), acumEnt: acumE, acumProj: acumP,
@@ -594,6 +609,17 @@ var Engine = (function () {
     return { cet: r.C.cetAno, parcela: r.C.parcela, vplC: r.flC.vplEnt, dVplC: out.flC.vplEnt - r.flC.vplEnt, linha: e ? e.linha.nome : null, custo: e ? e.sim.custo : null, juros: r.C.juros, dJuros: (r.C.juros || 0) - (out.C.juros || 0), tarifa: (out.C.custosIni || 0) - (r.C.custosIni || 0) };
   }
 
+  /* Quitação antecipada de C: o fluxo de C com e sem a regra (o outro lado da chave atual), só refaz o fluxo */
+  function cenarioQuitar(m, out) {
+    if (!out || !out.C || !(out.C.rows || []).length || !out.flC) return null;
+    var on = (m.altC || {}).quitar === 'auto', m2 = clone(m); m2.altC = m2.altC || {}; m2.altC.quitar = on ? 'nao' : 'auto';
+    var fl2 = fluxo(m2, out.C), com = on ? out.flC : fl2, sem = on ? fl2 : out.flC, q = com.quitAnt, d = num(m.fin.desconto), pv = null, taxa = null;
+    /* teste mês a mês (sem a convenção anual do fluxo): valor presente, na data da quitação, das parcelas que deixam de ser pagas, contra o valor pago */
+    if (q) { var b = q.ano * 12 + 12; pv = 0; out.C.rows.forEach(function (r) { var k = r.y * 12 + r.m - b; if (k > 0) { pv += r.parcela / Math.pow(1 + d, k / 12); if (taxa == null) taxa = num(r.taxa); } }); }
+    return { on: on, com: com, sem: sem, q: q, reserva: num((m.altC || {}).quitar_reserva), tarifa: num((m.altC || {}).quitar_tarifa), taxaRest: taxa,
+      ganhoMes: q ? (pv - q.valor) / Math.pow(1 + d, q.t) : null };
+  }
+
   /* Câmbio: o VPL de B em vários níveis de câmbio, nas duas formas de parcela, e o câmbio em que B empata com C e com D.
      O VPL de B é linear no câmbio (preço e parcelas dos itens em dólar escalam juntos), então o empate sai de dois pontos. */
   function vplBcambio(m, usd, parcelas) {
@@ -745,7 +771,7 @@ var Engine = (function () {
     return { base: basev, itens: out };
   }
 
-  return { baseHDA: baseHDA, cotacaoOn: cotacaoOn, cenarioCotacao: cenarioCotacao, cenario600F: cenario600F, terceirosRM: terceirosRM, saldoFimH: saldoFimH, fxB: fxB, emDolar: emDolar, num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
+  return { baseHDA: baseHDA, cotacaoOn: cotacaoOn, cenarioCotacao: cenarioCotacao, cenarioQuitar: cenarioQuitar, cenario600F: cenario600F, terceirosRM: terceirosRM, saldoFimH: saldoFimH, fxB: fxB, emDolar: emDolar, num: num, clone: clone, npv: npv, irr: irr, payback: payback, dreMensal: dreMensal, capexDe: capexDe, fluxo: fluxo, altB: altB, altC: altC, altD: altD, entidade: entidade, calcular: calcular, sensibilidade: sensibilidade, taxaImplicita: taxaImplicita, capacidadeTC: capacidadeTC,
     mesesAno: mesesAno, mesesDesde: mesesDesde, rmOn: rmOn, pacsOn: pacsOn, susModo: susModo, susAtualOn: susAtualOn, susAteOn: susAteOn, pacsEx: pacsEx, pacsImpl: pacsImpl, isRM: isRM, ativos: ativos, rmMensal: rmMensal, rmAno: rmAno, capacidadeRM: capacidadeRM, iniRM: iniRM, aprovRM: aprovRM, anoRM: anoRM, anoEqRM: anoEqRM, mesRMStr: mesRMStr, susUpside: susUpside, reajAno: reajAno, ipcaAno: ipcaAno, manutPacote: manutPacote, locacao: locacao, cotacaoVmi: cotacaoVmi, taxaLocImplicita: taxaLocImplicita, custoPossuirC: custoPossuirC, prazosD: prazosD, PRAZOS_D: PRAZOS_D };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;

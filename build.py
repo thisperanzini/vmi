@@ -77,8 +77,10 @@ def build_auth(base, dist):
     """Copia a camada de login (auth/) para o site: funções, edge function e páginas /entrar e /admin."""
     for f in AUTH_FUNCS: write(os.path.join(base, "netlify/functions", f), read("auth/functions/" + f))
     write(os.path.join(base, "netlify/edge-functions/gate.ts"), read("auth/edge/gate.ts"))
-    write(os.path.join(dist, "entrar/index.html"), read("auth/pages/entrar.html"))
-    write(os.path.join(dist, "admin/index.html"), read("auth/pages/admin.html"))
+    m = re.search(r'branco: "(data:image/png;base64,[^"]+)"', read("shared/logo.js"))
+    marca = '<img class="logo" alt="S&amp;S Partners" width="62" height="40" src="%s">' % m.group(1) if m else '<b>S<i>&amp;</i>S PARTNERS</b>'
+    for pg in ("entrar", "admin"):
+        write(os.path.join(dist, pg + "/index.html"), read("auth/pages/%s.html" % pg).replace('<b>S<i>&amp;</i>S PARTNERS</b>', marca))
     write(os.path.join(dist, "robots.txt"), "User-agent: *\nDisallow: /\n")
 
 def check():

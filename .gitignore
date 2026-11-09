@@ -2,3 +2,4 @@
 .DS_Store
 cfi-report.md
 node_modules/
+.netlify/

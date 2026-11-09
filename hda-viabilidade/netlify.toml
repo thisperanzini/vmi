@@ -4,6 +4,13 @@
   publish = "dist"
   command = ""
 
+# @netlify/blobs 11 pede Node 22.12+.
+[build.environment]
+  NODE_VERSION = "22"
+  # ALLOW_DOMAINS (domínio do e-mail) e MAIL_FROM (remetente) não são segredos, mas o valor aparece nas páginas e no código;
+  # sem isto o scanner de segredos do Netlify barra o deploy. SESSION_SECRET e RESEND_API_KEY seguem verificadas.
+  SECRETS_SCAN_OMIT_KEYS = "ALLOW_DOMAINS,MAIL_FROM,SITE_NAME,SITE_ID,ADMIN_EMAILS"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
