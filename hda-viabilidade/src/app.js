@@ -1369,17 +1369,23 @@
       { g: 8, t: 'TC', sub: '128 cortes', seta: true },
       { g: 108, t: 'US', sub: 'ultrassom', seta: true },
       { g: 152, t: 'Raio X', sub: 'móvel e DR', seta: true },
-      { g: 200, t: 'Outros', sub: 'e gráficos', seta: true, leve: true },
+      { g: 200, t: 'Cardio', sub: 'eco e ECG', seta: true },
       { g: 246, t: '+', sub: 'próximas', vazio: true }];
     /* setas do centro às modalidades, por baixo dos nós */
     nos.forEach(function (n) { if (n.seta) s += seta([cx, cy], pt(n.g), 66, 46, n.leve ? 'var(--fg-3)' : null); });
     /* PACS + RIS + agendamento, sobre o anel */
     var pp = pt(54); s += '<rect x="' + (pp[0] - 92).toFixed(1) + '" y="' + (pp[1] - 27).toFixed(1) + '" width="184" height="54" rx="27" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.6"/>';
-    s += tx(pp[0], pp[1] - 3, 'PACS + RIS', { w: 600, s: 14 }) + tx(pp[0], pp[1] + 14, '+ agendamento único', { s: 11, c: 'var(--fg-2)' });
+    s += tx(pp[0], pp[1] - 3, 'PACS + RIS + agenda', { w: 600, s: 13.5 }) + tx(pp[0], pp[1] + 14, 'Sectra · acervo único (VNA)', { s: 10.5, c: 'var(--fg-2)' });
+    /* UTI e emergência e Integrare (Lifemed): imagens e laudos no leito; dados dos equipamentos ao Tasy (expansão a validar) */
+    var caixa = function (c0, w, h, t1, t2, tr) { return '<rect x="' + (c0[0] - w / 2) + '" y="' + (c0[1] - h / 2) + '" width="' + w + '" height="' + h + '" rx="10" fill="var(--surface)" stroke="var(--fg-3)" stroke-width="1.5"' + (tr ? ' stroke-dasharray="5 4"' : '') + '/>' + tx(c0[0], c0[1] - 3, t1, { w: 600, s: 13 }) + tx(c0[0], c0[1] + 13, t2, { s: 10, c: 'var(--fg-2)' }); };
+    var it = [652, 254], ut = [652, 352];
+    s += seta([it[0], it[1] - 25], [652, 118], 0, 68) + seta([ut[0], ut[1] - 25], it, 0, 27);
+    s += seta([pp[0] + 92, pp[1]], ut, 0, 88) + '<text x="' + ((pp[0] + 92 + ut[0] - 88) / 2).toFixed(1) + '" y="' + (pp[1] - 8).toFixed(1) + '" text-anchor="middle" font-weight="500" style="fill:var(--accent);font-size:10.5px">UniView</text>';
+    s += caixa(it, 176, 50, 'Integrare (Lifemed)*', 'dados dos equipamentos', true) + caixa(ut, 176, 50, 'UTI e emergência', 'imagens e laudos no leito', false);
     /* Tasy, fora do anel, com a integração */
     var ta = [652, 118]; s += seta(pt(-24), ta, 0, 70);
     s += '<circle cx="' + ta[0] + '" cy="' + ta[1] + '" r="66" fill="var(--surface)" stroke="var(--fg-2)" stroke-width="1.8"/>';
-    s += tx(ta[0], ta[1] - 4, 'Tasy', { w: 600, s: 20 }) + tx(ta[0], ta[1] + 15, 'pedido, prontuário', { s: 10.5, c: 'var(--fg-2)' }) + tx(ta[0], ta[1] + 29, 'e faturamento', { s: 10.5, c: 'var(--fg-2)' });
+    s += tx(ta[0], ta[1] - 4, 'Tasy', { w: 600, s: 20 }) + tx(ta[0], ta[1] + 15, 'pedidos, prontuário', { s: 10.5, c: 'var(--fg-2)' }) + tx(ta[0], ta[1] + 29, 'laudos e imagens', { s: 10.5, c: 'var(--fg-2)' });
     nos.forEach(function (n) {
       var q = pt(n.g);
       s += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="44" fill="var(--surface)" stroke="' + (n.vazio || n.leve ? 'var(--fg-3)' : 'var(--accent)') + '" stroke-width="' + (n.vazio ? 1.6 : 2) + '"' + (n.vazio ? ' stroke-dasharray="5 4"' : '') + '/>';
@@ -1436,28 +1442,28 @@
     /* 1b · visão: centro de referência (antes do modelo) */
     var rmTxt = qR ? (rmLig ? 'ressonância 1,5T, ' : 'ressonância 1,5T (decisão à parte), ') : '';
     var colV = function (x, tit, bl) { return { tipo: 'txt', x: x, y: 236, w: 360, tam: 14.5, titulo: tit, bullets: bl }; };
-    lista.push({ nav: 'Visão: referência', k: 'Visão · centro de referência', t: 'Proposta: fazer do HDA uma referência em diagnóstico por imagem, com parque novo, um fluxo digital só e o serviço nas mãos do hospital', b: [
+    lista.push({ nav: 'Visão: referência', k: 'Visão · hospital de referência', t: 'Proposta: fazer do HDA um hospital de referência em imagem e cuidado conectado, com parque novo, laudo integrado e sistema próprio de imagem', b: [
       { tipo: 'txt', x: 56, y: 156, w: 1168, tam: 16, paras: ['**Objetivo do CEO:** transformar o HDA num centro boutique de referência em imagem, com Sectra, Integrare e equipamentos modernos. O centro: **DACI, Dom Alvarenga Centro de Imagem**, com o serviço internalizado; o modelo, nos slides seguintes, mostra que ele se paga.'] },
       colV(56, '1 · Parque completo e novo', ['Tomografia de 128 cortes, ' + rmTxt + 'dois ultrassons, raio X móvel e raio X digital, no mesmo lugar.', 'Equipamento nacional, com FINAME na compra ou locação com manutenção inclusa.', 'Menos pacientes encaminhados para fora e menos transferências de internados para exame.']),
-      colV(460, '2 · Um fluxo digital só', ['Pedido no Tasy, agenda única, exame, imagem no PACS e laudo de volta ao prontuário e ao faturamento.', 'Todas as modalidades no mesmo PACS' + (pacsOn() ? ' (Sectra)' : '') + ' e no mesmo RIS (Touch Health).', 'Laudo também à distância e prazo de laudo sob controle do hospital.']),
-      colV(864, '3 · O serviço é do hospital', ['Hoje a EMG fica com ' + P(emg.repasse / emg.rl, 0) + ' da receita e o serviço perde ' + mi(-emg.resultado * 12) + ' por ano.', 'Com o serviço próprio, o resultado vai a ' + R(prop.resultado) + ' por mês em regime, e o hospital decide agenda, qualidade e prazo.', 'Base para atrair convênios e médicos solicitantes e crescer com novas modalidades.']),
+      colV(460, '2 · Laudo integrado no prontuário', ['Pedido e agenda no Tasy; imagem, laudo e comparação com exames anteriores voltam ao prontuário.', 'Radiologia e cardiologia no mesmo acervo (Sectra), com laudo por especialidade e correlação entre exames.', 'UTI e emergência veem imagens e laudos no leito; laudo também à distância.']),
+      colV(864, '3 · Sistema próprio de imagem', ['Acervo sob governança do hospital e menos dependência de terceiros.', 'Hoje a EMG fica com ' + P(emg.repasse / emg.rl, 0) + ' da receita e o serviço perde ' + mi(-emg.resultado * 12) + ' por ano; com o serviço próprio, o resultado vai a ' + R(prop.resultado) + ' por mês em regime.', 'O hospital decide agenda, qualidade e prazo, e cresce com novas especialidades.']),
       { tipo: 'kpis', x: 56, y: 520, w: 1168, h: 100, cols: 4, vtam: 20, itens: [
         { lab: 'Serviço hoje, com a EMG', v: R(emg.resultado), sub: 'por mês', cls: 'bad' },
         { lab: 'Com o serviço próprio', v: R(prop.resultado), sub: 'por mês em regime', cls: 'good' },
         { lab: 'Valor para o hospital', v: mi(fl(best).vplEnt), sub: H + ' anos, ' + (emp ? juntaE(topV) + ' empatadas' : 'alternativa ' + best), cls: 'good' },
-        { lab: 'Pacote VMI cotado', v: mi(c.C.capex), sub: (qR && rmLig ? 'com a RM; ' : '') + 'ou ' + R(c.D.aluguel) + '/mês na locação', cls: '' }] },
+        { lab: 'Pacote VMI cotado', v: mi(c.C.capex + (qR && rmLig && !E.ppuOn(m) ? (+((m.rm || {}).terceiros_vmi) || 0) : 0)), sub: (qR && rmLig ? 'com a RM; ' : '') + 'ou ' + R(c.D.aluguel) + '/mês na locação', cls: '' }] },
       { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'A seguir: a esquemática proposta, os equipamentos cotados e o preço; depois, o modelo de viabilidade e as formas de financiar.' }] });
 
     /* 1c · esquemática (quadro da S&S) */
     lista.push({ nav: 'Esquemática', k: 'Esquemática proposta', t: 'A esquemática do DACI: o centro de imagem no meio, todas as modalidades no mesmo PACS, RIS e agenda, e tudo ligado ao Tasy', b: [
       { tipo: 'g', x: 56, y: 150, w: 800, f: function (el) { el.innerHTML = svgDACI({ rm: !!(qR && rmLig), pacs: pacsOn() }); } },
-      { tipo: 'txt', x: 890, y: 150, w: 334, tam: 14, bullets: [
-        '**No centro, o DACI (Dom Alvarenga Centro de Imagem):** o serviço de imagem próprio do hospital, que passa a operar todas as modalidades.',
-        '**O anel:** RM, TC, ultrassom, raio X e os métodos gráficos no mesmo PACS, RIS e agenda. O paciente marca, faz o exame e recebe o laudo num fluxo só.',
-        '**Tasy:** pedidos e laudos voltam ao prontuário e ao faturamento do hospital, sem redigitação.',
-        '**Espaço para crescer:** a próxima modalidade entra no mesmo anel, sem sistema novo.',
-        '**Referência:** com parque e fluxo integrados, o HDA passa a receber exames de fora em vez de mandar pacientes para fora.'] },
-      { tipo: 'nota', x: 56, y: 650, w: 1168, texto: 'Esquemática sugerida pela S&S. RIS Touch Health; PACS Sectra ' + (pacsOn() ? 'pela estimativa S&S, ' + pixTxt() : 'ainda sem cotação (no número, o HDA segue com a Pixeon que já paga)') + '.' }] });
+      { tipo: 'txt', x: 886, y: 150, w: 338, tam: 13, bullets: [
+        '**No centro, o DACI (Dom Alvarenga Centro de Imagem):** o serviço de imagem próprio, que passa a operar todas as modalidades.',
+        '**O anel:** radiologia (TC, RM, raio X, ultrassom) e cardiologia (eco e ECG) no mesmo PACS, RIS e agenda, com um acervo único (Sectra, VNA): aquisição, diagnóstico e laudo num fluxo só.',
+        '**Tasy:** pedidos, laudos e acesso às imagens no prontuário; o laudo reúne os resultados e permite correlacionar especialidades.',
+        '**UTI e emergência:** a equipe vê imagens e laudos no leito (UniView); o Integrare (Lifemed) pode levar os dados de monitores, ventiladores e bombas ao Tasy.*',
+        '**Espaço para crescer:** endoscopia, patologia digital, oftalmologia, ortopedia e medicina nuclear entram no mesmo acervo, sem sistema novo.*'] },
+      { tipo: 'nota', x: 56, y: 640, w: 1168, texto: '* Expansões e integrações propostas; equipamentos, interfaces e módulos a validar com o hospital e os fornecedores. O modelo precifica só o PACS Sectra na edição Standard (estimativa S&S, ' + (pacsOn() ? 'no número' : 'fora do cenário salvo; hoje o HDA segue com a Pixeon') + '); VNA, cardiologia, UniView e Integrare não estão no número. RIS Touch Health.' }] });
 
     /* 1d · equipamentos cotados e preço final */
     var fxE = E.fxB(m), ordE = ['tc', 'us', 'rxp', 'rxdr', 'dr', 'rm'], rotE = { tc: 'Tomografia (TC)', us: 'Ultrassom', rxp: 'Raio X móvel', rxdr: 'Raio X digital', dr: 'Placa DR avulsa', rm: 'Ressonância 1,5T' };
