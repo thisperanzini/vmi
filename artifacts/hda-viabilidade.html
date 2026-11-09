@@ -3731,7 +3731,7 @@ window.HDAMotion = (function () {
     d.className = 'dot';
     if (vendoVersao) { d.classList.add('local'); t.textContent = 'Vendo uma versão congelada (somente leitura até restaurar)'; return; }
     if (dbState === 'db') { if (canWrite === false) { d.classList.add('local'); t.textContent = 'Somente leitura: suas alterações ficam neste navegador'; } else if (dirty) { d.classList.add('dirty'); t.textContent = 'Alterações não salvas · salvando em instantes'; } else { d.classList.add('ok'); t.textContent = 'Premissas salvas' + (ultimoSalvoEm ? ' · ' + ultimoSalvoEm.replace('T', ' ').slice(0, 16) : ''); } }
-    else if (dbState === 'none') { d.classList.add('local'); t.textContent = dirty ? 'Alterações guardadas neste navegador' : 'Fora do claude.ai: premissas guardadas neste navegador'; }
+    else if (dbState === 'none') { d.classList.add('local'); t.textContent = dirty ? 'Alterações guardadas neste navegador' : window.HDA_MODELO_SALVO ? 'Premissas publicadas em ' + new Date(window.HDA_MODELO_SALVO.salvoEm).toLocaleDateString('pt-BR') + '; alterações ficam neste navegador' : 'Fora do claude.ai: premissas guardadas neste navegador'; }
     else t.textContent = 'Carregando…';
     $('#btnSalvar').disabled = !dirty || (db && canWrite === false);
   }
@@ -3741,7 +3741,7 @@ window.HDAMotion = (function () {
     var em = new Date().toISOString();
     if (db && canWrite !== false) {
       db.doc('config/main').set({ model: clone(model), salvoEm: em }).then(function () { saved = clone(model); ultimoSalvoEm = em; dirty = false; $('#btnDesfazer').hidden = true; renderSync(); }).catch(function (e) { if (e && e.code === 'invalid_argument') { canWrite = false; } lsSet('hda:model', JSON.stringify(model)); renderSync(); toast('Não foi possível salvar no banco; cópia guardada neste navegador.'); });
-    } else { lsSet('hda:model', JSON.stringify(model)); saved = clone(model); dirty = false; $('#btnDesfazer').hidden = true; renderSync(); }
+    } else { lsSet('hda:model', JSON.stringify(model)); if (window.HDA_MODELO_SALVO) lsSet('hda:base', window.HDA_MODELO_SALVO.salvoEm); saved = clone(model); dirty = false; $('#btnDesfazer').hidden = true; renderSync(); }
   }
   $('#btnSalvar').addEventListener('click', salvar);
   $('#btnDesfazer').addEventListener('click', function () { model = clone(saved); dirty = false; $('#btnDesfazer').hidden = true; recompute(); renderAll(); toast('Alterações descartadas.'); });
@@ -3768,7 +3768,11 @@ window.HDAMotion = (function () {
     renderSync();
   }
   function carregarLocal() {
-    var m = lsGet('hda:model'); if (m) { try { model = sane(JSON.parse(m)); saved = clone(model); } catch (e) { } }
+    /* Fora do claude.ai (site no Netlify): parte das premissas salvas publicadas com o site; alterações ficam neste navegador
+       até sair uma cópia publicada mais nova */
+    var snap = window.HDA_MODELO_SALVO || null, m = lsGet('hda:model'), base = lsGet('hda:base');
+    if (snap && snap.model && (!m || base !== snap.salvoEm)) { try { model = sane(clone(snap.model)); saved = clone(model); ultimoSalvoEm = snap.salvoEm; } catch (e) { } }
+    else if (m) { try { model = sane(JSON.parse(m)); saved = clone(model); if (snap) ultimoSalvoEm = snap.salvoEm; } catch (e) { } }
     var v = lsGet('hda:versoes'); if (v) { try { versoes = JSON.parse(v); } catch (e) { } }
     recompute(); renderAll(); entrada();
   }

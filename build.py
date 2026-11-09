@@ -70,7 +70,11 @@ def build_hda():
     ]
     page = "\n".join(parts) + "\n"
     write("artifacts/hda-viabilidade.html", page)
-    write("hda-viabilidade/dist/index.html", SITE_HEAD % "Hospital Dom Alvarenga: viabilidade da internalização do serviço de imagem com equipamentos VMI/Alfamed. S&S Partners." + page + "</body>\n</html>\n")
+    # site (Netlify): sem o banco do claude.ai, parte das premissas salvas copiadas em hda-viabilidade/src/modelo-salvo.json
+    snap = read("hda-viabilidade/src/modelo-salvo.json").strip()
+    page_site = page.replace("<script>\n/* ===== Aplicação", "<script>window.HDA_MODELO_SALVO = " + snap.replace("</", "<\\/") + ";</script>\n<script>\n/* ===== Aplicação", 1)
+    assert page_site != page, "não achei o script da aplicação para injetar as premissas"
+    write("hda-viabilidade/dist/index.html", SITE_HEAD % "Hospital Dom Alvarenga: viabilidade da internalização do serviço de imagem com equipamentos VMI/Alfamed. S&S Partners." + page_site + "</body>\n</html>\n")
 
 AUTH_FUNCS = ["_lib.mjs", "pedir-codigo.mjs", "validar-codigo.mjs", "sair.mjs", "log.mjs", "admin.mjs"]
 def build_auth(base, dist):
