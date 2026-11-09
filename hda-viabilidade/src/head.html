@@ -161,6 +161,11 @@ footer { color: var(--fg-3); font-size: 12px; padding-top: 10px; border-top: 1px
 .spin { width: 18px; height: 18px; border: 2.5px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: gira .8s linear infinite; flex: none; }
 @keyframes gira { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+/* animações (motion.js): estado inicial só enquanto a página carrega e para os cartões abaixo da dobra */
+body.m-boot main { opacity: 0; }
+.m-wait { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { body.m-boot main, .m-wait { opacity: 1 !important; } }
+@media print { body.m-boot main, .m-wait { opacity: 1 !important; } }
 .apres { position: fixed; inset: 0; z-index: 90; background: #0b0f0e; display: flex; flex-direction: column; }
 .apres-stage { position: relative; flex: 1; overflow: hidden; cursor: pointer; }
 .apres-slide { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform-origin: center center; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }

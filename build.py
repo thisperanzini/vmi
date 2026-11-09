@@ -3,7 +3,7 @@
 
   shared/      base.js (linhas, macro, modalidades) · catalogo.js (CFI) · motor.js · logo.js
   financiamento-vmi/src/   head.html · docs.js · app.js · seed.json
-  hda-viabilidade/src/     head.html · engine.js · premissas.js · app.js
+  hda-viabilidade/src/     head.html · engine.js · premissas.js · motion.js · app.js
 
 Saídas (determinísticas, commitadas):
   dist/financiamento-vmi/index.html      site financiamento (netlify.toml da raiz: publish = dist/financiamento-vmi)
@@ -65,6 +65,7 @@ def build_hda():
         script("Logo (shared/logo.js)", read("shared/logo.js")),
         script("Engine HDA (hda-viabilidade/src/engine.js)", read("hda-viabilidade/src/engine.js")),
         script("Premissas (hda-viabilidade/src/premissas.js)", read("hda-viabilidade/src/premissas.js")),
+        script("Animações (hda-viabilidade/src/motion.js)", read("hda-viabilidade/src/motion.js")),
         script("Aplicação (hda-viabilidade/src/app.js)", read("hda-viabilidade/src/app.js")),
     ]
     page = "\n".join(parts) + "\n"

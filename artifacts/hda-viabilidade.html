@@ -161,6 +161,11 @@ footer { color: var(--fg-3); font-size: 12px; padding-top: 10px; border-top: 1px
 .spin { width: 18px; height: 18px; border: 2.5px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: gira .8s linear infinite; flex: none; }
 @keyframes gira { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+/* animações (motion.js): estado inicial só enquanto a página carrega e para os cartões abaixo da dobra */
+body.m-boot main { opacity: 0; }
+.m-wait { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { body.m-boot main, .m-wait { opacity: 1 !important; } }
+@media print { body.m-boot main, .m-wait { opacity: 1 !important; } }
 .apres { position: fixed; inset: 0; z-index: 90; background: #0b0f0e; display: flex; flex-direction: column; }
 .apres-stage { position: relative; flex: 1; overflow: hidden; cursor: pointer; }
 .apres-slide { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform-origin: center center; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
@@ -2511,6 +2516,210 @@ function getPath(o, path) { var p = path.split('.'); for (var i = 0; i < p.lengt
 if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, BENCH_LOC: BENCH_LOC, SCHEMA: SCHEMA, modeloPadrao: modeloPadrao, completarManut: completarManut, garantirRM: garantirRM, RM_B: RM_B, RM_C: RM_C, setPath: setPath, getPath: getPath, EQUIP_B_PADRAO: EQUIP_B_PADRAO, EQUIP_C_PADRAO: EQUIP_C_PADRAO, EMPRESTIMOS_PADRAO: EMPRESTIMOS_PADRAO };
 </script>
 <script>
+/* ===== Animações (hda-viabilidade/src/motion.js) ===== */
+/* Animações da página e da apresentação (HDA).
+   - Página: ao abrir uma aba, os cartões entram em sequência (os de baixo, ao rolar), os indicadores contam até o valor,
+     as linhas dos gráficos se desenham e as barras crescem. Ao editar uma premissa, os indicadores que mudaram rolam
+     do valor antigo ao novo e piscam.
+   - Apresentação: cada slide entra com o título, depois os blocos na ordem de leitura (de cima para baixo, da esquerda
+     para a direita): indicadores contando, linhas das tabelas, gráficos se desenhando, notas por último. Voltando um
+     slide, só a transição.
+   Tudo pela Web Animations API, sem estado permanente no DOM: terminada a animação, o elemento fica como foi montado
+   (o texto final é sempre o original). Respeita prefers-reduced-motion e window.__HDA_SEM_ANIM. O .pptx não muda. */
+window.HDAMotion = (function () {
+  'use strict';
+  var EASE = 'cubic-bezier(.2,.7,.2,1)', OUT = 'cubic-bezier(.16,1,.3,1)';
+
+  function off() {
+    try {
+      if (window.__HDA_SEM_ANIM) return true;
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+    } catch (e) { }
+    return !(document.documentElement && document.documentElement.animate);
+  }
+  function anim(el, kf, o) { if (!el) return null; try { return el.animate(kf, o); } catch (e) { return null; } }
+  function arr(x) { return Array.prototype.slice.call(x || []); }
+  function entrar(el, delay, o) {
+    o = o || {};
+    return anim(el, [{ opacity: 0, transform: 'translate(' + (o.dx || 0) + 'px,' + (o.dy == null ? 14 : o.dy) + 'px)' + (o.sc ? ' scale(' + o.sc + ')' : '') }, { opacity: 1, transform: 'none' }],
+      { duration: o.dur || 560, delay: delay || 0, easing: o.ease || OUT, fill: 'backwards' });
+  }
+  function surgir(el, delay, dur) { return anim(el, [{ opacity: 0 }, { opacity: 1 }], { duration: dur || 420, delay: delay || 0, easing: 'ease-out', fill: 'backwards' }); }
+
+  /* ---------- números em pt-BR dentro de um texto ("R$ 8,29 mi", "16,18%", "R$ 180.703", "1,39") ---------- */
+  function parse(txt) {
+    var re = /[−-]?\d[\d.]*(?:,\d+)?/g, m;
+    while ((m = re.exec(txt))) {
+      var s = m[0].replace(/\.+$/, ''), i = m.index, a = txt.charAt(i - 1), b = txt.charAt(i + s.length);
+      if (a === '/' || b === '/' || /[\d.,]/.test(a) || b === ':' || /[A-Z]/.test(b) || /[A-Za-z]/.test(a)) continue; /* datas (dez/2027, 03/11), horas, códigos (2T27) */
+      var neg = /^[−-]/.test(s), body = neg ? s.slice(1) : s, parts = body.split(','), ip = parts[0], dp = parts[1] || '';
+      if (ip.indexOf('.') >= 0 && !/^\d{1,3}(\.\d{3})+$/.test(ip)) continue;
+      var v = parseFloat(ip.replace(/\./g, '') + (dp ? '.' + dp : ''));
+      if (!isFinite(v)) continue;
+      if (!dp && ip.indexOf('.') < 0 && v >= 1990 && v <= 2100) continue;               /* ano */
+      return { v: neg ? -v : v, d: dp.length, mil: ip.indexOf('.') >= 0, pre: txt.slice(0, i), pos: txt.slice(i + s.length), sinal: neg ? s.charAt(0) : '', txt: txt };
+    }
+    return null;
+  }
+  function fmt(p, v) {
+    var s = Math.abs(v).toFixed(p.d).split('.'), ip = s[0];
+    if (p.mil) ip = ip.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    var zero = Math.abs(v) < Math.pow(10, -p.d) / 2, pre = zero ? p.pre.replace(/^([^\d]*?)[−+-]\s?/, '$1') : p.pre; /* sem sinal no zero */
+    return pre + (v < 0 && !zero ? (p.sinal || '−') : '') + ip + (p.d ? ',' + s[1] : '') + p.pos;
+  }
+  function acharNum(el) {
+    if (!el || el.hasAttribute('data-sem-conta')) return null;
+    var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null), n;
+    while ((n = w.nextNode())) { var p = parse(n.nodeValue); if (p) { p.node = n; return p; } }
+    return null;
+  }
+  /* conta de "de" até o valor do texto; termina sempre no texto original */
+  function contar(el, delay, de, dur) {
+    var p = acharNum(el); if (!p) return;
+    var v0 = de == null ? 0 : de, v1 = p.v, d = dur || 1100, t0 = null, node = p.node;
+    if (v0 === v1) return;
+    node.nodeValue = fmt(p, v0);
+    function passo(ts) {
+      if (!node.parentNode) return;                                                       /* re-render: some sem rastro */
+      if (t0 == null) t0 = ts + (delay || 0);
+      var k = Math.max(0, Math.min(1, (ts - t0) / d)), e = 1 - Math.pow(1 - k, 3);
+      if (ts < t0) { requestAnimationFrame(passo); return; }
+      node.nodeValue = k >= 1 ? p.txt : fmt(p, v0 + (v1 - v0) * e);
+      if (k < 1) requestAnimationFrame(passo);
+    }
+    requestAnimationFrame(passo);
+    setTimeout(function () { if (node.parentNode && node.nodeValue !== p.txt) node.nodeValue = p.txt; }, (delay || 0) + d + 400); /* aba em segundo plano */
+  }
+
+  /* ---------- gráficos SVG: linhas se desenham, barras crescem da base, pontos e rótulos por último ---------- */
+  var ORIG = { b: 'center bottom', t: 'center top', l: 'left center', r: 'right center' };
+  function grafico(svg, delay) {
+    if (!svg) return;
+    delay = delay || 0;
+    var fim = delay;
+    arr(svg.querySelectorAll('path')).forEach(function (p, i) {
+      if (p.getAttribute('fill') !== 'none') return;
+      var L = 0; try { L = p.getTotalLength(); } catch (e) { }
+      if (!L) return;
+      var dl = delay + i * 140;
+      if (p.getAttribute('stroke-dasharray')) surgir(p, dl + 300, 700);
+      else anim(p, [{ strokeDasharray: L + ' ' + L, strokeDashoffset: L }, { strokeDasharray: L + ' ' + L, strokeDashoffset: 0 }], { duration: 1200, delay: dl, easing: EASE, fill: 'backwards' });
+      fim = Math.max(fim, dl + 1000);
+    });
+    arr(svg.querySelectorAll('rect[data-o]')).forEach(function (r, i) {
+      var o = r.getAttribute('data-o'), hz = o === 'l' || o === 'r';
+      r.style.transformBox = 'fill-box'; r.style.transformOrigin = ORIG[o] || ORIG.b;
+      var dl = delay + Math.min(i, 24) * 45;
+      anim(r, [{ transform: hz ? 'scaleX(0)' : 'scaleY(0)' }, { transform: 'none' }], { duration: 900, delay: dl, easing: EASE, fill: 'backwards' });
+      fim = Math.max(fim, dl + 700);
+    });
+    arr(svg.querySelectorAll('circle')).forEach(function (c, i) {
+      c.style.transformBox = 'fill-box'; c.style.transformOrigin = 'center';
+      anim(c, [{ opacity: 0, transform: 'scale(0)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: delay + 650 + Math.min(i, 30) * 22, easing: OUT, fill: 'backwards' });
+    });
+    /* rótulos de valor (texto com peso ou dentro da área do gráfico) entram depois das barras */
+    arr(svg.querySelectorAll('text[font-weight], text[data-v]')).forEach(function (t) { surgir(t, fim, 360); });
+  }
+
+  /* ---------- conteúdo de um cartão ou bloco ---------- */
+  function interior(el, delay) {
+    var d = delay || 0;
+    arr(el.querySelectorAll('.kpi, .sl-kpi')).forEach(function (k, i) {
+      entrar(k, d + 80 + i * 110, { dy: 18 });
+      contar(k.querySelector('.v'), d + 160 + i * 110);
+    });
+    arr(el.querySelectorAll('.cmp, .gate, .linha, .tile')).forEach(function (k, i) { if (i < 14) entrar(k, d + 80 + i * 70, { dy: 12, dur: 480 }); });
+    arr(el.querySelectorAll('.cmp b.t')).forEach(function (b, i) { contar(b, d + 160 + i * 70, null, 900); });
+    arr(el.querySelectorAll('svg')).forEach(function (s) { if (s.closest('.chart, .sb-g, .sb-img') || s.getAttribute('role') === 'img') grafico(s, d + 200); });
+    arr(el.querySelectorAll('.legend')).forEach(function (l) { surgir(l, d + 900); });
+  }
+
+  /* ---------- página: entrada de uma aba ---------- */
+  var io = null;
+  function aba(sec) {
+    if (io) { io.disconnect(); io = null; }
+    if (!sec || off() || document.visibilityState === 'hidden') return;
+    var cards = arr(sec.querySelectorAll('.card')).filter(function (c) { return !c.parentElement.closest('.card'); });
+    var vh = window.innerHeight || 800, n = 0, fila = [];
+    surgir(sec, 0, 260);
+    cards.forEach(function (c) {
+      var r = c.getBoundingClientRect();
+      if (r.top < vh + 40) { var d = Math.min(n++, 9) * 75; entrar(c, d, { dy: 16 }); interior(c, d); }
+      else { c.classList.add('m-wait'); fila.push(c); }
+    });
+    if (!fila.length) return;
+    if (!('IntersectionObserver' in window)) { fila.forEach(function (c) { c.classList.remove('m-wait'); }); return; }
+    var lote = 0, t = null;
+    io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var c = e.target; io.unobserve(c);
+        var d = lote++ * 80; clearTimeout(t); t = setTimeout(function () { lote = 0; }, 120);
+        c.classList.remove('m-wait'); entrar(c, d, { dy: 18 }); interior(c, d);
+      });
+    }, { rootMargin: '0px 0px -6% 0px' });
+    fila.forEach(function (c) { io.observe(c); });
+  }
+
+  /* ---------- página: indicadores que mudaram ao editar ---------- */
+  var SEL = '.kpi .v, .cmp b.t';
+  function chave(el, i) { var k = el.closest('.kpi, .cmp'), lab = k && k.querySelector('.lab, .l, h3'); return i + '|' + (lab ? lab.textContent.trim() : ''); }
+  function snap(sec) {
+    var m = {}; if (!sec) return m;
+    arr(sec.querySelectorAll(SEL)).forEach(function (el, i) { m[chave(el, i)] = el.textContent; });
+    return m;
+  }
+  function morph(sec, antes) {
+    if (!sec || !antes || off()) return;
+    arr(sec.querySelectorAll(SEL)).forEach(function (el, i) {
+      var velho = antes[chave(el, i)]; if (velho == null || velho === el.textContent) return;
+      var pv = parse(velho), pn = acharNum(el); if (!pv || !pn) return;
+      contar(el, 0, pv.v, 650);
+      anim(el.closest('.kpi, .cmp') || el, [{ boxShadow: '0 0 0 2px var(--accent)' }, { boxShadow: '0 0 0 2px transparent' }], { duration: 1100, easing: 'ease-out' });
+    });
+  }
+
+  /* ---------- apresentação: um slide ---------- */
+  function slide(root, dir) {
+    if (!root || off()) return;
+    var frente = dir == null || dir > 0;
+    anim(root, [{ opacity: 0, transform: 'translateX(' + (frente ? 24 : -24) + 'px) scale(.992)' }, { opacity: 1, transform: 'none' }], { duration: frente ? 520 : 300, easing: OUT });
+    if (!frente) return;
+    var capa = root.classList.contains('capa');
+    entrar(root.querySelector('.sl-k'), 90, { dy: 10, dur: 480 });
+    entrar(root.querySelector('.sl-t'), 160, { dy: capa ? 34 : 22, dur: capa ? 900 : 640 });
+    entrar(root.querySelector('.sl-sub'), capa ? 520 : 300, { dy: 12 });
+    surgir(root.querySelector('.sl-f'), 400, 600);
+    var blocos = arr(root.querySelectorAll('.sb')), notas = blocos.filter(function (b) { return b.classList.contains('sb-nota'); });
+    blocos = blocos.filter(function (b) { return notas.indexOf(b) < 0; }).sort(function (a, b) { return (a.offsetTop - b.offsetTop) || (a.offsetLeft - b.offsetLeft); });
+    var d = capa ? 700 : 340, fim = d;
+    blocos.forEach(function (b, i) {
+      var dl = d + i * 130; fim = Math.max(fim, dl);
+      if (b.classList.contains('sb-kpis')) { interior(b, dl - 80); fim = Math.max(fim, dl + b.querySelectorAll('.sl-kpi').length * 110); return; }
+      if (b.classList.contains('sb-tab')) {
+        entrar(b, dl, { dy: 10, dur: 420 });
+        var rows = arr(b.querySelectorAll('tbody tr'));
+        rows.forEach(function (r, k) { anim(r, [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 380, delay: dl + 140 + Math.min(k, 18) * 42, easing: OUT, fill: 'backwards' }); });
+        fim = Math.max(fim, dl + 140 + Math.min(rows.length, 18) * 42);
+        return;
+      }
+      if (b.classList.contains('sb-txt')) {
+        entrar(b.querySelector('h3'), dl, { dy: 10 });
+        var lis = arr(b.querySelectorAll('li, p'));
+        lis.forEach(function (li, k) { entrar(li, dl + 90 + Math.min(k, 10) * 85, { dx: -10, dy: 0, dur: 480 }); });
+        if (!lis.length && !b.querySelector('h3')) entrar(b, dl);
+        fim = Math.max(fim, dl + 90 + Math.min(lis.length, 10) * 85);
+        return;
+      }
+      entrar(b, dl, { dy: 16 }); interior(b, dl); fim = Math.max(fim, dl + 900);
+    });
+    notas.forEach(function (n, i) { entrar(n, fim + 250 + i * 120, { dy: 8, dur: 520 }); });
+  }
+
+  return { off: off, aba: aba, snap: snap, morph: morph, slide: slide, contar: contar, grafico: grafico, parse: parse, _fmt: fmt };
+})();
+</script>
+<script>
 /* ===== Aplicação (hda-viabilidade/src/app.js) ===== */
 /* ====================================================================
    Aplicação — estado, persistência, renderização das abas.
@@ -2569,7 +2778,10 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
   function recompute() { calc = E.calcular(model, M, BASE); }
   function recomputeSim() { simCalc = E.calcular(sim, M, BASE); }
   function markDirty() { dirty = JSON.stringify(model) !== JSON.stringify(saved); $('#btnDesfazer').hidden = !dirty; renderSync(); if (dirty) agendarAutoSave(); }
-  function afterEdit() { recompute(); markDirty(); renderAll(); }
+  var HM = window.HDAMotion || null, entrou = false;
+  function afterEdit() { var sec = $('#tab-' + tab), sn = HM && entrou ? HM.snap(sec) : null; recompute(); markDirty(); renderAll(); if (sn) HM.morph(sec, sn); }
+  /* primeira entrada animada: depois que os dados do banco (ou do navegador) chegam */
+  function entrada() { if (entrou) return; entrou = true; document.body.classList.remove('m-boot'); if (HM) HM.aba($('#tab-' + tab)); }
 
   /* ---------------- gráficos SVG ---------------- */
   function niceMax(v) { if (v <= 0) return 1; var p = Math.pow(10, Math.floor(Math.log10(v))); var f = v / p; var n = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10; return n * p; }
@@ -2613,7 +2825,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="var(--fg-3)"/>';
     opts.cats.forEach(function (c, i) {
       var cx = pl + gw * i + gw / 2, tot = opts.series.length * bw, x0 = cx - tot / 2;
-      opts.series.forEach(function (se, j) { var v = se.vals[i] || 0; var top = Math.min(y(0), y(v)), h = Math.abs(y(v) - y(0)); s += '<rect x="' + (x0 + j * bw) + '" y="' + top + '" width="' + (bw - 2) + '" height="' + h + '" fill="' + se.cor + '" rx="2"/>'; if (opts.labels) s += '<text x="' + (x0 + j * bw + bw / 2 - 1) + '" y="' + (v >= 0 ? top - 4 : top + h + 11) + '" text-anchor="middle">' + esc(opts.fmt(v)) + '</text>'; });
+      opts.series.forEach(function (se, j) { var v = se.vals[i] || 0; var top = Math.min(y(0), y(v)), h = Math.abs(y(v) - y(0)); s += '<rect x="' + (x0 + j * bw) + '" y="' + top + '" width="' + (bw - 2) + '" height="' + h + '" fill="' + se.cor + '" rx="2" data-o="' + (v < 0 ? 't' : 'b') + '"/>'; if (opts.labels) s += '<text x="' + (x0 + j * bw + bw / 2 - 1) + '" y="' + (v >= 0 ? top - 4 : top + h + 11) + '" text-anchor="middle">' + esc(opts.fmt(v)) + '</text>'; });
       s += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle">' + esc(c) + '</text>';
     });
     s += '</svg><div class="legend">' + opts.series.map(function (se) { return '<span><i style="background:' + se.cor + '"></i>' + esc(se.nome) + '</span>'; }).join('') + '</div>';
@@ -2628,7 +2840,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     itens.forEach(function (it, i) {
       var yy = 12 + i * rowH;
       s += '<text x="' + (pl - 10) + '" y="' + (yy + 16) + '" text-anchor="end" fill="var(--fg)">' + esc(it.nome) + '</text>';
-      [['lo', 'var(--bad)'], ['hi', 'var(--good)']].forEach(function (p) { var v = it[p[0]]; if (v === 0) return; var cor = v < 0 ? 'var(--bad)' : 'var(--good)'; s += '<rect x="' + Math.min(x(0), x(v)) + '" y="' + (yy + 4) + '" width="' + Math.abs(x(v) - x(0)) + '" height="20" fill="' + cor + '" opacity=".75" rx="2"/>'; s += '<text x="' + (v < 0 ? x(v) - 4 : x(v) + 4) + '" y="' + (yy + 18) + '" text-anchor="' + (v < 0 ? 'end' : 'start') + '">' + esc(fmt(v)) + '</text>'; });
+      [['lo', 'var(--bad)'], ['hi', 'var(--good)']].forEach(function (p) { var v = it[p[0]]; if (v === 0) return; var cor = v < 0 ? 'var(--bad)' : 'var(--good)'; s += '<rect x="' + Math.min(x(0), x(v)) + '" y="' + (yy + 4) + '" width="' + Math.abs(x(v) - x(0)) + '" height="20" fill="' + cor + '" opacity=".75" rx="2" data-o="' + (v < 0 ? 'r' : 'l') + '"/>'; s += '<text x="' + (v < 0 ? x(v) - 4 : x(v) + 4) + '" y="' + (yy + 18) + '" text-anchor="' + (v < 0 ? 'end' : 'start') + '">' + esc(fmt(v)) + '</text>'; });
       s += '<text x="' + (pl - 10) + '" y="' + (yy + 29) + '" text-anchor="end" fill="var(--fg-3)" font-size="10">' + esc(it.loTxt + ' → ' + it.hiTxt) + '</text>';
     });
     s += '<text x="' + x(-mx) + '" y="' + (H - 4) + '">' + esc(fmt(-mx)) + '</text><text x="' + x(mx) + '" y="' + (H - 4) + '" text-anchor="end">' + esc(fmt(mx)) + '</text></svg>';
@@ -3450,6 +3662,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     $$('main section').forEach(function (s) { s.hidden = s.id !== 'tab-' + id; });
     if (id === 'simulador') { sim = clone(model); recomputeSim(); renderSimulador(); }
     lsSet('hda:tab', id);
+    if (HM && entrou) HM.aba($('#tab-' + id));
   }
   $('#tabs').addEventListener('click', function (e) { var b = e.target.closest('.tab'); if (b) showTab(b.dataset.tab); });
 
@@ -3479,6 +3692,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     if (!has) { dbState = 'none'; carregarLocal(); return; }
     try { var rs = await Promise.all([window.claude.use('db'), window.claude.use('user'), window.claude.use('downloads')]); db = rs[0]; userCap = rs[1]; downloads = rs[2]; } catch (e) { db = null; }
     if (!db) { dbState = 'none'; carregarLocal(); return; }
+    setTimeout(entrada, 2500);
     dbState = 'db';
     if (userCap && userCap.can) { try { canWrite = await userCap.can('data.write'); } catch (e) { canWrite = null; } }
     db.doc('config/main').onSnapshot(function (snap) {
@@ -3489,15 +3703,15 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
         else if (!dirty && !vendoVersao) { model = sane(data.model); saved = clone(model); ultimoSalvoEm = data.salvoEm || null; recompute(); renderAll(); }
         else saved = sane(data.model);
       }
-      renderSync();
-    }, function () { renderSync(); });
+      renderSync(); entrada();
+    }, function () { renderSync(); entrada(); });
     db.collection('versoes').onSnapshot(function (qs) { versoes = qs.docs.map(function (d) { var b = clone(d.data() || {}); b.id = d.id; return b; }).sort(function (a, b) { return a.em < b.em ? 1 : -1; }); renderVersoes(); }, function () { });
     renderSync();
   }
   function carregarLocal() {
     var m = lsGet('hda:model'); if (m) { try { model = sane(JSON.parse(m)); saved = clone(model); } catch (e) { } }
     var v = lsGet('hda:versoes'); if (v) { try { versoes = JSON.parse(v); } catch (e) { } }
-    recompute(); renderAll();
+    recompute(); renderAll(); entrada();
   }
 
   /* ================= SUMÁRIO EXECUTIVO =================
@@ -3813,7 +4027,7 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
     itens.forEach(function (it, k) {
       var yy = 6 + k * rowH, cy = yy + rowH / 2 + 5;
       s += '<text x="' + (pl - 10) + '" y="' + cy + '" text-anchor="end" fill="var(--fg)">' + esc(it.nome) + '</text>';
-      s += '<rect x="' + Math.min(x(0), x(it.v)) + '" y="' + (yy + 9) + '" width="' + Math.max(1, Math.abs(x(it.v) - x(0))) + '" height="' + (rowH - 18) + '" fill="' + it.cor + '" rx="3"/>';
+      s += '<rect x="' + Math.min(x(0), x(it.v)) + '" y="' + (yy + 9) + '" width="' + Math.max(1, Math.abs(x(it.v) - x(0))) + '" height="' + (rowH - 18) + '" fill="' + it.cor + '" rx="3" data-o="' + (it.v < 0 ? 'r' : 'l') + '"/>';
       s += '<text x="' + (Math.max(x(0), x(it.v)) + 8) + '" y="' + cy + '" fill="var(--fg)" font-weight="600">' + esc(fmt(it.v)) + '</text>';
     });
     return s + '</svg>';
@@ -4146,9 +4360,11 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
   var ap = { lista: null, i: 0 };
   function apAberta() { return !$('#apres').hidden; }
   function apEscala() { var st = $('#apStage'), sl = $('#apSlide'); if (!st || !sl) return; var k = Math.min(st.clientWidth / 1280, st.clientHeight / 720); sl.style.transform = 'translate(-50%, -50%) scale(' + k + ')'; }
-  function apMostrar(i) {
+  function apMostrar(i, modo) {
+    var antes = ap.i;
     ap.i = Math.max(0, Math.min(ap.lista.length - 1, i));
-    montarSlide($('#apSlide'), ap.lista[ap.i], ap.i, ap.lista.length);
+    var mt = montarSlide($('#apSlide'), ap.lista[ap.i], ap.i, ap.lista.length);
+    if (HM && modo !== 'sem') { var dir = modo === 'abrir' ? 1 : ap.i - antes; if (dir) HM.slide(mt.root, dir); }
     $('#apNum').textContent = (ap.i + 1) + ' / ' + ap.lista.length; $('#apPrev').disabled = ap.i === 0; $('#apNext').disabled = ap.i === ap.lista.length - 1; $('#apIr').value = String(ap.i);
     apEscala();
   }
@@ -4165,14 +4381,14 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
       try { apMontarLista(); } catch (e) { busy(null); toast('Não consegui montar a apresentação: ' + (e && e.message || e)); return; }
       busy(null);
       var o = $('#apres'); o.hidden = false; document.body.classList.add('sem-rolagem');
-      apMostrar(0); $('#apNext').focus();
+      apMostrar(0, 'abrir'); $('#apNext').focus();
       try { if (o.requestFullscreen && !document.fullscreenElement) o.requestFullscreen().catch(function () { }); } catch (e) { }
       registrarUso('apresentacao');
     }, 30);
   }
   function fecharApresentacao() { $('#apres').hidden = true; document.body.classList.remove('sem-rolagem'); try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () { }); } catch (e) { } }
   /* números mudaram com a apresentação aberta (outra pessoa salvou, versão trocada): refaz no mesmo slide */
-  function apAtualizar() { if (!apAberta() || !ap.lista) return; try { apMontarLista(); apMostrar(ap.i); } catch (e) { } }
+  function apAtualizar() { if (!apAberta() || !ap.lista) return; try { apMontarLista(); apMostrar(ap.i, 'sem'); } catch (e) { } }
   $('#btnApresentar').addEventListener('click', abrirApresentacao);
   $('#apPrev').addEventListener('click', function () { apMostrar(ap.i - 1); });
   $('#apNext').addEventListener('click', function () { apMostrar(ap.i + 1); });
@@ -4346,6 +4562,8 @@ if (typeof module !== 'undefined') module.exports = { BENCH_MANUT: BENCH_MANUT, 
   $('#logoTopo').src = LOGO.navy;
   if (NO_DOMINIO) { var ft = $('#foot'); ft.innerHTML = '<a href="/.netlify/functions/sair" style="margin-right:10px">Sair</a><a href="/admin/" style="margin-right:10px">Acessos</a>' + ft.innerHTML; }
   registrarUso('pagina');
+  if (HM && !HM.off()) document.body.classList.add('m-boot');
+  setTimeout(entrada, 2500); /* rede lenta: mostra a página animada de qualquer jeito */
   recompute(); renderAll();
   var t0 = lsGet('hda:tab'); showTab(t0 && $('#tab-' + t0) ? t0 : 'tese');
   initCaps();
